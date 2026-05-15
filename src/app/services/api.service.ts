@@ -63,11 +63,28 @@ export class ApiService {
   getRendezVous(): Observable<any[]> {
     return this.http.get<any[]>(`${this.base}/rendez-vous`);
   }
+  getRendezVousCalendrier(mois: string): Observable<Record<string, any[]>> {
+    return this.http.get<Record<string, any[]>>(`${this.base}/rendez-vous/calendrier`, { params: { mois } });
+  }
   getRendezVousById(id: string): Observable<any> {
     return this.http.get(`${this.base}/rendez-vous/${id}`);
   }
   updateRendezVous(id: string, body: any): Observable<any> {
     return this.http.patch(`${this.base}/rendez-vous/${id}`, body);
+  }
+
+  // Workflow de validation
+  soumettre(instructionId: string, body: any): Observable<any> {
+    return this.http.post(`${this.base}/instructions/${instructionId}/soumettre`, body);
+  }
+  valider(instructionId: string, body: any): Observable<any> {
+    return this.http.post(`${this.base}/instructions/${instructionId}/valider`, body);
+  }
+  rejeter(instructionId: string, body: any): Observable<any> {
+    return this.http.post(`${this.base}/instructions/${instructionId}/rejeter`, body);
+  }
+  getWorkflow(instructionId: string): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/instructions/${instructionId}/workflow`);
   }
 
   // Fichiers (MinIO)
@@ -78,6 +95,81 @@ export class ApiService {
   }
   getFileUrl(name: string): string {
     return `${this.base}/files/${encodeURIComponent(name)}`;
+  }
+
+  // Recherche globale
+  search(q: string): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/search`, { params: { q } });
+  }
+
+  // Audit trail
+  getAuditLogs(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/audit`);
+  }
+  getAuditByEntity(entityType: string, entityId: string): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/audit/${entityType}/${entityId}`);
+  }
+
+  // Modèles de courrier départ
+  getTemplatesCourrier(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/templates-courrier`);
+  }
+  createCourrierDepart(data: any): Observable<any> {
+    return this.http.post(`${this.base}/courriers-depart`, data);
+  }
+
+  // Signature assets
+  getSignatureAssets(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/users/me/signature-assets`);
+  }
+  uploadSignatureAsset(assetType: string, file: File): Observable<any> {
+    const form = new FormData();
+    form.append('assetType', assetType);
+    form.append('file', file);
+    return this.http.post(`${this.base}/users/me/signature-assets`, form);
+  }
+  getSignatureAssetUrl(id: string): Observable<{ url: string }> {
+    return this.http.get<{ url: string }>(`${this.base}/users/me/signature-assets/${id}/url`);
+  }
+  deleteSignatureAsset(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/users/me/signature-assets/${id}`);
+  }
+
+  // Annotations
+  getAnnotations(pageId: string): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/pages/${encodeURIComponent(pageId)}/annotations`);
+  }
+  createAnnotation(body: any): Observable<any> {
+    return this.http.post(`${this.base}/annotations`, body);
+  }
+  updateAnnotation(id: string, body: any): Observable<any> {
+    return this.http.put(`${this.base}/annotations/${id}`, body);
+  }
+  deleteAnnotation(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/annotations/${id}`);
+  }
+
+  // PDF documents
+  getPdfDocuments(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/pdf-documents`);
+  }
+  uploadPdfDocument(file: File, title?: string): Observable<any> {
+    const form = new FormData();
+    form.append('file', file);
+    if (title) form.append('title', title);
+    return this.http.post(`${this.base}/pdf-documents`, form);
+  }
+  renderPage(docId: string, page: number): string {
+    return `${this.base}/pdf-documents/${docId}/pages/${page}/image`;
+  }
+  finalizePdfDocument(docId: string): Observable<any> {
+    return this.http.post(`${this.base}/pdf-documents/${docId}/finalize`, {});
+  }
+  downloadFinalPdf(docId: string): string {
+    return `${this.base}/pdf-documents/${docId}/final`;
+  }
+  deletePdfDocument(docId: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/pdf-documents/${docId}`);
   }
 
   // Collaborateurs

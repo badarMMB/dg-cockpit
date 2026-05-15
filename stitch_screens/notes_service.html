@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+
+<html class="light" lang="fr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Notes de Service - DG-Cockpit</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Inter -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind Config -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-container": "#54647a",
+                        "surface-bright": "#f7f9fb",
+                        "secondary-fixed-dim": "#b7c8e1",
+                        "surface-container-highest": "#e0e3e5",
+                        "primary-container": "#1e3a8a",
+                        "surface": "#f7f9fb",
+                        "secondary-container": "#d0e1fb",
+                        "on-error": "#ffffff",
+                        "on-surface": "#191c1e",
+                        "secondary-fixed": "#d3e4fe",
+                        "on-secondary-fixed": "#0b1c30",
+                        "surface-variant": "#e0e3e5",
+                        "secondary": "#505f76",
+                        "on-primary": "#ffffff",
+                        "inverse-surface": "#2d3133",
+                        "primary": "#00236f",
+                        "on-tertiary-fixed-variant": "#004395",
+                        "on-error-container": "#93000a",
+                        "surface-container": "#eceef0",
+                        "on-primary-container": "#90a8ff",
+                        "on-secondary-fixed-variant": "#38485d",
+                        "on-primary-fixed-variant": "#264191",
+                        "error": "#ba1a1a",
+                        "outline-variant": "#c5c5d3",
+                        "tertiary-fixed": "#d8e2ff",
+                        "surface-dim": "#d8dadc",
+                        "surface-tint": "#4059aa",
+                        "surface-container-lowest": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-container": "#82abff",
+                        "on-secondary": "#ffffff",
+                        "surface-container-high": "#e6e8ea",
+                        "primary-fixed": "#dce1ff",
+                        "inverse-primary": "#b6c4ff",
+                        "background": "#f7f9fb",
+                        "on-background": "#191c1e",
+                        "inverse-on-surface": "#eff1f3",
+                        "on-tertiary-fixed": "#001a42",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed-dim": "#adc6ff",
+                        "tertiary": "#00285e",
+                        "on-primary-fixed": "#00164e",
+                        "outline": "#757682",
+                        "surface-container-low": "#f2f4f6",
+                        "on-surface-variant": "#444651",
+                        "tertiary-container": "#003d88",
+                        "primary-fixed-dim": "#b6c4ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit-lg": "24px",
+                        "unit-xl": "48px",
+                        "unit-sm": "8px",
+                        "margin-page": "32px",
+                        "gutter": "24px",
+                        "sidebar-width": "280px",
+                        "container-max": "1440px",
+                        "unit-md": "16px",
+                        "unit-xs": "4px"
+                    },
+                    "fontFamily": {
+                        "title-lg": ["Inter"],
+                        "label-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "title-lg": ["18px", {"lineHeight": "24px", "fontWeight": "600"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "fontWeight": "600"}],
+                        "display-lg": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "500"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined[data-weight="fill"] {
+            font-variation-settings: 'FILL' 1;
+        }
+        
+        /* Subtle shadow for Level 1 Cards */
+        .shadow-level-1 {
+            box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.04);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen font-body-md text-body-md overflow-x-hidden">
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 left-[280px] h-20 z-40 bg-surface-container-lowest border-b border-outline-variant shadow-sm flex items-center justify-between px-unit-lg w-[calc(100%-280px)]">
+<div class="flex items-center">
+<h1 class="font-display-lg text-display-lg font-bold text-primary tracking-tight">DG-Cockpit</h1>
+</div>
+<div class="flex items-center gap-unit-md">
+<div class="relative w-64 mr-4">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full h-10 pl-10 pr-4 bg-surface-container rounded-DEFAULT border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant" placeholder="Rechercher..." type="text"/>
+</div>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200 cursor-pointer active:scale-95">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200 cursor-pointer active:scale-95">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200 cursor-pointer active:scale-95">
+<span class="material-symbols-outlined">help</span>
+</button>
+<div class="w-10 h-10 rounded-full overflow-hidden ml-2 border border-outline-variant cursor-pointer">
+<img alt="General Director Profile" class="w-full h-full object-cover" data-alt="A professional headshot of a mature male executive in a sharp navy suit and light blue tie. He has a confident, slight smile. The background is a blurred modern office setting with cool, light grey tones. High resolution, professional corporate photography style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDU2RSAN04-LCrrH03WF02fYAtJdpj5IcR5YLJslB8htovLliG92sdPWA1ZO_3n97H86zWYZ7hVESs-rLd13juDM0LaNXuixNy9mdseobxlvxRjH3KI1QRW4O8plnOt5fNphBM9hAEWDg9UdI8O7RH8OSfftuOXEhpCDLScY7A-d__-HQvrBolz1eaZ27YfSgMo7U1VU1iGGPyhCiBIxdIlOFtTD6abLBi_9Wzi6LW1WCuSPswT68Ks7oZfACugO2Kgc50iTkgujYON"/>
+</div>
+</div>
+</header>
+<!-- SideNavBar -->
+<nav class="fixed left-0 top-0 w-[280px] h-screen z-50 bg-surface-container border-r border-outline-variant shadow-md flex flex-col py-unit-lg">
+<div class="px-unit-lg mb-8 flex flex-col items-start gap-4">
+<div class="w-16 h-16 rounded-full overflow-hidden border-2 border-primary">
+<img alt="Executive Portrait" class="w-full h-full object-cover" data-alt="A professional headshot of a mature male executive in a sharp navy suit and light blue tie. He has a confident, slight smile. The background is a blurred modern office setting with cool, light grey tones. High resolution, professional corporate photography style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAgfHP2tAyrkTUvbwm1iRcfOIL9Ed3VsI0hQ192Su9uZpaxycZnmYIdFJtDOGhUdukAiOSrcpeX6DxE85wvHRjHumkRBI4iHKNTLlNEmzxnh9pufeaC7wuvHqZMdNPvIKgdCnxhFLzwxSFXcnm3BIu4Wu7GRi2n5J7_dEXq4jgIsUVS6XwLTi6JhMD4R3z3SacUlZwfw6Q_h9r5X5SmRjrlCFbYETqg5D-wTPFxqw3qflOyHAABNyhXqQE3XYxP3FP0vnj_ZSO0OWvF"/>
+</div>
+<div>
+<h2 class="font-headline-lg text-headline-lg text-primary">M. le Directeur Général</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Cabinet de Direction</p>
+</div>
+<button class="mt-4 w-full bg-primary text-on-primary font-title-lg text-title-lg py-3 px-4 rounded-full flex items-center justify-center gap-2 hover:bg-on-tertiary-fixed-variant transition-colors active:scale-[0.98]">
+<span class="material-symbols-outlined text-[20px]">add</span>
+                Nouveau Document
+            </button>
+</div>
+<div class="flex-1 overflow-y-auto px-2 space-y-1">
+<!-- Courrier Arrivé -->
+<a class="flex items-center gap-3 text-secondary hover:bg-surface-container-highest rounded-full mx-unit-sm px-unit-md py-3 transition-all hover:translate-x-1 duration-200 active:scale-[0.98] font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">mail</span>
+                Courrier Arrivé
+            </a>
+<!-- Parapheur -->
+<a class="flex items-center gap-3 text-secondary hover:bg-surface-container-highest rounded-full mx-unit-sm px-unit-md py-3 transition-all hover:translate-x-1 duration-200 active:scale-[0.98] font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">draw</span>
+                Parapheur
+            </a>
+<!-- Notes de Service (ACTIVE) -->
+<a class="flex items-center gap-3 bg-primary text-on-primary rounded-full mx-unit-sm px-unit-md py-3 font-semibold transition-all hover:translate-x-1 duration-200 active:scale-[0.98] font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" data-weight="fill">description</span>
+                Notes de Service
+            </a>
+<!-- Courrier Départ -->
+<a class="flex items-center gap-3 text-secondary hover:bg-surface-container-highest rounded-full mx-unit-sm px-unit-md py-3 transition-all hover:translate-x-1 duration-200 active:scale-[0.98] font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">outbox</span>
+                Courrier Départ
+            </a>
+<!-- Instructions -->
+<a class="flex items-center gap-3 text-secondary hover:bg-surface-container-highest rounded-full mx-unit-sm px-unit-md py-3 transition-all hover:translate-x-1 duration-200 active:scale-[0.98] font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">assignment</span>
+                Instructions
+            </a>
+<!-- Rendez-vous -->
+<a class="flex items-center gap-3 text-secondary hover:bg-surface-container-highest rounded-full mx-unit-sm px-unit-md py-3 transition-all hover:translate-x-1 duration-200 active:scale-[0.98] font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">event</span>
+                Rendez-vous
+            </a>
+</div>
+<div class="mt-auto px-2">
+<a class="flex items-center gap-3 text-secondary hover:bg-surface-container-highest rounded-full mx-unit-sm px-unit-md py-3 transition-all hover:translate-x-1 duration-200 active:scale-[0.98] font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">logout</span>
+                Déconnexion
+            </a>
+</div>
+</nav>
+<!-- Main Content -->
+<main class="ml-[280px] pt-20 p-margin-page min-h-screen max-w-container-max mx-auto">
+<!-- Page Header -->
+<div class="flex items-center justify-between mb-8">
+<div>
+<h2 class="font-display-lg text-display-lg text-on-surface">Notes de Service</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant mt-1">Gérez et suivez la diffusion des mémos officiels de l'institution.</p>
+</div>
+<div class="flex gap-4">
+<button class="bg-surface-container-lowest border border-outline-variant text-on-surface font-label-md text-label-md px-4 py-2 rounded-full flex items-center gap-2 shadow-sm hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[18px]">filter_list</span>
+                    Filtrer
+                </button>
+<button class="bg-surface-container-lowest border border-outline-variant text-on-surface font-label-md text-label-md px-4 py-2 rounded-full flex items-center gap-2 shadow-sm hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[18px]">sort</span>
+                    Plus récent
+                </button>
+</div>
+</div>
+<!-- Cards Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-gutter">
+<!-- Card 1 -->
+<article class="bg-surface-container-lowest rounded-DEFAULT border border-surface-container-highest shadow-level-1 overflow-hidden flex flex-col group cursor-pointer hover:shadow-md transition-shadow duration-300">
+<!-- Redressed Thumbnail -->
+<div class="w-full h-48 bg-surface-container-low border-b border-surface-container-highest relative overflow-hidden flex items-center justify-center p-4">
+<img alt="Document Thumbnail" class="w-[85%] h-full object-cover shadow-sm border border-outline-variant group-hover:scale-105 transition-transform duration-500 origin-top" data-alt="A perfectly top-down, straight, high-resolution scan of a formal French administrative memo. The document has an official letterhead with a logo at the top left, neat justified text paragraphs, and a faint stamp mark at the bottom right. The paper is crisp white, set against a pristine, light-grey digital background. The lighting is even and high-key, emphasizing a modern corporate minimalist aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB78Pkkv15b5Ba8rCS7Lz3JYcHThATTcBty13aaRdb6NvvNxvJIhlv_HlPk7uW7ZqYyxQow8H1hF-y0kSFMZ0KvrQXkq9DsWNHoWPN9P2enLMvoee8zgNgfzcpFMaynQE7Xoie09mPgoAZm9OiYlvwxofnD5NEVSKJpZF6IHZdq_EoAuHD3gGMOnRjOoxPz_MVjmjS7B6zrWnQqHWK8iL3HnQMNKx8aVLhnapumq7yxmf9DpXxDz-bnfPbTTJC_7tVxa1DJU9LVJRxE"/>
+<div class="absolute top-2 right-2 bg-secondary-container text-on-secondary-container px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">
+                        Important
+                    </div>
+</div>
+<div class="p-unit-md flex flex-col flex-1">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-wider">N° 2023-104</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Aujourd'hui</span>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface mb-2 line-clamp-2 group-hover:text-primary transition-colors">Mise à jour des protocoles de sécurité informatique au sein des départements</h3>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2 mb-4">Conformément aux nouvelles directives nationales, veuillez trouver ci-joint les procédures actualisées concernant l'accès au réseau interne.</p>
+<div class="mt-auto pt-4 border-t border-surface-container-highest flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-tertiary-container flex items-center justify-center text-on-tertiary-container font-bold text-[10px]">
+                                DSI
+                            </div>
+<span class="font-label-md text-label-md text-on-surface-variant">Direction Systèmes</span>
+</div>
+<!-- Read Status -->
+<div class="flex items-center gap-1.5 text-primary bg-primary-fixed/30 px-2.5 py-1 rounded-full">
+<span class="material-symbols-outlined text-[14px]">visibility</span>
+<span class="font-label-md text-label-md">145 lus</span>
+</div>
+</div>
+</div>
+</article>
+<!-- Card 2 -->
+<article class="bg-surface-container-lowest rounded-DEFAULT border border-surface-container-highest shadow-level-1 overflow-hidden flex flex-col group cursor-pointer hover:shadow-md transition-shadow duration-300">
+<div class="w-full h-48 bg-surface-container-low border-b border-surface-container-highest relative overflow-hidden flex items-center justify-center p-4">
+<img alt="Document Thumbnail" class="w-[85%] h-full object-cover shadow-sm border border-outline-variant group-hover:scale-105 transition-transform duration-500 origin-top" data-alt="A meticulously aligned, top-down view of an official corporate memo. The document features a bold header with a distinct reference number, structured bullet points, and a formal signature block. It is presented on high-quality white paper against a very subtle, soft grey surface. The lighting is bright and diffuse, reflecting a clean, executive command visual style with heavy whitespace." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDVx-mdsIEB-ClEGRXYYPJQP8t0n4tK9NZNaVSNuNFd6Ee6q6MO1zInuel3DYD9tlyQj8LKj_mm5zX1eWrTR95gpOHaZdMp09cs-HF9oaaNKuu4f8v_AyqhxwXtsgNZ1UL4gYSh1_1jPJXlLkrLSME7GAiRLa91Ohp73BV8C8B0CW0w1zlWz7SkzZcA1ZCl6BLByTQ9m3UY2O5wE7Fi6VIzqiV5Zl5w5pt1WvS29vPm-0nuVYf1qNA7kkrrTWStpmS3RttAknUTeGNu"/>
+</div>
+<div class="p-unit-md flex flex-col flex-1">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-wider">N° 2023-102</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">12 Oct</span>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface mb-2 line-clamp-2 group-hover:text-primary transition-colors">Organisation des permanences pour le pont du 1er Novembre</h3>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2 mb-4">Tableau de roulement et consignes spécifiques pour le maintien de la continuité de service durant la période fériée.</p>
+<div class="mt-auto pt-4 border-t border-surface-container-highest flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-surface-tint text-on-primary flex items-center justify-center font-bold text-[10px]">
+                                RH
+                            </div>
+<span class="font-label-md text-label-md text-on-surface-variant">Ressources Humaines</span>
+</div>
+<div class="flex items-center gap-1.5 text-secondary bg-surface-container px-2.5 py-1 rounded-full">
+<span class="material-symbols-outlined text-[14px]">visibility</span>
+<span class="font-label-md text-label-md">312 lus</span>
+</div>
+</div>
+</div>
+</article>
+<!-- Card 3 -->
+<article class="bg-surface-container-lowest rounded-DEFAULT border border-surface-container-highest shadow-level-1 overflow-hidden flex flex-col group cursor-pointer hover:shadow-md transition-shadow duration-300">
+<div class="w-full h-48 bg-surface-container-low border-b border-surface-container-highest relative overflow-hidden flex items-center justify-center p-4">
+<img alt="Document Thumbnail" class="w-[85%] h-full object-cover shadow-sm border border-outline-variant group-hover:scale-105 transition-transform duration-500 origin-top" data-alt="A straight, overhead shot of a multi-page administrative instruction document. The visible top page shows a dense layout with a table of contents and a large, bold title section. The paper is bright white, contrasting with a cool, minimalist light grey background. The image evokes a sense of formal institutional authority and crisp, clean documentation." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDruV71_QGJ59VlE5q_DYosU8fJmevhqG9R9uS-7ZMrr3bTaX5_cbck8Y5Y4ZRn01D0bHlIvEESkD6haR93rgDYQLIItGmSCzJeslE0ROm1beW68D-mIFgpxVkErOlqrAGwWJ_fLmOBdOlJ64ja3eTWwgF13HBLrevKhPRkvJ2454ZuxQmv69OGensERdhT2apOAhmCJvAPUELM7bUGy846qoNCf6MwqYYy3X1LMC_4P1LvBPy8fTPxIWy349Q_mgjxluvkBlF-8iHY"/>
+</div>
+<div class="p-unit-md flex flex-col flex-1">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-wider">N° 2023-098</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">05 Oct</span>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface mb-2 line-clamp-2 group-hover:text-primary transition-colors">Nouvelles procédures d'engagement des dépenses d'équipement</h3>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2 mb-4">Ce mémo annule et remplace la note N°2022-045 concernant le processus de validation budgétaire.</p>
+<div class="mt-auto pt-4 border-t border-surface-container-highest flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-bold text-[10px]">
+                                FIN
+                            </div>
+<span class="font-label-md text-label-md text-on-surface-variant">Finances</span>
+</div>
+<div class="flex items-center gap-1.5 text-secondary bg-surface-container px-2.5 py-1 rounded-full">
+<span class="material-symbols-outlined text-[14px]">visibility</span>
+<span class="font-label-md text-label-md">89 lus</span>
+</div>
+</div>
+</div>
+</article>
+<!-- Card 4 -->
+<article class="bg-surface-container-lowest rounded-DEFAULT border border-surface-container-highest shadow-level-1 overflow-hidden flex flex-col group cursor-pointer hover:shadow-md transition-shadow duration-300 opacity-75">
+<div class="w-full h-48 bg-surface-container-low border-b border-surface-container-highest relative overflow-hidden flex items-center justify-center p-4">
+<img alt="Document Thumbnail" class="w-[85%] h-full object-cover shadow-sm border border-outline-variant grayscale group-hover:scale-105 transition-transform duration-500 origin-top" data-alt="A perfectly squared, top-down preview of an archived memorandum. The document features a simple layout with large, readable text blocks and a subtle watermark. The paper has a slight off-white tone, placed against a stark white background. The lighting is even, reinforcing a sterile, highly organized corporate archive aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC2e1VOgCfyW66cPy8SOqrgbOsOm3tOX1VxpcJupbASkm1mtlZu4b2KtqZzE2aXO8a4Ispbz_r-yvLGz75e9fLtpbchqKrCsTF_SMgU4HdC7WOxsAN-_e-gbLYJS0lu0mBLQ8-KyxEBHmEU9VmcP4PLskwjaiWaFwCeeFGNA38Xx9BTcgB0hkV52h8JV8RZFkrgx7oGogGrg-6gSMTAUg2cmiKTMy-jwv1TaGLRTjs1yAF1RII-GX2nRZ9FzetS0087VCc_ZMVIuwjY"/>
+<div class="absolute inset-0 bg-surface-container/20"></div>
+</div>
+<div class="p-unit-md flex flex-col flex-1">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-sm text-label-sm text-outline uppercase tracking-wider">N° 2023-050</span>
+<span class="font-label-sm text-label-sm text-outline">15 Sep</span>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface-variant mb-2 line-clamp-2">Rappel sur l'utilisation du parc automobile de service</h3>
+<p class="font-body-md text-body-md text-outline line-clamp-2 mb-4">Note archivée. Pour information uniquement concernant l'historique des attributions de véhicules.</p>
+<div class="mt-auto pt-4 border-t border-surface-container-highest flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center font-bold text-[10px]">
+                                LOG
+                            </div>
+<span class="font-label-md text-label-md text-outline">Logistique</span>
+</div>
+<div class="flex items-center gap-1.5 text-outline">
+<span class="material-symbols-outlined text-[14px]">done_all</span>
+<span class="font-label-md text-label-md">Clôturé</span>
+</div>
+</div>
+</div>
+</article>
+</div>
+</main>
+</body></html>

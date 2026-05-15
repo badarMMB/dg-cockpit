@@ -105,6 +105,12 @@ public class InstructionController {
             instructionRepo.save(instruction);
         }
 
+        String audioUrl = (String) body.get("audioUrl");
+        if (audioUrl != null && !audioUrl.isBlank()) {
+            msg.setAudioUrl(audioUrl);
+            msg.setAttachmentName((String) body.getOrDefault("attachmentName", "voice.webm"));
+        }
+
         InstructionMessage saved = messageRepo.save(msg);
         return toMessageDto(saved);
     }
@@ -153,6 +159,7 @@ public class InstructionController {
         map.put("attachmentName", m.getAttachmentName());
         map.put("actionType", m.getActionType() != null ? m.getActionType().name().toLowerCase() : null);
         map.put("status", m.getStatut() != null ? m.getStatut().name().toLowerCase() : null);
+        map.put("audioUrl", m.getAudioUrl());
         return map;
     }
 

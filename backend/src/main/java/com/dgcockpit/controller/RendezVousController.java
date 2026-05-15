@@ -4,9 +4,12 @@ import com.dgcockpit.entity.RendezVous;
 import com.dgcockpit.repository.RendezVousRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 @RestController
 @RequestMapping("/api/rendez-vous")
@@ -21,6 +24,17 @@ public class RendezVousController {
     @GetMapping
     public List<Map<String, Object>> getAll() {
         return repo.findAllByOrderByHeureAsc().stream().map(this::toDto).toList();
+    }
+
+    @GetMapping("/calendrier")
+    public Map<String, List<Map<String, Object>>> getCalendrier(@RequestParam String mois) {
+        LocalDate start = LocalDate.parse(mois + "-01");
+        LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
+        Map<String, List<Map<String, Object>>> result = new TreeMap<>();
+        for (RendezVous r : repo.findByDateBetweenOrderByDateAscHeureAsc(start, end)) {
+            result.computeIfAbsent(r.getDate().toString(), k -> new ArrayList<>()).add(toDto(r));
+        }
+        return result;
     }
 
     @GetMapping("/{id}")

@@ -2,6 +2,7 @@ package com.dgcockpit.controller;
 
 import com.dgcockpit.entity.CourrierArrive;
 import com.dgcockpit.repository.CourrierArriveRepository;
+import com.dgcockpit.service.AuditService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
@@ -13,9 +14,11 @@ import java.util.Map;
 public class CourrierArriveController {
 
     private final CourrierArriveRepository repo;
+    private final AuditService auditService;
 
-    public CourrierArriveController(CourrierArriveRepository repo) {
+    public CourrierArriveController(CourrierArriveRepository repo, AuditService auditService) {
         this.repo = repo;
+        this.auditService = auditService;
     }
 
     @GetMapping
@@ -35,6 +38,8 @@ public class CourrierArriveController {
         return repo.findById(id).map(c -> {
             if (body.containsKey("statut")) {
                 c.setStatut(CourrierArrive.Statut.valueOf(body.get("statut")));
+                auditService.log("STATUT_" + body.get("statut"), "courrier-arrive", id,
+                    "Statut mis à jour : " + body.get("statut"));
             }
             return ResponseEntity.ok(toDto(repo.save(c)));
         }).orElse(ResponseEntity.notFound().build());

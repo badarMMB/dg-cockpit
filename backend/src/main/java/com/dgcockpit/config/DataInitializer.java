@@ -17,7 +17,8 @@ public class DataInitializer {
             InstructionMessageRepository messageRepo,
             CourrierArriveRepository courrierArriveRepo,
             CourrierDepartRepository courrierDepartRepo,
-            RendezVousRepository rendezVousRepo) {
+            RendezVousRepository rendezVousRepo,
+            TemplateCourrierDepartRepository templateRepo) {
 
         return args -> {
             if (collaborateurRepo.count() > 0) return;
@@ -150,6 +151,27 @@ public class DataInitializer {
             rdv3.setObjet("Discussion sur le renforcement de la coopération bilatérale dans le domaine administratif.");
             rdv3.setStatut(RendezVous.Statut.PLANIFIE);
             rendezVousRepo.save(rdv3);
+
+            // ── Modèles de courrier départ ────────────────────────────────
+            templateRepo.save(template("Note de service",
+                "NOTE_SERVICE",
+                "Note de service n° [REFERENCE] — [OBJET]",
+                "À l'attention de [DESTINATAIRES],\n\nPar la présente note de service, nous portons à votre connaissance [OBJET].\n\nNous vous remercions de bien vouloir en prendre acte et d'assurer la diffusion auprès de vos équipes.\n\nFait à [LIEU], le [DATE]\n\nLe Directeur Général"));
+
+            templateRepo.save(template("Circulaire",
+                "CIRCULAIRE",
+                "Circulaire n° [REFERENCE] relative à [OBJET]",
+                "Mesdames, Messieurs les Chefs de service,\n\nLa présente circulaire a pour objet de préciser les modalités d'application de [OBJET].\n\nI. CONTEXTE\n[À compléter]\n\nII. DISPOSITIONS\n[À compléter]\n\nIII. ENTRÉE EN VIGUEUR\nLa présente circulaire prend effet à compter de sa date de signature.\n\nLe Directeur Général"));
+
+            templateRepo.save(template("Lettre de réponse",
+                "REPONSE",
+                "Réponse à votre courrier du [DATE] — [REFERENCE]",
+                "Monsieur / Madame,\n\nNous avons bien reçu votre courrier du [DATE] relatif à [OBJET] et nous vous en remercions.\n\nAprès examen attentif de votre demande, nous avons l'honneur de vous informer que [REPONSE].\n\nNous restons à votre disposition pour tout renseignement complémentaire.\n\nVeuillez agréer, Monsieur / Madame, l'expression de nos salutations distinguées.\n\nLe Directeur Général"));
+
+            templateRepo.save(template("Lettre d'invitation",
+                "INVITATION",
+                "Invitation — [EVENEMENT] du [DATE]",
+                "Monsieur / Madame,\n\nNous avons l'honneur de vous convier à [EVENEMENT] qui se tiendra le [DATE] à [HEURE], [LIEU].\n\nProgramme :\n[À compléter]\n\nMerci de bien vouloir confirmer votre participation avant le [DATE_LIMITE].\n\nVeuillez agréer, Monsieur / Madame, l'expression de nos salutations distinguées.\n\nLe Directeur Général"));
         };
     }
 
@@ -157,5 +179,11 @@ public class DataInitializer {
         Collaborateur c = new Collaborateur();
         c.setName(name); c.setEmail(email); c.setRole(role);
         return c;
+    }
+
+    private TemplateCourrierDepart template(String nom, String type, String objet, String contenu) {
+        TemplateCourrierDepart t = new TemplateCourrierDepart();
+        t.setNom(nom); t.setType(type); t.setObjet(objet); t.setContenu(contenu);
+        return t;
     }
 }

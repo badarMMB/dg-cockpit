@@ -2,6 +2,8 @@ import { Component, OnInit, signal, ViewChild, ElementRef, AfterViewChecked, inj
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
+import { WorkflowTimelineComponent } from '../../shared/workflow-timeline/workflow-timeline.component';
+import { AudioRecorderComponent } from '../../shared/audio-recorder/audio-recorder.component';
 
 interface ChatMessage {
   id: string;
@@ -14,6 +16,7 @@ interface ChatMessage {
   attachmentName?: string;
   actionType?: string;
   status?: 'pending' | 'validated' | 'rejected';
+  audioUrl?: string;
 }
 
 interface Assignee {
@@ -24,7 +27,7 @@ interface Assignee {
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, WorkflowTimelineComponent, AudioRecorderComponent],
   templateUrl: './chat.component.html',
   styleUrl: './chat.component.css'
 })
@@ -48,6 +51,36 @@ export class ChatComponent implements OnInit, AfterViewChecked {
   newInstructionAssignees = signal<Assignee[]>([]);
   isRecordingAudio = signal(false);
   hasAudioRecord = signal(false);
+
+  workflowSteps = signal<any[]>([]);
+  showWorkflow = signal(false);
+
+  readonly statutColors: Record<string, string> = {
+    'OUVERT':            'bg-gray-100 text-gray-700',
+    'EN_COURS':          'bg-yellow-100 text-yellow-700',
+    'EN_ATTENTE':        'bg-orange-100 text-orange-700',
+    'SOUMIS_VALIDATION': 'bg-blue-100 text-blue-700',
+    'CLOTURE':           'bg-green-100 text-green-700',
+    'REFUSE':            'bg-red-100 text-red-700'
+  };
+
+  readonly statutLabels: Record<string, string> = {
+    'OUVERT':            'Ouvert',
+    'EN_COURS':          'En cours',
+    'EN_ATTENTE':        'En attente',
+    'SOUMIS_VALIDATION': 'En validation',
+    'CLOTURE':           'Clôturé',
+    'REFUSE':            'Refusé'
+  };
+
+  canSoumettre(): boolean {
+    const s = this.activeThread()?.statut;
+    return s === 'OUVERT' || s === 'EN_COURS' || s === 'EN_ATTENTE';
+  }
+
+  canValider(): boolean {
+    return this.activeThread()?.statut === 'SOUMIS_VALIDATION';
+  }
 
   instructionTypes = [
     'Préparation de document', 'Demande de rapport', 'Organisation de réunion',
@@ -75,21 +108,17 @@ export class ChatComponent implements OnInit, AfterViewChecked {
 
   private loadMessages(threadId: string) {
     this.activeThreadId.set(threadId);
+    this.showWorkflow.set(false);
     this.api.getMessages(threadId).subscribe(msgs => {
       this.messages.set(msgs.map(m => ({
-        id: m.id,
-        sender: m.sender,
-        text: m.text,
-        time: m.time,
-        isSelf: m.isSelf,
-        type: m.type as 'normal' | 'final',
-        hasAttachment: m.hasAttachment,
-        attachmentName: m.attachmentName,
-        actionType: m.actionType,
-        status: m.status as any
+        id: m.id, sender: m.sender, text: m.text, time: m.time,
+        isSelf: m.isSelf, type: m.type as 'normal' | 'final',
+        hasAttachment: m.hasAttachment, attachmentName: m.attachmentName,
+        actionType: m.actionType, status: m.status as any
       })));
       this.shouldScrollToBottom = true;
     });
+    this.api.getWorkflow(threadId).subscribe(steps => this.workflowSteps.set(steps));
   }
 
   selectThread(id: string) {
@@ -192,14 +221,36 @@ export class ChatComponent implements OnInit, AfterViewChecked {
     this.isNewInstructionModalOpen.set(false);
   }
 
+  onAudioRecorded(blob: Blob) {
+    const threadId = this.activeThreadId();
+    if (!threadId) return;
+    const file = new File([blob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
+    this.api.uploadFile(file).subscribe(res => {
+      const payload = {
+        sender: 'DG', isSelf: true,
+        text: '',
+        type: 'NORMAL',
+        attachmentName: res.name,
+        audioUrl: this.api.getFileUrl(res.name)
+      };
+      this.api.sendMessage(threadId, payload).subscribe(saved => {
+        this.messages.update(msgs => [...msgs, {
+          id: saved.id, sender: saved.sender, text: saved.text ?? '',
+          time: saved.time, isSelf: saved.isSelf,
+          type: saved.type as 'normal' | 'final',
+          hasAttachment: saved.hasAttachment,
+          attachmentName: saved.attachmentName,
+          actionType: saved.actionType, status: saved.status as any,
+          audioUrl: saved.audioUrl ?? payload.audioUrl
+        }]);
+        this.shouldScrollToBottom = true;
+      });
+    });
+  }
+
   toggleAudioRecording() {
-    if (this.isRecordingAudio()) {
-      this.isRecordingAudio.set(false);
-      this.hasAudioRecord.set(true);
-    } else {
-      this.isRecordingAudio.set(true);
-      this.hasAudioRecord.set(false);
-    }
+    this.isRecordingAudio.update(v => !v);
+    if (!this.isRecordingAudio()) this.hasAudioRecord.set(true);
   }
 
   createNewInstruction() {
@@ -217,6 +268,41 @@ export class ChatComponent implements OnInit, AfterViewChecked {
       this.threads.update(t => [newThread, ...t.map(th => ({ ...th, active: false }))]);
       this.loadMessages(created.id);
       this.closeNewInstructionModal();
+    });
+  }
+
+  activeThread() {
+    return this.threads().find(t => t.id === this.activeThreadId());
+  }
+
+  toggleWorkflow() {
+    this.showWorkflow.update(v => !v);
+  }
+
+  soumettreValidation() {
+    const id = this.activeThreadId();
+    if (!id) return;
+    this.api.soumettre(id, { validateur: 'DG', commentaire: '' }).subscribe(step => {
+      this.workflowSteps.update(s => [...s, step]);
+      this.threads.update(t => t.map(th => th.id === id ? { ...th, statut: 'SOUMIS_VALIDATION' } : th));
+    });
+  }
+
+  validerInstruction() {
+    const id = this.activeThreadId();
+    if (!id) return;
+    this.api.valider(id, { validateur: 'DG', commentaire: '' }).subscribe(step => {
+      this.workflowSteps.update(s => [...s, step]);
+      this.threads.update(t => t.map(th => th.id === id ? { ...th, statut: 'CLOTURE' } : th));
+    });
+  }
+
+  rejeterInstruction() {
+    const id = this.activeThreadId();
+    if (!id) return;
+    this.api.rejeter(id, { validateur: 'DG', commentaire: '' }).subscribe(step => {
+      this.workflowSteps.update(s => [...s, step]);
+      this.threads.update(t => t.map(th => th.id === id ? { ...th, statut: 'REFUSE' } : th));
     });
   }
 

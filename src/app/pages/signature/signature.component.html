@@ -9,10 +9,14 @@
       <button class="hidden sm:block px-3 py-1.5 border border-gray-300 text-gray-700 font-medium rounded text-sm hover:bg-gray-50">
         Refuser
       </button>
-      <button *ngIf="!isSigned()" (click)="openModal()"
+      <button *ngIf="!isSigned() && !isSaving()" (click)="openModal()"
               class="px-3 md:px-6 py-1.5 md:py-2 bg-primary text-white font-medium rounded hover:bg-primary/90 shadow-soft flex items-center gap-1.5 text-sm">
         <span>✍️</span> Signer
       </button>
+      <div *ngIf="isSaving()" class="px-3 py-1.5 bg-gray-100 text-gray-600 rounded flex items-center gap-2 text-sm">
+        <div class="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+        Enregistrement…
+      </div>
       <div *ngIf="isSigned()" class="px-3 py-1.5 bg-green-600 text-white font-medium rounded shadow-soft flex items-center gap-1.5 text-sm">
         <span>✅</span> Signé
       </div>
@@ -53,9 +57,14 @@
       <!-- Zone de signature -->
       <div class="mt-8 md:mt-16 flex justify-end">
         <div class="w-48 md:w-64 border border-dashed border-gray-400 p-4 rounded bg-gray-50 flex flex-col items-center justify-center min-h-[100px] md:min-h-[150px]">
-          <span *ngIf="!isSigned()" class="text-sm text-gray-500 font-medium text-center">Zone de signature DG</span>
-          <img *ngIf="isSigned() && signatureImage()" [src]="signatureImage()" class="max-w-full max-h-full" alt="Signature"/>
-          <div *ngIf="isSigned()" class="mt-2 text-xs text-green-600 font-bold bg-green-100 px-2 py-1 rounded-full">Scellé ✓</div>
+          <span *ngIf="!isSigned() && !isSaving()" class="text-sm text-gray-500 font-medium text-center">Zone de signature DG</span>
+          <div *ngIf="isSaving()" class="flex flex-col items-center gap-2">
+            <div class="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+            <span class="text-xs text-gray-500">Enregistrement…</span>
+          </div>
+          <img *ngIf="isSigned() && signatureImage()" [src]="signatureImage()" class="max-w-full max-h-24" alt="Signature"/>
+          <div *ngIf="isSigned()" class="mt-1 text-[10px] text-green-700 font-semibold bg-green-100 px-2 py-0.5 rounded-full text-center">✓ Scellé</div>
+          <div *ngIf="isSigned() && signedAt()" class="mt-1 text-[9px] text-gray-500 text-center leading-tight">{{ signedAt() }}</div>
         </div>
       </div>
     </div>

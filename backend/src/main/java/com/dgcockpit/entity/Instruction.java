@@ -29,7 +29,7 @@ public class Instruction {
     @OneToMany(mappedBy = "instruction", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Assignee> assignees = new ArrayList<>();
 
-    public enum StatutInstruction { OUVERT, EN_COURS, EN_ATTENTE, CLOTURE, REFUSE }
+    public enum StatutInstruction { OUVERT, EN_COURS, EN_ATTENTE, SOUMIS_VALIDATION, CLOTURE, REFUSE }
 
     // Getters / Setters
     public String getId() { return id; }

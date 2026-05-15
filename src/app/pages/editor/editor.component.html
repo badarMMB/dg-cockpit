@@ -4,9 +4,16 @@
     <div class="flex items-center gap-3 min-w-0">
       <div class="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center text-red-600 text-sm font-bold flex-shrink-0">PDF</div>
       <div class="min-w-0">
-        <input type="text" [ngModel]="documentTitle()" (ngModelChange)="documentTitle.set($event)"
-               class="text-base md:text-lg font-semibold text-gray-900 border-none bg-transparent hover:bg-gray-50 px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-primary/50 w-full"
-               placeholder="Nom du document...">
+        <div class="flex items-center gap-2">
+          <input type="text" [ngModel]="documentTitle()" (ngModelChange)="documentTitle.set($event)"
+                 class="text-base md:text-lg font-semibold text-gray-900 border-none bg-transparent hover:bg-gray-50 px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-primary/50 w-full md:w-64"
+                 placeholder="Nom du document...">
+          <select (change)="onTemplateSelected($event)" 
+                  class="hidden md:block bg-gray-50 border border-gray-200 rounded text-[10px] font-bold uppercase tracking-wider px-2 py-1 outline-none text-gray-500 focus:ring-1 focus:ring-primary">
+            <option value="">-- Utiliser un modèle --</option>
+            <option *ngFor="let t of templates()" [value]="t.id">{{ t.nom }}</option>
+          </select>
+        </div>
         <p class="text-xs text-gray-500 px-2">Brouillon • Sauvegardé</p>
       </div>
     </div>

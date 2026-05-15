@@ -10,7 +10,7 @@ RUN npx ng build --configuration production
 FROM maven:3.9-eclipse-temurin-21-alpine AS mvn-build
 WORKDIR /app
 COPY backend/pom.xml ./pom.xml
-RUN mvn dependency:go-offline -B
+RUN mvn dependency:resolve -DincludeScope=runtime -B || true
 COPY backend/src ./src
 COPY --from=ng-build /workspace/backend/src/main/resources/static ./src/main/resources/static
 RUN mvn package -DskipTests -B

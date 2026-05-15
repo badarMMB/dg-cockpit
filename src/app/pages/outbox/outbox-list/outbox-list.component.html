@@ -5,15 +5,25 @@
         <h1 class="text-xl md:text-2xl font-bold text-gray-900">Courrier Départ</h1>
         <p class="text-sm text-gray-500 mt-1">Correspondances officielles émises par la Direction</p>
       </div>
-      <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
-        {{ courriers().length }} courrier(s)
-      </span>
+      <button (click)="openModal()"
+              class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        <span class="hidden sm:inline">Nouveau courrier</span>
+      </button>
     </div>
+
+    <!-- Filtres statut -->
     <div class="flex gap-2 mt-4 overflow-x-auto pb-1">
-      <button class="px-3 py-1.5 bg-primary text-white rounded-full text-xs font-medium whitespace-nowrap">Tous</button>
-      <button class="px-3 py-1.5 bg-white border border-gray-300 text-gray-600 rounded-full text-xs font-medium hover:border-primary hover:text-primary whitespace-nowrap">Brouillons</button>
-      <button class="px-3 py-1.5 bg-white border border-gray-300 text-gray-600 rounded-full text-xs font-medium hover:border-primary hover:text-primary whitespace-nowrap">Signés</button>
-      <button class="px-3 py-1.5 bg-white border border-gray-300 text-gray-600 rounded-full text-xs font-medium hover:border-primary hover:text-primary whitespace-nowrap">Expédiés</button>
+      <button *ngFor="let f of [['TOUS','Tous'],['BROUILLON','Brouillons'],['SIGNE','Signés'],['EXPEDIE','Expédiés']]"
+              (click)="filterStatut.set(f[0])"
+              class="px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors"
+              [ngClass]="filterStatut() === f[0]
+                ? 'bg-primary text-white'
+                : 'bg-white border border-gray-300 text-gray-600 hover:border-primary hover:text-primary'">
+        {{ f[1] }}
+      </button>
     </div>
   </header>
 
@@ -23,35 +33,101 @@
     </div>
 
     <div *ngIf="!loading()" class="space-y-3">
-      <a *ngFor="let c of courriers()"
-         [routerLink]="['/outbox', c.id]"
+      <a *ngFor="let c of filtered()"
+         [routerLink]="['/outbox', c['id']]"
          class="block bg-white rounded-xl border border-gray-200 p-4 md:p-5 hover:border-primary hover:shadow-soft transition-all cursor-pointer group">
         <div class="flex items-start justify-between gap-3">
           <div class="flex items-start gap-3 md:gap-4 min-w-0">
             <div class="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 font-bold text-xl flex-shrink-0">📤</div>
             <div class="min-w-0">
-              <h3 class="font-semibold text-gray-900 text-sm group-hover:text-primary transition-colors truncate">{{ c.objet }}</h3>
-              <p class="text-xs text-gray-500 mt-0.5">À : <span class="font-medium text-gray-700">{{ c.destinataire }}</span></p>
-              <p class="text-xs text-gray-400 mt-1 truncate">{{ c.apercu }}</p>
+              <h3 class="font-semibold text-gray-900 text-sm group-hover:text-primary transition-colors truncate">{{ c['objet'] }}</h3>
+              <p class="text-xs text-gray-500 mt-0.5">À : <span class="font-medium text-gray-700">{{ c['destinataire'] }}</span></p>
+              <p class="text-xs text-gray-400 mt-1 truncate">{{ c['apercu'] }}</p>
             </div>
           </div>
           <div class="flex flex-col items-end gap-2 flex-shrink-0">
-            <span class="text-xs text-gray-400 whitespace-nowrap">{{ c.dateEnvoi }}</span>
+            <span class="text-xs text-gray-400 whitespace-nowrap">{{ c['dateEnvoi'] }}</span>
             <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold"
-                  [ngClass]="statutColors[c.statut] || 'bg-gray-100 text-gray-600'">
-              {{ statutLabels[c.statut] || c.statut }}
+                  [ngClass]="statutColors[c['statut']] || 'bg-gray-100 text-gray-600'">
+              {{ statutLabels[c['statut']] || c['statut'] }}
             </span>
-            <div *ngIf="c.pieceJointe" class="text-gray-400 text-xs flex items-center gap-1">
-              📎 <span>{{ c.pieceJointe }}</span>
+            <div *ngIf="c['pieceJointe']" class="text-gray-400 text-xs flex items-center gap-1">
+              📎 <span>{{ c['pieceJointe'] }}</span>
             </div>
           </div>
         </div>
       </a>
 
-      <div *ngIf="courriers().length === 0" class="text-center py-16 text-gray-400">
+      <div *ngIf="filtered().length === 0" class="text-center py-16 text-gray-400">
         <div class="text-5xl mb-4">📤</div>
         <p class="font-medium">Aucun courrier départ</p>
       </div>
     </div>
   </main>
+</div>
+
+<!-- ── Modal nouveau courrier ────────────────────────────────────────── -->
+<div *ngIf="showModal()" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+
+    <!-- En-tête modal -->
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+      <h2 class="text-base font-semibold text-gray-900">Nouveau courrier départ</h2>
+      <button (click)="showModal.set(false)" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+    </div>
+
+    <!-- Corps modal -->
+    <div class="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+
+      <!-- Sélecteur de modèle -->
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1.5">Partir d'un modèle <span class="text-gray-400">(optionnel)</span></label>
+        <select [ngModel]="selectedTemplateId()" (ngModelChange)="onTemplateChange($event)"
+                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-white">
+          <option value="">— Aucun modèle —</option>
+          <option *ngFor="let t of templates()" [value]="t['id']">{{ t['nom'] }}</option>
+        </select>
+      </div>
+
+      <!-- Objet -->
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1.5">Objet <span class="text-red-500">*</span></label>
+        <input type="text" [ngModel]="formObjet()" (ngModelChange)="formObjet.set($event)"
+               placeholder="Objet du courrier"
+               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary">
+      </div>
+
+      <!-- Destinataire -->
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1.5">Destinataire <span class="text-red-500">*</span></label>
+        <input type="text" [ngModel]="formDestinataire()" (ngModelChange)="formDestinataire.set($event)"
+               placeholder="Nom ou entité destinataire"
+               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary">
+      </div>
+
+      <!-- Contenu -->
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1.5">Contenu</label>
+        <textarea [ngModel]="formContenu()" (ngModelChange)="formContenu.set($event)"
+                  rows="7" placeholder="Corps du courrier…"
+                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary resize-none font-mono leading-relaxed">
+        </textarea>
+      </div>
+    </div>
+
+    <!-- Pied modal -->
+    <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+      <button (click)="showModal.set(false)"
+              class="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+        Annuler
+      </button>
+      <button (click)="createDraft()"
+              [disabled]="!formObjet() || !formDestinataire() || saving()"
+              class="px-4 py-2 text-sm text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+        <div *ngIf="saving()" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+        <span>{{ saving() ? 'Création…' : 'Créer le brouillon' }}</span>
+      </button>
+    </div>
+
+  </div>
 </div>

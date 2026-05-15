@@ -16,7 +16,7 @@
     </div>
   </div>
 
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mb-6 md:mb-8">
     <!-- Instructions récentes -->
     <div class="bg-surface rounded-lg border border-gray-100 shadow-soft p-4 md:p-6">
       <div class="flex items-center justify-between mb-4 md:mb-6">
@@ -32,10 +32,13 @@
             </div>
             <div class="min-w-0">
               <div class="font-medium text-gray-900 text-sm truncate">{{ inst.title }}</div>
-              <div class="text-xs text-gray-500 truncate">{{ inst.agent }} • {{ inst.date }}</div>
+              <div class="text-xs text-gray-500 truncate">{{ inst.agent }}</div>
             </div>
           </div>
-          <span class="ml-2 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 whitespace-nowrap flex-shrink-0">{{ inst.status }}</span>
+          <span class="ml-2 px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap flex-shrink-0"
+                [ngClass]="statutColors[inst.status] || 'bg-gray-100 text-gray-700'">
+            {{ statutLabels[inst.status] || inst.status }}
+          </span>
         </div>
       </div>
     </div>
@@ -63,5 +66,72 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- Analytics -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
+
+    <!-- Instructions par statut -->
+    <div class="bg-surface rounded-lg border border-gray-100 shadow-soft p-4 md:p-6">
+      <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4">Instructions</h2>
+      <div class="space-y-3">
+        <div *ngFor="let row of instrChartRows()">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs text-gray-600">{{ row.label }}</span>
+            <span class="text-xs font-semibold text-gray-800">{{ row.count }}</span>
+          </div>
+          <div class="w-full bg-gray-100 rounded-full h-2">
+            <div class="h-2 rounded-full transition-all duration-500"
+                 [ngClass]="row.color"
+                 [style.width.%]="row.pct || 0"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Courriers arrivés -->
+    <div class="bg-surface rounded-lg border border-gray-100 shadow-soft p-4 md:p-6">
+      <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4">Courrier Arrivé</h2>
+      <div class="mb-4 text-center">
+        <span class="text-3xl font-bold text-gray-900">{{ rawStats()['totalCourrierArrive'] || 0 }}</span>
+        <span class="text-sm text-gray-500 ml-1">total</span>
+      </div>
+      <div class="space-y-3">
+        <div *ngFor="let row of caChartRows()">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs text-gray-600">{{ row.label }}</span>
+            <span class="text-xs font-semibold text-gray-800">{{ row.count }}</span>
+          </div>
+          <div class="w-full bg-gray-100 rounded-full h-2">
+            <div class="h-2 rounded-full transition-all duration-500"
+                 [ngClass]="row.color"
+                 [style.width.%]="row.pct || 0"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Courriers départ -->
+    <div class="bg-surface rounded-lg border border-gray-100 shadow-soft p-4 md:p-6">
+      <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4">Courrier Départ</h2>
+      <div class="mb-4 text-center">
+        <span class="text-3xl font-bold text-gray-900">{{ rawStats()['totalCourrierDepart'] || 0 }}</span>
+        <span class="text-sm text-gray-500 ml-1">total</span>
+      </div>
+      <div class="space-y-3">
+        <div *ngFor="let row of cdChartRows()">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs text-gray-600">{{ row.label }}</span>
+            <span class="text-xs font-semibold text-gray-800">{{ row.count }}</span>
+          </div>
+          <div class="w-full bg-gray-100 rounded-full h-2">
+            <div class="h-2 rounded-full transition-all duration-500"
+                 [ngClass]="row.color"
+                 [style.width.%]="row.pct || 0"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>

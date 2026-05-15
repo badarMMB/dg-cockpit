@@ -2,11 +2,12 @@ import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../services/api.service';
+import { AuditTimelineComponent } from '../../../shared/audit-timeline/audit-timeline.component';
 
 @Component({
   selector: 'app-inbox-detail',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, AuditTimelineComponent],
   templateUrl: './inbox-detail.component.html'
 })
 export class InboxDetailComponent implements OnInit {

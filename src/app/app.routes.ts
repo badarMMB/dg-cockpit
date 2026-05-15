@@ -10,6 +10,9 @@ import { OutboxListComponent } from './pages/outbox/outbox-list/outbox-list.comp
 import { OutboxDetailComponent } from './pages/outbox/outbox-detail/outbox-detail.component';
 import { AppointmentListComponent } from './pages/appointments/appointment-list/appointment-list.component';
 import { AppointmentDetailComponent } from './pages/appointments/appointment-detail/appointment-detail.component';
+import { SignatureAssetsComponent } from './pages/signature-assets/signature-assets.component';
+import { PdfDocumentsComponent } from './pages/pdf-documents/pdf-documents.component';
+import { PdfViewerComponent } from './pages/pdf-viewer/pdf-viewer.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
@@ -17,6 +20,9 @@ export const routes: Routes = [
   { path: 'chat',              component: ChatComponent },
   { path: 'editor',            component: EditorComponent },
   { path: 'signature',         component: SignatureComponent },
+  { path: 'signature-assets',  component: SignatureAssetsComponent },
+  { path: 'pdf-documents',     component: PdfDocumentsComponent },
+  { path: 'pdf-viewer/:id',    component: PdfViewerComponent },
   { path: 'settings',          component: SettingsComponent },
   { path: 'inbox',             component: InboxListComponent },
   { path: 'inbox/:id',         component: InboxDetailComponent },

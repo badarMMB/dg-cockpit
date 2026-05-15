@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>DG-Cockpit - Instructions</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS via CDN -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Theme Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-container": "#54647a",
+                    "surface-bright": "#f7f9fb",
+                    "secondary-fixed-dim": "#b7c8e1",
+                    "surface-container-highest": "#e0e3e5",
+                    "primary-container": "#1e3a8a",
+                    "surface": "#f7f9fb",
+                    "secondary-container": "#d0e1fb",
+                    "on-error": "#ffffff",
+                    "on-surface": "#191c1e",
+                    "secondary-fixed": "#d3e4fe",
+                    "on-secondary-fixed": "#0b1c30",
+                    "surface-variant": "#e0e3e5",
+                    "secondary": "#505f76",
+                    "on-primary": "#ffffff",
+                    "inverse-surface": "#2d3133",
+                    "primary": "#00236f",
+                    "on-tertiary-fixed-variant": "#004395",
+                    "on-error-container": "#93000a",
+                    "surface-container": "#eceef0",
+                    "on-primary-container": "#90a8ff",
+                    "on-secondary-fixed-variant": "#38485d",
+                    "on-primary-fixed-variant": "#264191",
+                    "error": "#ba1a1a",
+                    "outline-variant": "#c5c5d3",
+                    "tertiary-fixed": "#d8e2ff",
+                    "surface-dim": "#d8dadc",
+                    "surface-tint": "#4059aa",
+                    "surface-container-lowest": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "on-tertiary-container": "#82abff",
+                    "on-secondary": "#ffffff",
+                    "surface-container-high": "#e6e8ea",
+                    "primary-fixed": "#dce1ff",
+                    "inverse-primary": "#b6c4ff",
+                    "background": "#f7f9fb",
+                    "on-background": "#191c1e",
+                    "inverse-on-surface": "#eff1f3",
+                    "on-tertiary-fixed": "#001a42",
+                    "on-tertiary": "#ffffff",
+                    "tertiary-fixed-dim": "#adc6ff",
+                    "tertiary": "#00285e",
+                    "on-primary-fixed": "#00164e",
+                    "outline": "#757682",
+                    "surface-container-low": "#f2f4f6",
+                    "on-surface-variant": "#444651",
+                    "tertiary-container": "#003d88",
+                    "primary-fixed-dim": "#b6c4ff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "unit-lg": "24px",
+                    "unit-xl": "48px",
+                    "unit-sm": "8px",
+                    "margin-page": "32px",
+                    "gutter": "24px",
+                    "sidebar-width": "280px",
+                    "container-max": "1440px",
+                    "unit-md": "16px",
+                    "unit-xs": "4px"
+            },
+            "fontFamily": {
+                    "title-lg": [
+                            "Inter"
+                    ],
+                    "label-md": [
+                            "Inter"
+                    ],
+                    "display-lg": [
+                            "Inter"
+                    ],
+                    "headline-md": [
+                            "Inter"
+                    ],
+                    "headline-lg": [
+                            "Inter"
+                    ],
+                    "body-md": [
+                            "Inter"
+                    ],
+                    "label-sm": [
+                            "Inter"
+                    ],
+                    "body-lg": [
+                            "Inter"
+                    ]
+            },
+            "fontSize": {
+                    "title-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "label-md": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "display-lg": [
+                            "36px",
+                            {
+                                    "lineHeight": "44px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "headline-md": [
+                            "20px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-lg": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "letterSpacing": "-0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "label-sm": [
+                            "11px",
+                            {
+                                    "lineHeight": "14px",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "body-lg": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom scrollbar for chat areas */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #c5c5d3; /* outline-variant */
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background h-screen overflow-hidden flex font-body-md text-body-md">
+<!-- SideNavBar (Shared Component) -->
+<nav class="bg-surface-container text-primary font-body-md text-body-md fixed left-0 top-0 w-[280px] h-screen z-50 border-r border-outline-variant shadow-md flex flex-col py-unit-lg h-full">
+<!-- Header -->
+<div class="px-unit-lg mb-unit-lg">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded-full overflow-hidden bg-surface-container-high border border-outline-variant">
+<img alt="Executive Portrait" class="w-full h-full object-cover" data-alt="A professional studio portrait of a confident male corporate executive in a tailored dark navy suit and white shirt. The lighting is bright, high-key, and even, conveying a clean, modern, and authoritative corporate aesthetic against a stark white background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCYq3iLgOlLAYEKOJ6xO574MQOxbj80axEE4FnkPNJeV0h1voaFCetelT5niAtK_4w-bxrveTv9aAeS02yTtrQDORFnwWKx6TDydBpeIm4KV38VJNNJ6EtDrGcc8vV7O_Y_O2GrjMxiXedMWL7vun-sl0PluIRwfARCJ60dek_O8nesUizLNy53lOxxLj2cISOeIgaAoSK6ulrEmLb8EXYIxzIUoA4cUEHxhCrwY92VDXEVOCGqg-8gQ5Tn6ZGQCk1oKXlz-r-SHhkP"/>
+</div>
+<div>
+<h2 class="font-title-lg text-title-lg text-on-surface">M. le Directeur Général</h2>
+<p class="font-label-md text-label-md text-secondary">Cabinet de Direction</p>
+</div>
+</div>
+</div>
+<!-- CTA -->
+<div class="px-unit-lg mb-unit-lg">
+<button class="w-full bg-primary text-on-primary rounded-full py-3 px-4 font-label-md text-label-md flex items-center justify-center gap-2 hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm active:scale-[0.98]">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                Nouveau Document
+            </button>
+</div>
+<!-- Navigation Links -->
+<div class="flex-1 overflow-y-auto">
+<ul class="flex flex-col gap-1">
+<!-- Courrier Arrivé -->
+<li>
+<a class="flex items-center gap-3 text-secondary hover:bg-surface-container-highest rounded-full mx-unit-sm px-unit-md py-3 transition-all hover:translate-x-1 duration-200 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">mail</span>
+                        Courrier Arrivé
+                    </a>
+</li>
+<!-- Parapheur -->
+<li>
+<a class="flex items-center gap-3 text-secondary hover:bg-surface-container-highest rounded-full mx-unit-sm px-unit-md py-3 transition-all hover:translate-x-1 duration-200 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">draw</span>
+                        Parapheur
+                    </a>
+</li>
+<!-- Notes de Service -->
+<li>
+<a class="flex items-center gap-3 text-secondary hover:bg-surface-container-highest rounded-full mx-unit-sm px-unit-md py-3 transition-all hover:translate-x-1 duration-200 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">description</span>
+                        Notes de Service
+                    </a>
+</li>
+<!-- Courrier Départ -->
+<li>
+<a class="flex items-center gap-3 text-secondary hover:bg-surface-container-highest rounded-full mx-unit-sm px-unit-md py-3 transition-all hover:translate-x-1 duration-200 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">outbox</span>
+                        Courrier Départ
+                    </a>
+</li>
+<!-- Instructions (ACTIVE) -->
+<li>
+<a class="flex items-center gap-3 bg-primary text-on-primary rounded-full mx-unit-sm px-unit-md py-3 font-semibold transition-all hover:translate-x-1 duration-200 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">assignment</span>
+                        Instructions
+                    </a>
+</li>
+<!-- Rendez-vous -->
+<li>
+<a class="flex items-center gap-3 text-secondary hover:bg-surface-container-highest rounded-full mx-unit-sm px-unit-md py-3 transition-all hover:translate-x-1 duration-200 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">event</span>
+                        Rendez-vous
+                    </a>
+</li>
+</ul>
+</div>
+<!-- Footer -->
+<div class="px-unit-lg mt-auto pt-4 border-t border-outline-variant">
+<a class="flex items-center gap-3 text-secondary hover:bg-surface-container-highest rounded-full px-unit-md py-3 transition-all hover:translate-x-1 duration-200 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">logout</span>
+                Déconnexion
+            </a>
+</div>
+</nav>
+<!-- TopAppBar (Shared Component) -->
+<header class="bg-surface-container-lowest text-primary font-headline-md text-headline-md fixed top-0 right-0 left-[280px] h-20 z-40 border-b border-outline-variant shadow-sm flex items-center justify-between px-unit-lg w-[calc(100%-280px)]">
+<!-- Search/Brand Left -->
+<div class="flex items-center gap-4">
+<div class="font-display-lg text-display-lg font-bold tracking-tight">DG-Cockpit</div>
+<div class="h-6 w-[1px] bg-outline-variant mx-2"></div>
+<div class="relative w-96">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-full py-2 pl-10 pr-4 text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" placeholder="Rechercher dans les instructions..." type="text"/>
+</div>
+</div>
+<!-- Trailing Actions -->
+<div class="flex items-center gap-2 text-on-surface-variant">
+<button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container-high transition-colors duration-200 cursor-pointer active:scale-95">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container-high transition-colors duration-200 cursor-pointer active:scale-95">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container-high transition-colors duration-200 cursor-pointer active:scale-95">
+<span class="material-symbols-outlined">help</span>
+</button>
+<div class="ml-2 w-10 h-10 rounded-full overflow-hidden border border-outline-variant cursor-pointer active:scale-95">
+<img alt="General Director Profile" class="w-full h-full object-cover" data-alt="A close-up professional studio portrait of a male corporate executive in a dark navy suit. Bright, clean, white background, conveying authority and minimalism." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDxTMMs5KdsU_YlSGuhgMgbx44NHQsp5euQoyAJ0NrkeqHfYxFr06jXolZ-QZm2g4PbaUXsDOuNQUJc7Sm7DQNwVsBGyYsD327hjbBAEMftfBAhAUHJENwOxVXqdVytXaxKyD9XZsZC3bztX_tWqHZXKojHO7bie1XcLKsU5yg5VcOCYw7hNqriUaGSYAdoS2G-SkkN1ytXyJPeHsscCtpn6YVjw0mZdMT4_YclJ0Etx7a_nyid1T6p_rg0cM2ZmHI08v8l7e_hIA1J"/>
+</div>
+</div>
+</header>
+<!-- Main Content Area: Two-Pane Telegram Style -->
+<main class="ml-[280px] mt-20 flex-1 flex h-[calc(100vh-80px)] w-[calc(100%-280px)]">
+<!-- Left Pane: List of Instructions (Chat List Style) -->
+<div class="w-[380px] bg-surface-container-lowest border-r border-outline-variant flex flex-col h-full flex-shrink-0">
+<!-- Pane Header -->
+<div class="p-unit-md border-b border-outline-variant flex items-center justify-between">
+<h3 class="font-title-lg text-title-lg text-on-surface">Dossiers Actifs</h3>
+<button class="text-primary hover:bg-surface-container rounded-full p-2 transition-colors">
+<span class="material-symbols-outlined">filter_list</span>
+</button>
+</div>
+<!-- List -->
+<div class="flex-1 overflow-y-auto">
+<!-- Inactive Item -->
+<div class="p-4 border-b border-surface-container flex gap-3 hover:bg-surface-container-low cursor-pointer transition-colors">
+<div class="w-12 h-12 rounded-full bg-tertiary-container flex items-center justify-center flex-shrink-0 text-on-tertiary-container">
+<span class="material-symbols-outlined">group</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-baseline mb-1">
+<h4 class="font-title-lg text-title-lg text-on-surface truncate text-[15px]">Comité Stratégique</h4>
+<span class="font-label-sm text-label-sm text-on-surface-variant flex-shrink-0">10:42</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant truncate">DRH: Les documents sont prêts pour la réu...</p>
+</div>
+</div>
+<!-- Active Item: Rapport Annuel -->
+<div class="p-4 border-b border-surface-container flex gap-3 bg-surface-container cursor-pointer transition-colors border-l-4 border-l-primary">
+<div class="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center flex-shrink-0 text-on-primary-container">
+<span class="material-symbols-outlined">folder_special</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-baseline mb-1">
+<h4 class="font-title-lg text-title-lg text-on-surface truncate text-[15px] font-semibold">Rapport Annuel 2023</h4>
+<span class="font-label-sm text-label-sm text-primary flex-shrink-0 font-semibold">Hier</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface truncate font-medium">Secrétariat: Projet de rapport soumis p...</p>
+</div>
+<div class="flex flex-col items-end justify-center">
+<div class="bg-primary text-on-primary rounded-full w-5 h-5 flex items-center justify-center font-label-sm text-[10px]">2</div>
+</div>
+</div>
+<!-- Inactive Item -->
+<div class="p-4 border-b border-surface-container flex gap-3 hover:bg-surface-container-low cursor-pointer transition-colors">
+<div class="w-12 h-12 rounded-full bg-secondary-container flex items-center justify-center flex-shrink-0 text-on-secondary-container">
+<span class="material-symbols-outlined">account_balance</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-baseline mb-1">
+<h4 class="font-title-lg text-title-lg text-on-surface truncate text-[15px]">Audit Interne T3</h4>
+<span class="font-label-sm text-label-sm text-on-surface-variant flex-shrink-0">Lun</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant truncate">Dir. Fin: Veuillez valider le périmètre d'au...</p>
+</div>
+</div>
+<!-- Inactive Item -->
+<div class="p-4 border-b border-surface-container flex gap-3 hover:bg-surface-container-low cursor-pointer transition-colors">
+<div class="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 border border-outline-variant">
+<img alt="Department Head" class="w-full h-full object-cover" data-alt="Portrait of a professional female department head in a modern office environment, wearing a smart grey blazer. Soft, natural lighting conveying a collaborative corporate atmosphere." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCV9_hX6ipxfFYePfr99NmDipT2TBsbX_1kH_qafC8Dpa88UXo1J3A6FMlg88vnIh_4usVufXZm70UnCqT5zaKglQHOauxIwPf-2PQZ4dlGd28ZMg5fKZgrE8XRfl9sw5x7asuHfSTE1AiWVlNdl9WY6hB8n-vB0ru4yhuNYua3TZ7JQM2hOSIIGuAQAns8DjysUs9pat23qf37n0HhTHP_ir4JotjEqPfvIheJpUABUnM1mKctuhXoeSH85UwcuRsMOJtKbD667hRO"/>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-baseline mb-1">
+<h4 class="font-title-lg text-title-lg text-on-surface truncate text-[15px]">Mme. Dubois (DRH)</h4>
+<span class="font-label-sm text-label-sm text-on-surface-variant flex-shrink-0">04 Nov</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant truncate">Concernant la restructuration du pôle I...</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Pane: Active Thread (Telegram Style) -->
+<div class="flex-1 bg-surface-bright flex flex-col h-full relative">
+<!-- Thread Header -->
+<div class="h-[72px] px-unit-lg border-b border-outline-variant bg-surface-container-lowest flex items-center justify-between flex-shrink-0 shadow-sm z-10">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container">
+<span class="material-symbols-outlined">folder_special</span>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Rapport Annuel 2023</h2>
+<div class="flex items-center gap-2 mt-1">
+<span class="font-label-sm text-label-sm bg-secondary-fixed text-on-secondary-fixed px-2 py-0.5 rounded-full">En cours de révision</span>
+<span class="font-label-sm text-label-sm text-secondary flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">group</span>
+                                4 Participants
+                            </span>
+</div>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="p-2 text-secondary hover:bg-surface-container rounded-full transition-colors">
+<span class="material-symbols-outlined">search</span>
+</button>
+<button class="p-2 text-secondary hover:bg-surface-container rounded-full transition-colors">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Chat / Instruction History Area -->
+<div class="flex-1 overflow-y-auto p-unit-lg flex flex-col gap-6" style="background-image: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23e2e8f0\' fill-opacity=\'0.4\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');">
+<!-- Date Divider -->
+<div class="flex justify-center my-2">
+<span class="bg-surface-container text-on-surface-variant font-label-sm text-label-sm px-3 py-1 rounded-full border border-outline-variant">Aujourd'hui</span>
+</div>
+<!-- Message (Other: Secrétariat) -->
+<div class="flex gap-3 max-w-[80%]">
+<div class="w-10 h-10 rounded-full bg-tertiary-container flex items-center justify-center flex-shrink-0 text-on-tertiary-container mt-auto mb-1">
+<span class="material-symbols-outlined text-[20px]">support_agent</span>
+</div>
+<div class="flex flex-col gap-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant ml-1">Secrétariat Général • 09:15</span>
+<div class="bg-surface-container-lowest border border-outline-variant p-4 rounded-2xl rounded-bl-none shadow-sm text-on-surface">
+<p class="mb-3">Bonjour Monsieur le Directeur Général, le projet de rapport annuel consolidé par la direction financière est prêt pour votre première lecture.</p>
+<!-- Attachment Card inside message -->
+<div class="bg-surface-container-low border border-outline-variant rounded-lg p-3 flex items-center gap-3 cursor-pointer hover:bg-surface-container transition-colors">
+<div class="w-10 h-10 bg-[#E53E3E]/10 rounded flex items-center justify-center text-[#E53E3E]">
+<span class="material-symbols-outlined">picture_as_pdf</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="font-title-lg text-title-lg text-[14px] text-on-surface truncate">Projet_Rapport_Annuel_V1.pdf</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">4.2 MB • 45 pages</p>
+</div>
+<button class="text-primary hover:bg-primary-container p-2 rounded-full transition-colors">
+<span class="material-symbols-outlined">download</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Message (Self: DG) -->
+<div class="flex gap-3 max-w-[80%] self-end">
+<div class="flex flex-col gap-1 items-end">
+<div class="flex items-center gap-2 mr-1">
+<span class="material-symbols-outlined text-primary text-[16px]">done_all</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Vous • 10:30</span>
+</div>
+<div class="bg-primary text-on-primary p-4 rounded-2xl rounded-br-none shadow-sm">
+<p>Merci. J'ai parcouru la section "Perspectives". Il manque les données prévisionnelles du T4 pour le projet Alpha. Veuillez demander à la direction de la stratégie de compléter cette partie avant la fin de la journée.</p>
+</div>
+</div>
+</div>
+<!-- Status Update (System/Action) -->
+<div class="flex justify-center my-4">
+<div class="bg-surface-container-lowest border border-outline-variant rounded-full py-1.5 px-4 flex items-center gap-2 shadow-sm">
+<span class="material-symbols-outlined text-tertiary text-[16px]">assignment_add</span>
+<span class="font-label-sm text-label-sm text-on-surface">Nouvelle tâche assignée à <strong>Dir. Stratégie</strong></span>
+</div>
+</div>
+<!-- Message (Other: Dir. Stratégie) -->
+<div class="flex gap-3 max-w-[80%]">
+<div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 border border-outline-variant mt-auto mb-1">
+<img alt="Strategy Director" class="w-full h-full object-cover" data-alt="Professional portrait of a male corporate strategy director in a modern, brightly lit office environment. He is wearing a tailored grey suit and glasses, projecting an analytical and composed demeanor." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAw0lCFVASxZh8jHW5WYNJcEH4DIMDYYZpwT_7wj4T0ExQTs44MqPS9RoldojWLGhbylk8yPj-QwdSdWGUr30OZ1qIwg-8OmLt0UQU57MERjp-0dOVCovPCc-sb9Zmcy58deReHQIl_v8a176vMBp1oB0wtSZNA3hk36YJ9uoidvYzRdYkWtRpJ2Rjdkm6v16Ny6AEwPN04iIRWDjfb5XVALKqNOdGMINJCzfjnA92ltzmR7vXoh6yv4SwMKYz4I08P4ToUSG-AImce"/>
+</div>
+<div class="flex flex-col gap-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant ml-1">Dir. Stratégie • 14:05</span>
+<div class="bg-surface-container-lowest border border-outline-variant p-4 rounded-2xl rounded-bl-none shadow-sm text-on-surface">
+<p>C'est noté M. le Directeur Général. Voici l'annexe avec les données prévisionnelles actualisées. J'ai également intégré les graphiques d'impact.</p>
+<div class="mt-3 flex gap-2">
+<div class="bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 flex items-center gap-2 cursor-pointer hover:bg-surface-container">
+<span class="material-symbols-outlined text-[#1D6F42]">table_chart</span>
+<span class="font-label-sm text-[13px]">Previsions_T4.xlsx</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Input Area -->
+<div class="bg-surface-container-lowest border-t border-outline-variant p-unit-md flex items-end gap-3 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.02)]">
+<button class="p-3 text-secondary hover:bg-surface-container hover:text-primary rounded-full transition-colors flex-shrink-0">
+<span class="material-symbols-outlined">attach_file</span>
+</button>
+<div class="flex-1 bg-surface-container-low border border-outline-variant rounded-[1.5rem] focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all flex items-end overflow-hidden min-h-[48px]">
+<textarea class="w-full bg-transparent border-none focus:ring-0 resize-none py-3 px-4 text-body-md text-on-surface placeholder:text-on-surface-variant/50 max-h-[120px]" placeholder="Dicter ou écrire une instruction..." rows="1" style="scrollbar-width: none;"></textarea>
+<button class="p-3 text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined">mic</span>
+</button>
+</div>
+<button class="bg-primary text-on-primary w-12 h-12 rounded-full flex items-center justify-center hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm flex-shrink-0 active:scale-95">
+<span class="material-symbols-outlined ml-1">send</span>
+</button>
+</div>
+</div>
+</main>
+</body></html>

@@ -23,13 +23,18 @@
 
   <main *ngIf="!loading() && rdv()" class="flex-1 overflow-y-auto p-4 md:p-8 max-w-4xl mx-auto w-full">
     <!-- Bloc heure/statut -->
-    <div class="bg-primary text-white rounded-xl p-4 md:p-6 mb-4 flex items-center gap-4">
-      <div class="text-4xl md:text-5xl font-bold">{{ rdv().heure }}</div>
-      <div>
+    <div class="bg-primary text-white rounded-xl p-4 md:p-6 mb-4 flex items-center gap-4 shadow-lg overflow-hidden relative">
+      <div class="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-32 w-32" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.89-2-2-2zm0 14H5V6h14v12zm-7-7c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm6 4c0-2-4-3.1-6-3.1s-6 1.1-6 3.1v1h12v-1z"/>
+        </svg>
+      </div>
+      <div class="text-4xl md:text-5xl font-bold z-10">{{ rdv().heure }}</div>
+      <div class="z-10">
         <div class="text-lg font-semibold">{{ rdv().titre }}</div>
         <div class="text-primary/80 text-sm">Durée : {{ rdv().duree }}</div>
       </div>
-      <div class="ml-auto">
+      <div class="ml-auto flex flex-col items-end gap-2 z-10">
         <span class="px-3 py-1 rounded-full text-xs font-bold"
               [ngClass]="{
                 'bg-white/20 text-white': rdv().statut === 'PLANIFIE',
@@ -39,28 +44,81 @@
               }">
           {{ rdv().statut === 'PLANIFIE' ? 'Planifié' : rdv().statut === 'EN_COURS' ? 'En cours' : rdv().statut === 'TERMINE' ? 'Terminé' : 'Annulé' }}
         </span>
+        <button (click)="toggleBadge()" 
+                class="px-3 py-1.5 bg-white text-primary rounded-lg text-xs font-bold hover:bg-gray-100 transition-all flex items-center gap-2 shadow-sm">
+          <span>🎫</span> {{ showBadge() ? 'Masquer Badge' : 'Générer Badge' }}
+        </button>
       </div>
     </div>
 
-    <!-- Infos visiteur -->
-    <div class="bg-white rounded-xl border border-gray-200 p-4 md:p-6 mb-4 shadow-soft">
-      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Visiteur</h2>
-      <div class="flex items-center gap-4">
-        <div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg flex-shrink-0">
-          {{ rdv().visiteur?.charAt(0) }}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="md:col-span-2 space-y-4">
+        <!-- Infos visiteur -->
+        <div class="bg-white rounded-xl border border-gray-200 p-4 md:p-6 shadow-soft">
+          <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Visiteur</h2>
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg flex-shrink-0">
+              {{ rdv().visiteur?.charAt(0) }}
+            </div>
+            <div>
+              <p class="font-semibold text-gray-900">{{ rdv().visiteur }}</p>
+              <p *ngIf="rdv().organisation" class="text-sm text-gray-500">{{ rdv().organisation }}</p>
+              <p *ngIf="rdv().contact" class="text-xs text-gray-400 mt-0.5">{{ rdv().contact }}</p>
+            </div>
+          </div>
         </div>
-        <div>
-          <p class="font-semibold text-gray-900">{{ rdv().visiteur }}</p>
-          <p *ngIf="rdv().organisation" class="text-sm text-gray-500">{{ rdv().organisation }}</p>
-          <p *ngIf="rdv().contact" class="text-xs text-gray-400 mt-0.5">{{ rdv().contact }}</p>
+
+        <!-- Objet -->
+        <div class="bg-white rounded-xl border border-gray-200 p-4 md:p-6 shadow-soft">
+          <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Objet du rendez-vous</h2>
+          <p class="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{{ rdv().objet || 'Aucun objet renseigné.' }}</p>
         </div>
       </div>
-    </div>
 
-    <!-- Objet -->
-    <div class="bg-white rounded-xl border border-gray-200 p-4 md:p-6 shadow-soft">
-      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Objet du rendez-vous</h2>
-      <p class="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{{ rdv().objet || 'Aucun objet renseigné.' }}</p>
+      <!-- Badge Visiteur (Droit ou dessous sur mobile) -->
+      <div *ngIf="showBadge()" class="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+        <div class="bg-white rounded-2xl border-2 border-primary overflow-hidden shadow-xl sticky top-4">
+          <div class="bg-primary p-4 text-center">
+            <div class="text-white font-bold tracking-widest text-sm uppercase">Pass Visiteur</div>
+            <div class="text-white/70 text-[10px] mt-1">DG-COCKPIT EXÉCUTIF</div>
+          </div>
+          <div class="p-6 flex flex-col items-center">
+            <!-- QR Code -->
+            <div class="w-40 h-40 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center mb-4 p-2">
+              <img [src]="'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=RDV-' + rdv().id" 
+                   alt="QR Code Visiteur" 
+                   class="w-full h-full mix-blend-multiply">
+            </div>
+            
+            <div class="text-center">
+              <div class="text-sm font-bold text-gray-900 uppercase">{{ rdv().visiteur }}</div>
+              <div class="text-xs text-gray-500 mt-1">{{ rdv().organisation }}</div>
+            </div>
+
+            <div class="w-full border-t border-dashed border-gray-300 my-4"></div>
+
+            <div class="grid grid-cols-2 gap-4 w-full text-center">
+              <div>
+                <div class="text-[10px] text-gray-400 uppercase font-bold">Heure</div>
+                <div class="text-sm font-bold text-primary">{{ rdv().heure }}</div>
+              </div>
+              <div>
+                <div class="text-[10px] text-gray-400 uppercase font-bold">Salle</div>
+                <div class="text-sm font-bold text-primary">Bureau DG</div>
+              </div>
+            </div>
+
+            <div class="mt-6 w-full">
+              <button class="w-full py-2 bg-gray-900 text-white rounded font-bold text-xs hover:bg-black transition-colors flex items-center justify-center gap-2">
+                <span>🖨️</span> Imprimer le badge
+              </button>
+            </div>
+          </div>
+          <div class="bg-gray-50 p-3 text-center border-t border-gray-100">
+            <div class="text-[10px] text-gray-400">Valide uniquement le {{ rdv().date | date:'dd/MM/yyyy' }}</div>
+          </div>
+        </div>
+      </div>
     </div>
   </main>
 </div>

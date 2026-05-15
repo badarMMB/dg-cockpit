@@ -25,6 +25,7 @@ public class InstructionMessage {
     private TypeMessage type = TypeMessage.NORMAL;
 
     private String attachmentName;
+    private String audioUrl;
 
     @Enumerated(EnumType.STRING)
     private ActionType actionType;
@@ -53,6 +54,8 @@ public class InstructionMessage {
     public void setType(TypeMessage type) { this.type = type; }
     public String getAttachmentName() { return attachmentName; }
     public void setAttachmentName(String attachmentName) { this.attachmentName = attachmentName; }
+    public String getAudioUrl() { return audioUrl; }
+    public void setAudioUrl(String audioUrl) { this.audioUrl = audioUrl; }
     public ActionType getActionType() { return actionType; }
     public void setActionType(ActionType actionType) { this.actionType = actionType; }
     public StatutMessage getStatut() { return statut; }

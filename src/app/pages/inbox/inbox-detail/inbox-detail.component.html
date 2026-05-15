@@ -80,6 +80,12 @@
       </div>
     </div>
 
+    <!-- Audit trail -->
+    <div class="bg-white rounded-xl border border-gray-200 p-4 md:p-6 mt-4 shadow-soft">
+      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Historique</h2>
+      <app-audit-timeline entityType="courrier-arrive" [entityId]="courrier()?.['id'] ?? ''"></app-audit-timeline>
+    </div>
+
     <!-- Actions mobiles -->
     <div class="mt-4 flex gap-3 sm:hidden">
       <button *ngIf="courrier().statut === 'NON_TRAITE'" (click)="marquerEnCours()"

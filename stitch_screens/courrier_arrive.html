@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+
+<html class="light" lang="fr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Courrier Arrivé - DG Cockpit</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .icon-fill {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+<!-- Tailwind Config from Brand Anchors -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-container": "#54647a",
+                    "surface-bright": "#f7f9fb",
+                    "secondary-fixed-dim": "#b7c8e1",
+                    "surface-container-highest": "#e0e3e5",
+                    "primary-container": "#1e3a8a",
+                    "surface": "#f7f9fb",
+                    "secondary-container": "#d0e1fb",
+                    "on-error": "#ffffff",
+                    "on-surface": "#191c1e",
+                    "secondary-fixed": "#d3e4fe",
+                    "on-secondary-fixed": "#0b1c30",
+                    "surface-variant": "#e0e3e5",
+                    "secondary": "#505f76",
+                    "on-primary": "#ffffff",
+                    "inverse-surface": "#2d3133",
+                    "primary": "#00236f",
+                    "on-tertiary-fixed-variant": "#004395",
+                    "on-error-container": "#93000a",
+                    "surface-container": "#eceef0",
+                    "on-primary-container": "#90a8ff",
+                    "on-secondary-fixed-variant": "#38485d",
+                    "on-primary-fixed-variant": "#264191",
+                    "error": "#ba1a1a",
+                    "outline-variant": "#c5c5d3",
+                    "tertiary-fixed": "#d8e2ff",
+                    "surface-dim": "#d8dadc",
+                    "surface-tint": "#4059aa",
+                    "surface-container-lowest": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "on-tertiary-container": "#82abff",
+                    "on-secondary": "#ffffff",
+                    "surface-container-high": "#e6e8ea",
+                    "primary-fixed": "#dce1ff",
+                    "inverse-primary": "#b6c4ff",
+                    "background": "#f7f9fb",
+                    "on-background": "#191c1e",
+                    "inverse-on-surface": "#eff1f3",
+                    "on-tertiary-fixed": "#001a42",
+                    "on-tertiary": "#ffffff",
+                    "tertiary-fixed-dim": "#adc6ff",
+                    "tertiary": "#00285e",
+                    "on-primary-fixed": "#00164e",
+                    "outline": "#757682",
+                    "surface-container-low": "#f2f4f6",
+                    "on-surface-variant": "#444651",
+                    "tertiary-container": "#003d88",
+                    "primary-fixed-dim": "#b6c4ff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "unit-lg": "24px",
+                    "unit-xl": "48px",
+                    "unit-sm": "8px",
+                    "margin-page": "32px",
+                    "gutter": "24px",
+                    "sidebar-width": "280px",
+                    "container-max": "1440px",
+                    "unit-md": "16px",
+                    "unit-xs": "4px"
+            },
+            "fontFamily": {
+                    "title-lg": ["Inter", "sans-serif"],
+                    "label-md": ["Inter", "sans-serif"],
+                    "display-lg": ["Inter", "sans-serif"],
+                    "headline-md": ["Inter", "sans-serif"],
+                    "headline-lg": ["Inter", "sans-serif"],
+                    "body-md": ["Inter", "sans-serif"],
+                    "label-sm": ["Inter", "sans-serif"],
+                    "body-lg": ["Inter", "sans-serif"]
+            },
+            "fontSize": {
+                    "title-lg": ["18px", {"lineHeight": "24px", "fontWeight": "600"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "fontWeight": "600"}],
+                    "display-lg": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "500"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+            }
+          }
+        }
+      }
+    </script>
+</head>
+<body class="bg-background min-h-screen w-full flex font-body-md text-body-md text-on-background overflow-x-hidden">
+<!-- SideNavBar Component (Desktop Only) -->
+<nav class="hidden md:flex bg-surface-container dark:bg-on-background fixed left-0 top-0 w-[280px] h-screen z-50 border-r border-outline-variant dark:border-outline shadow-md dark:shadow-none flex-col py-unit-lg">
+<!-- Header -->
+<div class="px-unit-lg mb-unit-lg flex items-center gap-unit-md">
+<div class="w-12 h-12 rounded-full overflow-hidden shrink-0 border-2 border-primary-fixed">
+<img alt="Executive Portrait" class="w-full h-full object-cover" data-alt="A professional studio portrait of a senior executive director wearing a dark navy suit and light blue tie. The background is a clean, modern corporate grey. The lighting is soft and flattering, creating a trustworthy and authoritative mood suitable for an administrative dashboard profile picture." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC55y5BqpeD_CiLurcSKWg7tTEmE_5_W_ytr9i5dj-kC9aGHtLD9SzYi_JcqqYXoSiX-9_tMsGhjmL80Neu1PfTgyv1IzB6zQcoGtQ2Vx1xbW6NrX1T_z043sa71rW1lIRT_UKISvY3mY9Lto0gq2p88o76QJiwxXIbI29t7sAr3LCUb7XfsHHX9IxgrFeksYwZns94NbG2TPhe2Xa7A4RMtiFHyrJqXcZR2RKZQ2VtOPEU7JJh140WLEcMG86TZHurI3UQrwHLmUxx"/>
+</div>
+<div>
+<h2 class="font-title-lg text-title-lg text-on-surface">M. le Directeur Général</h2>
+<p class="font-label-md text-label-md text-secondary">Cabinet de Direction</p>
+</div>
+</div>
+<!-- CTA -->
+<div class="px-unit-lg mb-unit-lg">
+<button class="w-full bg-primary text-on-primary rounded-full py-3 px-4 flex items-center justify-center gap-2 font-label-md text-label-md hover:bg-on-primary-fixed-variant transition-colors shadow-sm">
+<span class="material-symbols-outlined icon-fill">add</span>
+                Nouveau Document
+            </button>
+</div>
+<!-- Navigation Links -->
+<div class="flex-1 overflow-y-auto flex flex-col gap-1">
+<!-- Active Tab: Courrier Arrivé -->
+<a class="bg-primary dark:bg-primary-container text-on-primary dark:text-on-primary-container rounded-full mx-unit-sm px-unit-md py-3 font-semibold flex items-center gap-3" href="#">
+<span class="material-symbols-outlined icon-fill">mail</span>
+                Courrier Arrivé
+            </a>
+<a class="text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container-highest dark:hover:bg-on-secondary-fixed-variant rounded-full mx-unit-sm px-unit-md py-3 transition-all hover:translate-x-1 duration-200 active:scale-[0.98] flex items-center gap-3 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">draw</span>
+                Parapheur
+            </a>
+<a class="text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container-highest dark:hover:bg-on-secondary-fixed-variant rounded-full mx-unit-sm px-unit-md py-3 transition-all hover:translate-x-1 duration-200 active:scale-[0.98] flex items-center gap-3 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">description</span>
+                Notes de Service
+            </a>
+<a class="text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container-highest dark:hover:bg-on-secondary-fixed-variant rounded-full mx-unit-sm px-unit-md py-3 transition-all hover:translate-x-1 duration-200 active:scale-[0.98] flex items-center gap-3 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">outbox</span>
+                Courrier Départ
+            </a>
+<a class="text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container-highest dark:hover:bg-on-secondary-fixed-variant rounded-full mx-unit-sm px-unit-md py-3 transition-all hover:translate-x-1 duration-200 active:scale-[0.98] flex items-center gap-3 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">assignment</span>
+                Instructions
+            </a>
+<a class="text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container-highest dark:hover:bg-on-secondary-fixed-variant rounded-full mx-unit-sm px-unit-md py-3 transition-all hover:translate-x-1 duration-200 active:scale-[0.98] flex items-center gap-3 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">event</span>
+                Rendez-vous
+            </a>
+</div>
+<!-- Footer -->
+<div class="px-unit-lg mt-auto pt-unit-md">
+<a class="text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container-highest dark:hover:bg-on-secondary-fixed-variant rounded-full px-unit-md py-3 transition-all hover:translate-x-1 duration-200 active:scale-[0.98] flex items-center gap-3 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">logout</span>
+                Déconnexion
+            </a>
+</div>
+</nav>
+<!-- Main Content Wrapper (Offset for Desktop Nav) -->
+<div class="flex-1 md:ml-[280px] flex flex-col min-h-screen">
+<!-- TopAppBar Component -->
+<header class="bg-surface-container-lowest dark:bg-inverse-surface fixed top-0 right-0 left-0 md:left-[280px] h-20 z-40 border-b border-outline-variant dark:border-outline shadow-sm dark:shadow-none flex items-center justify-between px-unit-lg">
+<!-- Search Bar on Left -->
+<div class="flex-1 max-w-md relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-lg py-2 pl-10 pr-4 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" placeholder="Rechercher un courrier, réf..." type="text"/>
+</div>
+<!-- Brand Logo (Center/Right depending on layout, here right-aligned before actions to balance) -->
+<div class="hidden lg:flex items-center mx-unit-lg">
+<span class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed tracking-tight">DG-Cockpit</span>
+</div>
+<!-- Trailing Icons -->
+<div class="flex items-center gap-2">
+<button class="w-10 h-10 rounded-full hover:bg-surface-container-high dark:hover:bg-surface-variant transition-colors duration-200 flex items-center justify-center text-on-surface-variant relative cursor-pointer active:scale-95">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="w-10 h-10 rounded-full hover:bg-surface-container-high dark:hover:bg-surface-variant transition-colors duration-200 flex items-center justify-center text-on-surface-variant cursor-pointer active:scale-95">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<button class="w-10 h-10 rounded-full hover:bg-surface-container-high dark:hover:bg-surface-variant transition-colors duration-200 flex items-center justify-center text-on-surface-variant cursor-pointer active:scale-95">
+<span class="material-symbols-outlined">help</span>
+</button>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 pt-20 p-margin-page">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-unit-md mb-unit-lg">
+<div>
+<h1 class="font-display-lg text-display-lg text-on-surface">Courrier Arrivé</h1>
+<p class="font-body-lg text-body-lg text-secondary mt-1">42 documents en attente de traitement</p>
+</div>
+</div>
+<!-- Filter Bar -->
+<div class="bg-surface-container-lowest rounded-DEFAULT border border-outline-variant shadow-[0_2px_4px_rgba(0,0,0,0.04)] p-unit-md mb-unit-lg flex flex-wrap items-center gap-unit-md">
+<span class="font-label-md text-label-md text-secondary uppercase tracking-wider mr-2">Filtres :</span>
+<div class="relative">
+<select class="appearance-none bg-surface border border-outline-variant rounded-full py-2 pl-4 pr-10 font-body-md text-body-md text-on-surface hover:border-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer">
+<option value="">Toutes Urgences</option>
+<option value="high">Urgent (Signalé)</option>
+<option value="normal">Normal</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none">arrow_drop_down</span>
+</div>
+<div class="relative">
+<select class="appearance-none bg-surface border border-outline-variant rounded-full py-2 pl-4 pr-10 font-body-md text-body-md text-on-surface hover:border-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer">
+<option value="">Tous Services</option>
+<option value="sg">Secrétariat Général</option>
+<option value="df">Direction Financière</option>
+<option value="drh">Ressources Humaines</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none">arrow_drop_down</span>
+</div>
+<div class="relative">
+<select class="appearance-none bg-surface border border-outline-variant rounded-full py-2 pl-4 pr-10 font-body-md text-body-md text-on-surface hover:border-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer">
+<option value="today">Aujourd'hui</option>
+<option value="week">Cette semaine</option>
+<option value="all">Tout l'historique</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none">arrow_drop_down</span>
+</div>
+<div class="ml-auto flex items-center gap-2">
+<button class="p-2 rounded-lg bg-surface-container-high text-on-surface hover:bg-surface-variant transition-colors" title="Vue Grille">
+<span class="material-symbols-outlined icon-fill">grid_view</span>
+</button>
+<button class="p-2 rounded-lg text-secondary hover:bg-surface-container-high transition-colors" title="Vue Liste">
+<span class="material-symbols-outlined">view_list</span>
+</button>
+</div>
+</div>
+<!-- Mail Grid (Visual Priority) -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:grid-cols-5 gap-gutter">
+<!-- Card 1: Urgent -->
+<div class="bg-surface-container-lowest rounded-DEFAULT border border-outline-variant shadow-[0_2px_4px_rgba(0,0,0,0.04)] overflow-hidden group hover:shadow-[0_10px_15px_rgba(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col">
+<!-- Redressed Thumbnail (Aspect ratio close to A4 paper) -->
+<div class="aspect-[3/4] bg-surface-container relative border-b border-outline-variant overflow-hidden">
+<img alt="Document Preview" class="w-full h-full object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity" data-alt="A high-resolution, top-down photograph of an official government or corporate document resting on a pristine white surface. The document has an elaborate letterhead, dense paragraphs of text, and a distinct red 'URGENT' stamp near the top right. The lighting is bright and even, casting subtle drop shadows that give the paper realistic depth in a modern, professional setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA-5xvSAKz5-FjQ0XTrb2Lkikk2K4WEErIQLgXYdoRbzRkIdXkWxci0JJ0VvzSckIq6kkVOz4DSvcC5rDW4d58wi54EyUvRE7jeAfpgS1WHBYQmI6cs5-vEc4WZSnlwn7bTPNQcjxQBHtMw0rseYQzNkY1xZ1KkhipYDVb2RAPJHZLzrfV-tsEdKf_L2r2WexO5TPu3Fk26NroGvIdNc8NQ-3zVkuo7nYVBS0P8F7kQD76yE4oUsKtLJj0rgkJHmKY9BWBOZFJkyAoA"/>
+<!-- Urgency Indicator overlay on image -->
+<div class="absolute top-3 right-3 flex gap-2">
+<span class="bg-error text-on-error font-label-sm text-label-sm px-2 py-1 rounded-full shadow-sm flex items-center gap-1 uppercase tracking-wide">
+<span class="material-symbols-outlined text-[14px]">error</span>
+                                Urgent
+                            </span>
+</div>
+</div>
+<!-- Metadata -->
+<div class="p-4 flex flex-col flex-1">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-sm text-label-sm text-secondary">Réf: CA-2023-4091</span>
+<span class="font-label-sm text-label-sm text-secondary">Aujourd'hui, 09:15</span>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface line-clamp-2 mb-2 group-hover:text-primary transition-colors">Convocation Assemblée Générale Extraordinaire</h3>
+<div class="mt-auto flex flex-wrap gap-2 pt-3 border-t border-surface-container-highest">
+<span class="bg-surface-container text-on-surface-variant font-label-sm text-label-sm px-2 py-1 rounded-md">Ministère des Finances</span>
+<span class="bg-secondary-container text-on-secondary-container font-label-sm text-label-sm px-2 py-1 rounded-md">Dir. Juridique</span>
+</div>
+</div>
+</div>
+<!-- Card 2: Normal -->
+<div class="bg-surface-container-lowest rounded-DEFAULT border border-outline-variant shadow-[0_2px_4px_rgba(0,0,0,0.04)] overflow-hidden group hover:shadow-[0_10px_15px_rgba(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col">
+<div class="aspect-[3/4] bg-surface-container relative border-b border-outline-variant overflow-hidden">
+<img alt="Document Preview" class="w-full h-full object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity" data-alt="A macro shot focusing on the top half of a formal typed letter. The paper is bright white with a crisp texture. A corporate logo is visible in the top left corner, and a bold blue ink signature is partially visible near the center. The lighting is professional studio light, emphasizing the flat, clean nature of the administrative document within a minimalist environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBV9N9VSFpSzVeiVbF0b7wx5jT1TpgQie_xcKJ2Vv-omWbuEnkt60GN6psEUHIs-dk2vOqE_UrT6J623aIhuK1c1Tb-QU3ShIQGyolkwPgy1_SRLFkB66-wONYgiUMunNFWAW7tsjLsitP_n6q6jc0UcDjt6knM_p5LTZC0OsQZ_EBdzCF3xWCW0v61yW1flnTGBf53MPKtbEJeju0p52eLA2u7PhwAoII-DvmjFyj47FlKxBvUab2e-vLc6ZYVEFKTUHMl5odCmUBt"/>
+</div>
+<div class="p-4 flex flex-col flex-1">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-sm text-label-sm text-secondary">Réf: CA-2023-4090</span>
+<span class="font-label-sm text-label-sm text-secondary">Hier, 16:45</span>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface line-clamp-2 mb-2 group-hover:text-primary transition-colors">Rapport d'audit trimestriel - Synthèse des opérations</h3>
+<div class="mt-auto flex flex-wrap gap-2 pt-3 border-t border-surface-container-highest">
+<span class="bg-surface-container text-on-surface-variant font-label-sm text-label-sm px-2 py-1 rounded-md">Cabinet d'Audit Externe</span>
+<span class="bg-tertiary-container text-on-tertiary-container font-label-sm text-label-sm px-2 py-1 rounded-md">Pour Information</span>
+</div>
+</div>
+</div>
+<!-- Card 3: Normal -->
+<div class="bg-surface-container-lowest rounded-DEFAULT border border-outline-variant shadow-[0_2px_4px_rgba(0,0,0,0.04)] overflow-hidden group hover:shadow-[0_10px_15px_rgba(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col">
+<div class="aspect-[3/4] bg-surface-container relative border-b border-outline-variant overflow-hidden">
+<img alt="Document Preview" class="w-full h-full object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity" data-alt="An overhead view of a financial spreadsheet document printed on standard A4 paper. Rows and columns of data are clearly visible, with some figures highlighted in faint yellow marker. The document sits on a clean, light grey desk surface. The image is brightly lit, conveying a sense of corporate transparency and analytical precision." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC8DtUS3bG1mXm9Hy7_EhYP85gOX5WG65s0e9kXXIAFuI5LZdqXV6lg2YKkLWpqWljMeq8YBe3mRX7pOc5_CNH0fed1J_Xl8nxpSkVcBlnc68Xol3FkQI6SmYfujHiCfUhXMZU3YO9qufcvpjfsBiGPsp_B8d_y9Ue9sDCs23DUH9Yki4lAnZW6UpBWzLsEykkQjhUJie2Juzy1OVxnjWNk7meLXuVSxAWS48qQt5hnyF6zFCZU3qAlYw7PiVdv3EhDgutRYDlZoI_e"/>
+</div>
+<div class="p-4 flex flex-col flex-1">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-sm text-label-sm text-secondary">Réf: CA-2023-4089</span>
+<span class="font-label-sm text-label-sm text-secondary">Hier, 14:20</span>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface line-clamp-2 mb-2 group-hover:text-primary transition-colors">Demande de budget complémentaire Q4</h3>
+<div class="mt-auto flex flex-wrap gap-2 pt-3 border-t border-surface-container-highest">
+<span class="bg-surface-container text-on-surface-variant font-label-sm text-label-sm px-2 py-1 rounded-md">Direction Marketing</span>
+<span class="bg-primary-container text-on-primary-container font-label-sm text-label-sm px-2 py-1 rounded-md">Validation Requise</span>
+</div>
+</div>
+</div>
+<!-- Card 4: Action Required -->
+<div class="bg-surface-container-lowest rounded-DEFAULT border border-outline-variant shadow-[0_2px_4px_rgba(0,0,0,0.04)] overflow-hidden group hover:shadow-[0_10px_15px_rgba(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col">
+<div class="aspect-[3/4] bg-surface-container relative border-b border-outline-variant overflow-hidden">
+<img alt="Document Preview" class="w-full h-full object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity" data-alt="A close-up shot of a legal contract document. The text is dense and formal. In the bottom right corner, there are distinct signature lines with a handwritten signature in black ink and a corporate seal beside it. The lighting highlights the texture of the thick paper, emphasizing the document's legal and binding nature in a stark, modern office setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDxUCxQdW7Z2dXpd2JpgubehisFIgcUk7no2jdWqs5SRJR5SmvLtq-vDWT2nxrDlvVUFUA0IrIS0WLOiVv7JTbwemda0-f0kTEGiHE3Xs7vFIplHONxp7BQ0Vc3hD0eiwdP0OTE-VmgllZllf9FgKtH9a9M1XOh-tpdVp2srZgZchCqWpdP3QDhxOpq4_BieccwmOLXmtvhKZi9zjy3w2ZKen8jnHZYvijtZUiqU5_nvcDtX13ks25hBlkKRGu4honrscaUz6pZXo9i"/>
+<!-- Action Indicator overlay -->
+<div class="absolute top-3 right-3 flex gap-2">
+<span class="bg-primary text-on-primary font-label-sm text-label-sm px-2 py-1 rounded-full shadow-sm flex items-center gap-1 uppercase tracking-wide">
+<span class="material-symbols-outlined text-[14px]">draw</span>
+                                Signature
+                            </span>
+</div>
+</div>
+<div class="p-4 flex flex-col flex-1">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-sm text-label-sm text-secondary">Réf: CA-2023-4088</span>
+<span class="font-label-sm text-label-sm text-secondary">12 Oct, 10:00</span>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface line-clamp-2 mb-2 group-hover:text-primary transition-colors">Contrat de prestation de services IT - Renouvellement</h3>
+<div class="mt-auto flex flex-wrap gap-2 pt-3 border-t border-surface-container-highest">
+<span class="bg-surface-container text-on-surface-variant font-label-sm text-label-sm px-2 py-1 rounded-md">Fournisseur TechSys</span>
+<span class="bg-secondary-container text-on-secondary-container font-label-sm text-label-sm px-2 py-1 rounded-md">DSI</span>
+</div>
+</div>
+</div>
+<!-- Card 5: Normal -->
+<div class="bg-surface-container-lowest rounded-DEFAULT border border-outline-variant shadow-[0_2px_4px_rgba(0,0,0,0.04)] overflow-hidden group hover:shadow-[0_10px_15px_rgba(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col hidden xl:flex">
+<div class="aspect-[3/4] bg-surface-container relative border-b border-outline-variant overflow-hidden">
+<img alt="Document Preview" class="w-full h-full object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity" data-alt="A top-down view of an administrative form with various checkboxes and fill-in-the-blank sections. Several fields have been filled out neatly with a dark pen. The document is placed on a minimalist, pale blue surface. The bright, diffuse lighting eliminates harsh shadows, creating a clean, efficient, and highly organized visual aesthetic appropriate for a corporate dashboard." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBB2a7mnX4FXOJQnWBT6mo4JrAvLCbosKiL_Mf8ZeMbaEOikkYu76zKwTQxHDPLv35x0IRxl-LfeRDXEWsepihT6KQYHUis3nkusb2xJimkwFgSbuD7fXrryLphQdY6JRQaJlcJpns3Zedh9rz4g5WeZSddMkbvHhRt3ywACgvypugrNc4YsTNc64ishOesiPZvLdmhxtqLnIXGkI8bvwHJ9gGQGqoQtY_F_pycHTGHAmfaYhWtYA7XFBSpny8NSN3tJrwv0VxzX0_5"/>
+</div>
+<div class="p-4 flex flex-col flex-1">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-sm text-label-sm text-secondary">Réf: CA-2023-4087</span>
+<span class="font-label-sm text-label-sm text-secondary">11 Oct, 15:30</span>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface line-clamp-2 mb-2 group-hover:text-primary transition-colors">Mise à jour des protocoles de sécurité interne</h3>
+<div class="mt-auto flex flex-wrap gap-2 pt-3 border-t border-surface-container-highest">
+<span class="bg-surface-container text-on-surface-variant font-label-sm text-label-sm px-2 py-1 rounded-md">Direction Sûreté</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Pagination / Load More -->
+<div class="mt-unit-xl flex justify-center pb-unit-xl">
+<button class="bg-surface-container border border-outline-variant text-primary font-label-md text-label-md px-6 py-2 rounded-full hover:bg-surface-container-high transition-colors flex items-center gap-2">
+                    Charger plus de courriers
+                    <span class="material-symbols-outlined text-[18px]">expand_more</span>
+</button>
+</div>
+</main>
+</div>
+</body></html>

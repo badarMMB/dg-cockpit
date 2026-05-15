@@ -16,6 +16,7 @@ export class AppointmentDetailComponent implements OnInit {
 
   rdv = signal<any>(null);
   loading = signal(true);
+  showBadge = signal(false);
 
   ngOnInit() {
     const id = this.route.snapshot.paramMap.get('id')!;
@@ -23,6 +24,10 @@ export class AppointmentDetailComponent implements OnInit {
       this.rdv.set(data);
       this.loading.set(false);
     });
+  }
+
+  toggleBadge() {
+    this.showBadge.update(v => !v);
   }
 
   annuler() {

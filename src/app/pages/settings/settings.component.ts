@@ -2,6 +2,7 @@ import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
+import { AuditTimelineComponent } from '../../shared/audit-timeline/audit-timeline.component';
 
 interface User {
   id: string;
@@ -14,13 +15,15 @@ interface User {
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, AuditTimelineComponent],
   templateUrl: './settings.component.html'
 })
 export class SettingsComponent implements OnInit {
   private api = inject(ApiService);
 
-  activeTab = signal<'company' | 'users'>('company');
+  activeTab = signal<'company' | 'users' | 'audit'>('company');
+  auditLogs = signal<any[]>([]);
+  auditLoading = signal(false);
 
   companyName = signal('Ministère des Affaires Générales');
   companyLogo = signal('https://ui-avatars.com/api/?name=MAG&background=00236f&color=fff&size=128');
@@ -31,6 +34,19 @@ export class SettingsComponent implements OnInit {
   isAddUserModalOpen = signal(false);
   newUser = signal({ name: '', email: '', role: 'Agent (Chef de Service)' });
   availableRoles = ['Directeur Général (DG)', 'Secrétaire de Direction', 'Agent (Chef de Service)', 'Admin IT'];
+
+  loadAudit() {
+    this.auditLoading.set(true);
+    this.api.getAuditLogs().subscribe(data => {
+      this.auditLogs.set(data);
+      this.auditLoading.set(false);
+    });
+  }
+
+  switchTab(tab: 'company' | 'users' | 'audit') {
+    this.activeTab.set(tab);
+    if (tab === 'audit' && this.auditLogs().length === 0) this.loadAudit();
+  }
 
   ngOnInit() {
     this.api.getCollaborateurs().subscribe(list => {

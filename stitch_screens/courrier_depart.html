@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+
+<html class="light" lang="fr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Courrier Départ - DG-Cockpit</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "error-container": "#ffdad6",
+                        "tertiary-fixed-dim": "#adc6ff",
+                        "surface-container": "#eceef0",
+                        "on-background": "#191c1e",
+                        "secondary-fixed-dim": "#b7c8e1",
+                        "on-primary": "#ffffff",
+                        "on-surface": "#191c1e",
+                        "secondary-fixed": "#d3e4fe",
+                        "surface-bright": "#f7f9fb",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-fixed": "#0b1c30",
+                        "on-tertiary-container": "#82abff",
+                        "on-surface-variant": "#444651",
+                        "surface-variant": "#e0e3e5",
+                        "surface-container-lowest": "#ffffff",
+                        "inverse-surface": "#2d3133",
+                        "inverse-primary": "#b6c4ff",
+                        "on-secondary-container": "#54647a",
+                        "surface-container-high": "#e6e8ea",
+                        "primary-fixed-dim": "#b6c4ff",
+                        "primary": "#00236f",
+                        "primary-fixed": "#dce1ff",
+                        "on-tertiary-fixed": "#001a42",
+                        "tertiary-fixed": "#d8e2ff",
+                        "surface-container-low": "#f2f4f6",
+                        "outline-variant": "#c5c5d3",
+                        "on-secondary-fixed-variant": "#38485d",
+                        "surface-dim": "#d8dadc",
+                        "on-primary-container": "#90a8ff",
+                        "outline": "#757682",
+                        "inverse-on-surface": "#eff1f3",
+                        "secondary-container": "#d0e1fb",
+                        "secondary": "#505f76",
+                        "primary-container": "#1e3a8a",
+                        "on-primary-fixed-variant": "#264191",
+                        "on-error-container": "#93000a",
+                        "surface": "#f7f9fb",
+                        "surface-container-highest": "#e0e3e5",
+                        "on-error": "#ffffff",
+                        "on-primary-fixed": "#00164e",
+                        "background": "#f7f9fb",
+                        "on-secondary": "#ffffff",
+                        "tertiary-container": "#003d88",
+                        "tertiary": "#00285e",
+                        "on-tertiary-fixed-variant": "#004395",
+                        "error": "#ba1a1a",
+                        "surface-tint": "#4059aa"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "unit-lg": "24px",
+                        "margin-page": "32px",
+                        "container-max": "1440px",
+                        "unit-sm": "8px",
+                        "unit-md": "16px",
+                        "sidebar-width": "280px",
+                        "unit-xs": "4px",
+                        "unit-xl": "48px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "title-lg": ["Inter"],
+                        "label-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "500" }],
+                        "title-lg": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "600" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen flex">
+<!-- SideNavBar -->
+<nav class="fixed left-0 top-0 h-full w-[280px] bg-on-tertiary-fixed dark:bg-on-tertiary-fixed border-r border-outline-variant shadow-sm flex flex-col p-unit-md z-50">
+<div class="flex items-center gap-3 mb-8 px-4">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-on-primary" style="font-variation-settings: 'FILL' 1;">assured_workload</span>
+</div>
+<div>
+<h1 class="font-headline-lg text-headline-lg font-bold text-surface-container-lowest">DG-Cockpit</h1>
+<p class="font-label-sm text-label-sm text-tertiary-fixed-dim">Executive Command</p>
+</div>
+</div>
+<button class="mb-8 w-full bg-primary-container text-on-primary-container font-label-md text-label-md py-3 px-4 rounded-full flex items-center justify-center gap-2 hover:bg-primary-container/90 transition-colors">
+<span class="material-symbols-outlined">add</span>
+            New Entry
+        </button>
+<div class="flex-1 flex flex-col gap-1 overflow-y-auto">
+<a class="flex items-center gap-3 font-body-md text-body-md font-medium text-surface-variant hover:text-white px-4 py-2 rounded-full hover:bg-primary-container/10 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-3 font-body-md text-body-md font-medium text-surface-variant hover:text-white px-4 py-2 rounded-full hover:bg-primary-container/10 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">mail</span>
+                Incoming Mail
+            </a>
+<a class="flex items-center gap-3 font-body-md text-body-md font-medium bg-primary text-on-primary rounded-full px-4 py-2 opacity-90 transition-opacity" href="#">
+<span class="material-symbols-outlined">send</span>
+                Courrier Départ
+            </a>
+<a class="flex items-center gap-3 font-body-md text-body-md font-medium text-surface-variant hover:text-white px-4 py-2 rounded-full hover:bg-primary-container/10 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">description</span>
+                Service Notes
+            </a>
+<a class="flex items-center gap-3 font-body-md text-body-md font-medium text-surface-variant hover:text-white px-4 py-2 rounded-full hover:bg-primary-container/10 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">assignment</span>
+                Instructions
+            </a>
+<a class="flex items-center gap-3 font-body-md text-body-md font-medium text-surface-variant hover:text-white px-4 py-2 rounded-full hover:bg-primary-container/10 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+                Appointments
+            </a>
+<a class="flex items-center gap-3 font-body-md text-body-md font-medium text-surface-variant hover:text-white px-4 py-2 rounded-full hover:bg-primary-container/10 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">monitoring</span>
+                Analytics
+            </a>
+</div>
+<div class="mt-auto flex flex-col gap-1 pt-4 border-t border-surface-variant/20">
+<a class="flex items-center gap-3 font-body-md text-body-md font-medium text-surface-variant hover:text-white px-4 py-2 rounded-full hover:bg-primary-container/10 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">help</span>
+                Support
+            </a>
+<a class="flex items-center gap-3 font-body-md text-body-md font-medium text-surface-variant hover:text-white px-4 py-2 rounded-full hover:bg-primary-container/10 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">logout</span>
+                Sign Out
+            </a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 ml-[280px] flex flex-col min-h-screen">
+<!-- TopAppBar -->
+<header class="docked full-width top-0 sticky z-40 bg-surface-bright border-b border-outline-variant flex justify-between items-center h-16 px-margin-page">
+<div class="flex items-center gap-4 flex-1 max-w-2xl">
+<div class="relative w-full focus-within:ring-2 focus-within:ring-primary rounded-full">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary">search</span>
+<input class="w-full pl-10 pr-4 py-2 rounded-full bg-surface-container-low border-none focus:outline-none focus:ring-0 font-body-md text-body-md text-on-surface placeholder:text-secondary hover:bg-surface-container-high transition-colors" placeholder="Rechercher dans les courriers..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-2 ml-4">
+<button class="p-2 rounded-full text-secondary hover:bg-surface-container-low hover:text-primary transition-all">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 rounded-full text-secondary hover:bg-surface-container-low hover:text-primary transition-all">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<button class="p-2 rounded-full text-secondary hover:bg-surface-container-low hover:text-primary transition-all">
+<span class="material-symbols-outlined">apps</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-label-md ml-2 cursor-pointer border border-outline-variant">
+                    GD
+                </div>
+</div>
+</header>
+<!-- Page Content -->
+<main class="flex-1 p-margin-page max-w-container-max mx-auto w-full">
+<!-- Page Header -->
+<div class="mb-8 flex justify-between items-end">
+<div>
+<h2 class="font-display-lg text-display-lg text-on-surface mb-2">Courrier Départ</h2>
+<p class="font-body-md text-body-md text-secondary">15 documents envoyés ce mois</p>
+</div>
+<button class="bg-primary text-on-primary px-6 py-2 rounded-full font-label-md text-label-md flex items-center gap-2 hover:bg-primary/90 transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                    Nouveau Courrier
+                </button>
+</div>
+<!-- Filter Bar -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 mb-8 flex flex-wrap gap-4 shadow-sm items-center justify-between">
+<div class="flex flex-wrap gap-4 items-center">
+<span class="font-label-md text-label-md text-secondary uppercase tracking-wider">Filtres:</span>
+<div class="relative">
+<select class="appearance-none bg-surface-container-low border border-outline-variant rounded-md pl-4 pr-10 py-2 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer hover:bg-surface-container-highest transition-colors">
+<option value="">Statut (Tous)</option>
+<option value="envoye">Envoyé</option>
+<option value="en_attente">En attente</option>
+<option value="signe">Signé</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-secondary pointer-events-none text-[20px]">arrow_drop_down</span>
+</div>
+<div class="relative">
+<select class="appearance-none bg-surface-container-low border border-outline-variant rounded-md pl-4 pr-10 py-2 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer hover:bg-surface-container-highest transition-colors">
+<option value="">Destinataire (Tous)</option>
+<option value="min_int">Ministère de l'Intérieur</option>
+<option value="pref">Préfecture</option>
+<option value="dir_reg">Direction Régionale</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-secondary pointer-events-none text-[20px]">arrow_drop_down</span>
+</div>
+<div class="relative">
+<input class="bg-surface-container-low border border-outline-variant rounded-md px-4 py-2 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer hover:bg-surface-container-highest transition-colors" type="date"/>
+</div>
+</div>
+<button class="text-primary hover:text-primary/80 font-label-md text-label-md flex items-center gap-1 transition-colors">
+<span class="material-symbols-outlined text-[18px]">clear_all</span>
+                    Réinitialiser
+                </button>
+</div>
+<!-- Document Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-gutter">
+<!-- Card 1 -->
+<article class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-[0_2px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_10px_15px_rgba(0,0,0,0.08)] transition-shadow duration-300 flex flex-col group cursor-pointer">
+<div class="h-48 bg-surface-container-low border-b border-outline-variant/50 relative overflow-hidden flex items-center justify-center p-4">
+<img alt="Document thumbnail" class="h-full object-contain shadow-sm border border-outline-variant/30 bg-white" data-alt="A clean, straight-on high-resolution scan of an official French administrative document. The document features formal letterhead with a crest, structured paragraphs of text, and official stamps. The lighting is even and bright, emphasizing the professional, executive command aesthetic of the system. The paper appears crisp white against a subtle light gray background." src="https://lh3.googleusercontent.com/aida/ADBb0uhms9ZvwpvWebmLoOGeoHhQgHtAHvdl040H_NdyAof_wa_-VjEzWE9_Pln8BfqrPTNZ47oV44MZKr7YgtlBNVAlByxbt6iE-W3K64YXsEG_r6d_-a1OevmcT1t5tAgNgwOieolrD2ahZQVLUtIoJLbISx4lvs6k1aXGD6RO8IVA3YJo29MRdWvir5YGm4xR418IETyCxAhDQELLaKWKEFyGcaZKHTFxZkoDPICjBXL58Q16hGHfNogbqOU"/>
+<div class="absolute top-3 right-3">
+<span class="bg-[#e6f4ea] text-[#137333] px-3 py-1 rounded-full font-label-sm text-label-sm flex items-center gap-1 border border-[#ceead6]">
+<span class="material-symbols-outlined text-[14px]">check_circle</span>
+                                Envoyé
+                            </span>
+</div>
+</div>
+<div class="p-unit-md flex flex-col flex-1">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-sm text-label-sm text-secondary">Réf: CD-2023-089</span>
+<span class="font-label-sm text-label-sm text-secondary">26 Oct 2023</span>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface mb-1 group-hover:text-primary transition-colors">Rapport Trimestriel de Sécurité</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-4 flex-1">À: Ministère de l'Intérieur</p>
+<div class="flex items-center gap-3 pt-3 border-t border-surface-variant/50 mt-auto">
+<button class="text-secondary hover:text-primary transition-colors p-1" title="Voir détails">
+<span class="material-symbols-outlined">visibility</span>
+</button>
+<button class="text-secondary hover:text-primary transition-colors p-1" title="Télécharger">
+<span class="material-symbols-outlined">download</span>
+</button>
+<button class="text-secondary hover:text-primary transition-colors p-1 ml-auto" title="Plus d'actions">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+</article>
+<!-- Card 2 -->
+<article class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-[0_2px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_10px_15px_rgba(0,0,0,0.08)] transition-shadow duration-300 flex flex-col group cursor-pointer">
+<div class="h-48 bg-surface-container-low border-b border-outline-variant/50 relative overflow-hidden flex items-center justify-center p-4">
+<img alt="Document thumbnail" class="h-full object-contain shadow-sm border border-outline-variant/30 bg-white" data-alt="A clear, straight-on high-resolution digital image of a formal corporate memo. The document has a corporate logo at the top left, clear structured headings, and bullet points. The aesthetic is clean, professional, and minimalist, with a crisp white page set against a soft, light gray background, fitting an executive administrative dashboard." src="https://lh3.googleusercontent.com/aida/ADBb0ui4mKH5cjrUhTK8S4sjNzI7b3nFZYAhJq8iiHzFHY2WdI2tVPXQv3G3FmJZ-I_flucfc1W7W-AqsYCYEpFsbxI4OVjKo9XGujo3q-opRZ008PCoXzZ-sje9GHyrSOtDke5OJtzv4AL_KXn6yCnS3jKyeL19VDtMFarC1KMm0xema_0nXL-mNjDIJQ6kkqtM5evPokaVlWbziKur3TQXBzdmeoCXBKVxpzfnkvLdqyKCc_is3xJ3GReyfGC1"/>
+<div class="absolute top-3 right-3">
+<span class="bg-[#fef7e0] text-[#b06000] px-3 py-1 rounded-full font-label-sm text-label-sm flex items-center gap-1 border border-[#feefc3]">
+<span class="material-symbols-outlined text-[14px]">pending</span>
+                                En attente
+                            </span>
+</div>
+</div>
+<div class="p-unit-md flex flex-col flex-1">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-sm text-label-sm text-secondary">Réf: CD-2023-088</span>
+<span class="font-label-sm text-label-sm text-secondary">25 Oct 2023</span>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface mb-1 group-hover:text-primary transition-colors">Demande d'Allocation Budgetaire</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-4 flex-1">À: Direction des Finances</p>
+<div class="flex items-center gap-3 pt-3 border-t border-surface-variant/50 mt-auto">
+<button class="text-secondary hover:text-primary transition-colors p-1" title="Voir détails">
+<span class="material-symbols-outlined">visibility</span>
+</button>
+<button class="text-secondary hover:text-primary transition-colors p-1" title="Modifier">
+<span class="material-symbols-outlined">edit</span>
+</button>
+<button class="text-secondary hover:text-primary transition-colors p-1 ml-auto" title="Plus d'actions">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+</article>
+<!-- Card 3 -->
+<article class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-[0_2px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_10px_15px_rgba(0,0,0,0.08)] transition-shadow duration-300 flex flex-col group cursor-pointer">
+<div class="h-48 bg-surface-container-low border-b border-outline-variant/50 relative overflow-hidden flex items-center justify-center p-4">
+<div class="w-3/4 h-full bg-white shadow-sm border border-outline-variant/30 flex flex-col p-4 relative">
+<div class="w-full h-2 bg-surface-variant mb-2 rounded-full"></div>
+<div class="w-3/4 h-2 bg-surface-variant mb-4 rounded-full"></div>
+<div class="w-full h-1 bg-surface-variant/50 mb-1"></div>
+<div class="w-full h-1 bg-surface-variant/50 mb-1"></div>
+<div class="w-5/6 h-1 bg-surface-variant/50 mb-4"></div>
+<div class="w-8 h-8 rounded-full border-2 border-primary/20 absolute bottom-4 right-4"></div>
+</div>
+<div class="absolute top-3 right-3">
+<span class="bg-[#e8f0fe] text-[#1967d2] px-3 py-1 rounded-full font-label-sm text-label-sm flex items-center gap-1 border border-[#d2e3fc]">
+<span class="material-symbols-outlined text-[14px]">edit_document</span>
+                                Signé
+                            </span>
+</div>
+</div>
+<div class="p-unit-md flex flex-col flex-1">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-sm text-label-sm text-secondary">Réf: CD-2023-087</span>
+<span class="font-label-sm text-label-sm text-secondary">24 Oct 2023</span>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface mb-1 group-hover:text-primary transition-colors">Circulaire Interne - RH</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-4 flex-1">À: Tous les Départements</p>
+<div class="flex items-center gap-3 pt-3 border-t border-surface-variant/50 mt-auto">
+<button class="text-secondary hover:text-primary transition-colors p-1" title="Voir détails">
+<span class="material-symbols-outlined">visibility</span>
+</button>
+<button class="text-secondary hover:text-primary transition-colors p-1" title="Télécharger">
+<span class="material-symbols-outlined">download</span>
+</button>
+<button class="text-secondary hover:text-primary transition-colors p-1 ml-auto" title="Plus d'actions">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+</article>
+</div>
+</main>
+</div>
+</body></html>

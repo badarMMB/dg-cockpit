@@ -41,6 +41,12 @@
             <artifactId>minio</artifactId>
             <version>8.5.10</version>
         </dependency>
+        <!-- PDFBox : rendu page image + fusion annotations -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.3</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

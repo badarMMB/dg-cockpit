@@ -5,57 +5,121 @@
         <h1 class="text-xl md:text-2xl font-bold text-gray-900">Agenda & Visiteurs</h1>
         <p class="text-sm text-gray-500 mt-1 capitalize">{{ today }}</p>
       </div>
-      <button class="px-3 md:px-4 py-2 bg-primary text-white font-medium rounded text-sm hover:bg-primary/90 shadow-soft flex items-center gap-2">
-        <span>➕</span><span class="hidden sm:inline">Nouveau RDV</span>
-      </button>
+      <div class="flex items-center gap-2 md:gap-3">
+        <!-- Vue toggle -->
+        <div class="flex border border-gray-200 rounded-lg overflow-hidden text-xs font-medium">
+          <button (click)="switchView('list')" class="px-3 py-1.5 transition-colors"
+                  [ngClass]="viewMode() === 'list' ? 'bg-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'">
+            Liste
+          </button>
+          <button (click)="switchView('calendar')" class="px-3 py-1.5 transition-colors"
+                  [ngClass]="viewMode() === 'calendar' ? 'bg-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'">
+            Calendrier
+          </button>
+        </div>
+        <button class="px-3 md:px-4 py-2 bg-primary text-white font-medium rounded text-sm hover:bg-primary/90 shadow-soft flex items-center gap-2">
+          <span>➕</span><span class="hidden sm:inline">Nouveau RDV</span>
+        </button>
+      </div>
     </div>
-    <div class="flex gap-2 mt-4 overflow-x-auto pb-1">
+
+    <!-- Filtres rapides (mode liste) -->
+    <div *ngIf="viewMode() === 'list'" class="flex gap-2 mt-4 overflow-x-auto pb-1">
       <button class="px-3 py-1.5 bg-primary text-white rounded-full text-xs font-medium whitespace-nowrap">Aujourd'hui</button>
       <button class="px-3 py-1.5 bg-white border border-gray-300 text-gray-600 rounded-full text-xs font-medium hover:border-primary hover:text-primary whitespace-nowrap">Cette semaine</button>
       <button class="px-3 py-1.5 bg-white border border-gray-300 text-gray-600 rounded-full text-xs font-medium hover:border-primary hover:text-primary whitespace-nowrap">Planifiés</button>
       <button class="px-3 py-1.5 bg-white border border-gray-300 text-gray-600 rounded-full text-xs font-medium hover:border-primary hover:text-primary whitespace-nowrap">Annulés</button>
     </div>
+
+    <!-- Navigation mois (mode calendrier) -->
+    <div *ngIf="viewMode() === 'calendar'" class="flex items-center justify-between mt-4">
+      <button (click)="prevMonth()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 text-xl leading-none">‹</button>
+      <span class="text-sm font-semibold text-gray-700 capitalize">{{ currentMonthLabel() }}</span>
+      <button (click)="nextMonth()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 text-xl leading-none">›</button>
+    </div>
   </header>
 
   <main class="flex-1 overflow-y-auto p-4 md:p-8">
+    <!-- Spinner -->
     <div *ngIf="loading()" class="flex justify-center items-center h-40">
       <div class="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
     </div>
 
-    <div *ngIf="!loading()" class="space-y-3">
-      <a *ngFor="let rdv of rendezVous()"
-         [routerLink]="['/appointments', rdv.id]"
-         class="block bg-white rounded-xl border border-gray-200 p-4 md:p-5 hover:border-primary hover:shadow-soft transition-all cursor-pointer group">
-        <div class="flex items-center gap-4">
-          <!-- Heure -->
-          <div class="w-16 md:w-20 text-center flex-shrink-0">
-            <div class="text-lg md:text-xl font-bold text-primary">{{ rdv.heure }}</div>
-            <div class="text-xs text-gray-400">{{ rdv.duree }}</div>
-          </div>
-          <div class="w-px h-12 bg-gray-200 flex-shrink-0"></div>
-          <!-- Infos -->
-          <div class="flex-1 min-w-0">
-            <h3 class="font-semibold text-gray-900 text-sm group-hover:text-primary transition-colors truncate">{{ rdv.titre }}</h3>
-            <p class="text-xs text-gray-500 mt-0.5">
-              <span class="font-medium text-gray-700">{{ rdv.visiteur }}</span>
-              <span *ngIf="rdv.organisation"> • {{ rdv.organisation }}</span>
-            </p>
-            <p *ngIf="rdv.objet" class="text-xs text-gray-400 mt-1 truncate">{{ rdv.objet }}</p>
-          </div>
-          <!-- Statut -->
-          <div class="flex-shrink-0">
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold"
-                  [ngClass]="statutColors[rdv.statut] || 'bg-gray-100 text-gray-600'">
-              {{ statutLabels[rdv.statut] || rdv.statut }}
-            </span>
-          </div>
-        </div>
-      </a>
+    <ng-container *ngIf="!loading()">
 
-      <div *ngIf="rendezVous().length === 0" class="text-center py-16 text-gray-400">
-        <div class="text-5xl mb-4">📅</div>
-        <p class="font-medium">Aucun rendez-vous aujourd'hui</p>
+      <!-- Grille calendrier -->
+      <div *ngIf="viewMode() === 'calendar'" class="mb-5 bg-white rounded-xl border border-gray-200 p-3 md:p-4">
+        <!-- En-têtes jours -->
+        <div class="grid grid-cols-7 mb-2">
+          <div *ngFor="let h of weekHeaders" class="text-center text-xs font-medium text-gray-400 py-1">{{ h }}</div>
+        </div>
+        <!-- Cellules -->
+        <div class="grid grid-cols-7 gap-1">
+          <ng-container *ngFor="let cell of calendarDays()">
+            <div *ngIf="!cell" class="h-9 md:h-10"></div>
+            <button *ngIf="cell"
+                    (click)="selectDay(cell.date)"
+                    class="h-9 md:h-10 rounded-lg flex flex-col items-center justify-center relative text-xs md:text-sm font-medium transition-all"
+                    [ngClass]="{
+                      'bg-primary text-white shadow-sm': selectedDay() === cell.date,
+                      'bg-primary/10 text-primary ring-1 ring-primary/30': cell.date === todayStr && selectedDay() !== cell.date,
+                      'text-gray-700 hover:bg-gray-100': cell.date !== todayStr && selectedDay() !== cell.date
+                    }">
+              {{ cell.day }}
+              <span *ngIf="rdvByDay()[cell.date]?.length"
+                    class="absolute bottom-1 w-1.5 h-1.5 rounded-full"
+                    [ngClass]="selectedDay() === cell.date ? 'bg-white' : 'bg-primary'"></span>
+            </button>
+          </ng-container>
+        </div>
       </div>
-    </div>
+
+      <!-- Titre de la sélection (mode calendrier) -->
+      <p *ngIf="viewMode() === 'calendar'" class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 capitalize">
+        {{ selectedDayLabel() || 'Tous les rendez-vous' }}
+      </p>
+
+      <!-- Liste des RDV -->
+      <div class="space-y-3">
+        <a *ngFor="let rdv of filteredRdv()"
+           [routerLink]="['/appointments', rdv.id]"
+           class="block bg-white rounded-xl border border-gray-200 p-4 md:p-5 hover:border-primary hover:shadow-soft transition-all cursor-pointer group">
+          <div class="flex items-center gap-4">
+            <!-- Heure -->
+            <div class="w-16 md:w-20 text-center flex-shrink-0">
+              <div class="text-lg md:text-xl font-bold text-primary">{{ rdv.heure }}</div>
+              <div class="text-xs text-gray-400">{{ rdv.duree }}</div>
+            </div>
+            <div class="w-px h-12 bg-gray-200 flex-shrink-0"></div>
+            <!-- Infos -->
+            <div class="flex-1 min-w-0">
+              <h3 class="font-semibold text-gray-900 text-sm group-hover:text-primary transition-colors truncate">{{ rdv.titre }}</h3>
+              <p class="text-xs text-gray-500 mt-0.5">
+                <span class="font-medium text-gray-700">{{ rdv.visiteur }}</span>
+                <span *ngIf="rdv.organisation"> • {{ rdv.organisation }}</span>
+              </p>
+              <p *ngIf="rdv.objet" class="text-xs text-gray-400 mt-1 truncate">{{ rdv.objet }}</p>
+              <p *ngIf="viewMode() === 'calendar' && !selectedDay() && rdv.date"
+                 class="text-xs text-gray-400 mt-0.5">
+                {{ rdv.date | date:'dd/MM/yyyy' }}
+              </p>
+            </div>
+            <!-- Statut -->
+            <div class="flex-shrink-0">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                    [ngClass]="statutColors[rdv.statut] || 'bg-gray-100 text-gray-600'">
+                {{ statutLabels[rdv.statut] || rdv.statut }}
+              </span>
+            </div>
+          </div>
+        </a>
+
+        <div *ngIf="filteredRdv().length === 0" class="text-center py-16 text-gray-400">
+          <div class="text-5xl mb-4">📅</div>
+          <p class="font-medium">{{ selectedDay() ? 'Aucun rendez-vous ce jour' : 'Aucun rendez-vous' }}</p>
+        </div>
+      </div>
+
+    </ng-container>
   </main>
 </div>

@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+
+<html class="light" lang="fr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>DG-Cockpit | Gestion des Rendez-vous</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "error": "#ba1a1a",
+                    "inverse-surface": "#2d3133",
+                    "on-tertiary": "#ffffff",
+                    "on-secondary-container": "#54647a",
+                    "primary-fixed": "#dce1ff",
+                    "outline-variant": "#c5c5d3",
+                    "on-error-container": "#93000a",
+                    "on-primary-fixed-variant": "#264191",
+                    "primary-container": "#1e3a8a",
+                    "on-tertiary-fixed": "#001a42",
+                    "on-secondary-fixed-variant": "#38485d",
+                    "on-primary": "#ffffff",
+                    "on-error": "#ffffff",
+                    "inverse-primary": "#b6c4ff",
+                    "surface-container": "#eceef0",
+                    "on-tertiary-container": "#82abff",
+                    "primary": "#00236f",
+                    "surface": "#f7f9fb",
+                    "tertiary-fixed": "#d8e2ff",
+                    "on-primary-container": "#90a8ff",
+                    "background": "#f7f9fb",
+                    "surface-container-low": "#f2f4f6",
+                    "surface-bright": "#f7f9fb",
+                    "secondary-container": "#d0e1fb",
+                    "on-background": "#191c1e",
+                    "surface-container-high": "#e6e8ea",
+                    "on-secondary": "#ffffff",
+                    "surface-variant": "#e0e3e5",
+                    "on-surface-variant": "#444651",
+                    "tertiary-container": "#003d88",
+                    "surface-container-highest": "#e0e3e5",
+                    "surface-tint": "#4059aa",
+                    "surface-dim": "#d8dadc",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed": "#d3e4fe",
+                    "secondary": "#505f76",
+                    "secondary-fixed-dim": "#b7c8e1",
+                    "tertiary-fixed-dim": "#adc6ff",
+                    "on-secondary-fixed": "#0b1c30",
+                    "error-container": "#ffdad6",
+                    "outline": "#757682",
+                    "tertiary": "#00285e",
+                    "on-surface": "#191c1e",
+                    "on-primary-fixed": "#00164e",
+                    "inverse-on-surface": "#eff1f3",
+                    "primary-fixed-dim": "#b6c4ff",
+                    "on-tertiary-fixed-variant": "#004395"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "unit-xs": "4px",
+                    "unit-sm": "8px",
+                    "container-max": "1440px",
+                    "unit-xl": "48px",
+                    "sidebar-width": "280px",
+                    "margin-page": "32px",
+                    "unit-lg": "24px",
+                    "gutter": "24px",
+                    "unit-md": "16px"
+            },
+            "fontFamily": {
+                    "headline-md": ["Inter"],
+                    "display-lg": ["Inter"],
+                    "body-md": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "title-lg": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "label-md": ["Inter"],
+                    "headline-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "display-lg": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "500"}],
+                    "title-lg": ["18px", {"lineHeight": "24px", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "fontWeight": "600"}],
+                    "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+    </style>
+</head>
+<body class="overflow-hidden">
+<!-- Persistent SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-[280px] bg-inverse-surface dark:bg-surface-container-lowest flex flex-col py-unit-lg shadow-lg z-50">
+<div class="px-8 mb-10">
+<h1 class="text-headline-lg font-headline-lg text-inverse-on-surface dark:text-primary mb-1">Directorate General</h1>
+<p class="text-label-sm text-surface-variant opacity-70 uppercase tracking-widest">Executive Command</p>
+</div>
+<nav class="flex-grow space-y-2">
+<a class="text-surface-variant dark:text-secondary px-4 py-3 mx-4 flex items-center gap-3 hover:bg-secondary dark:hover:bg-secondary-container hover:text-white transition-all scale-95 active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-body-md text-body-md">Dashboard</span>
+</a>
+<a class="text-surface-variant dark:text-secondary px-4 py-3 mx-4 flex items-center gap-3 hover:bg-secondary dark:hover:bg-secondary-container hover:text-white transition-all scale-95 active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">mail</span>
+<span class="font-body-md text-body-md">Incoming Mail</span>
+</a>
+<a class="text-surface-variant dark:text-secondary px-4 py-3 mx-4 flex items-center gap-3 hover:bg-secondary dark:hover:bg-secondary-container hover:text-white transition-all scale-95 active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">description</span>
+<span class="font-body-md text-body-md">Service Notes</span>
+</a>
+<a class="text-surface-variant dark:text-secondary px-4 py-3 mx-4 flex items-center gap-3 hover:bg-secondary dark:hover:bg-secondary-container hover:text-white transition-all scale-95 active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">assignment</span>
+<span class="font-body-md text-body-md">Instructions</span>
+</a>
+<!-- Active State: Appointments -->
+<a class="bg-primary dark:bg-primary-container text-on-primary dark:text-on-primary-container rounded-full mx-4 px-4 py-3 flex items-center gap-3 scale-95 active:scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="font-body-md text-body-md">Appointments</span>
+</a>
+<a class="text-surface-variant dark:text-secondary px-4 py-3 mx-4 flex items-center gap-3 hover:bg-secondary dark:hover:bg-secondary-container hover:text-white transition-all scale-95 active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-body-md text-body-md">Analytics</span>
+</a>
+</nav>
+<div class="px-4 mt-auto space-y-2 pt-6 border-t border-white/10">
+<button class="w-full bg-white/10 text-white rounded-full py-3 font-label-md flex items-center justify-center gap-2 hover:bg-white/20 transition-all mb-4">
+<span class="material-symbols-outlined">add</span>
+                New Briefing
+            </button>
+<a class="text-surface-variant px-4 py-2 flex items-center gap-3 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="text-body-md">Support</span>
+</a>
+<a class="text-surface-variant px-4 py-2 flex items-center gap-3 hover:text-error transition-colors" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="text-body-md">Sign Out</span>
+</a>
+</div>
+</aside>
+<!-- Main Wrapper -->
+<div class="ml-[280px] h-screen flex flex-col">
+<!-- TopNavBar -->
+<header class="h-16 w-full flex items-center justify-between px-margin-page bg-surface dark:bg-inverse-surface border-b border-outline-variant dark:border-outline shadow-sm z-40">
+<div class="flex items-center gap-6">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="pl-10 pr-4 py-1.5 bg-surface-container-low border-none rounded-full w-64 text-body-md focus:ring-2 focus:ring-primary/20" placeholder="Rechercher un rendez-vous..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 rounded-full hover:bg-surface-container-high transition-colors relative">
+<span class="material-symbols-outlined text-on-surface-variant">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="p-2 rounded-full hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant">settings</span>
+</button>
+<div class="h-8 w-[1px] bg-outline-variant mx-2"></div>
+<div class="flex items-center gap-3 cursor-pointer hover:bg-surface-container-high p-1 pr-3 rounded-full transition-colors">
+<img alt="Director General Profile" class="w-8 h-8 rounded-full object-cover border border-outline-variant" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAI4oiy9Q5meLrAEGADSgXRjLcIIQiQotreT0oyTRjetFr1SWOLCUoOUp5sj5cJRwkxNd7HdFXTr43LhtRk-C3VmTo9m8PCm-PTB-R4xJdKFz04vNOv0kxiy-sBwnmddKWSIAPOa35QiHBCvGhugsAolE2XFaXqVEPkDrNx-MZHXaeFXI0xTP1kOaNxNGQE0G06YYAQiyyMhAXJHBzO34JCobX1xpgvDZOWJrNUx0L9QYMiNC8v0HAOK1Z86-QPnmci0cv9itsnma3D"/>
+<span class="text-label-md text-primary font-bold">DG Admin</span>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-grow p-margin-page flex gap-gutter overflow-hidden">
+<!-- Left Panel: Appointments List (60%) -->
+<section class="w-[60%] flex flex-col bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant overflow-hidden">
+<div class="px-unit-lg py-unit-md border-b border-outline-variant flex items-center justify-between bg-white">
+<h2 class="text-title-lg font-title-lg text-primary flex items-center gap-2">
+<span class="material-symbols-outlined">event_upcoming</span>
+                        Prochains Rendez-vous
+                    </h2>
+<div class="flex gap-2">
+<button class="px-3 py-1.5 text-label-md rounded-md bg-surface-container text-on-surface hover:bg-surface-container-high transition-colors">Aujourd'hui</button>
+<button class="px-3 py-1.5 text-label-md rounded-md text-on-surface-variant hover:bg-surface-container transition-colors">Cette semaine</button>
+</div>
+</div>
+<div class="flex-grow overflow-y-auto p-unit-md space-y-unit-sm">
+<!-- List Item 1 (Selected) -->
+<div class="p-unit-md rounded-lg border-2 border-primary bg-primary/5 flex items-center gap-4 cursor-pointer">
+<div class="flex flex-col items-center justify-center w-16 h-16 bg-white rounded-md border border-outline-variant text-primary">
+<span class="text-label-sm font-bold uppercase">Jan</span>
+<span class="text-headline-md leading-none">31</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start">
+<h3 class="font-headline-md text-primary">Jean-Pierre Durand</h3>
+<span class="text-label-md font-bold text-primary">14:30</span>
+</div>
+<p class="text-body-md text-on-surface-variant">Réunion de Coordination Strategy 2024</p>
+</div>
+<span class="material-symbols-outlined text-primary">chevron_right</span>
+</div>
+<!-- List Item 2 -->
+<div class="p-unit-md rounded-lg border border-outline-variant bg-white flex items-center gap-4 cursor-pointer hover:border-primary/40 transition-colors">
+<div class="flex flex-col items-center justify-center w-16 h-16 bg-surface-container-low rounded-md border border-outline-variant text-secondary">
+<span class="text-label-sm font-bold uppercase">Jan</span>
+<span class="text-headline-md leading-none">31</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start">
+<h3 class="font-headline-md text-on-surface">Marie-Claire Lefebvre</h3>
+<span class="text-label-md font-bold text-secondary">15:45</span>
+</div>
+<p class="text-body-md text-on-surface-variant">Audit de Performance Trimestrielle</p>
+</div>
+<span class="material-symbols-outlined text-outline">chevron_right</span>
+</div>
+<!-- List Item 3 -->
+<div class="p-unit-md rounded-lg border border-outline-variant bg-white flex items-center gap-4 cursor-pointer hover:border-primary/40 transition-colors">
+<div class="flex flex-col items-center justify-center w-16 h-16 bg-surface-container-low rounded-md border border-outline-variant text-secondary">
+<span class="text-label-sm font-bold uppercase">Fév</span>
+<span class="text-headline-md leading-none">01</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start">
+<h3 class="font-headline-md text-on-surface">Col. André Malraux</h3>
+<span class="text-label-md font-bold text-secondary">09:00</span>
+</div>
+<p class="text-body-md text-on-surface-variant">Briefing Sécurité Opérationnelle</p>
+</div>
+<span class="material-symbols-outlined text-outline">chevron_right</span>
+</div>
+<!-- List Item 4 -->
+<div class="p-unit-md rounded-lg border border-outline-variant bg-white flex items-center gap-4 cursor-pointer hover:border-primary/40 transition-colors">
+<div class="flex flex-col items-center justify-center w-16 h-16 bg-surface-container-low rounded-md border border-outline-variant text-secondary">
+<span class="text-label-sm font-bold uppercase">Fév</span>
+<span class="text-headline-md leading-none">01</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start">
+<h3 class="font-headline-md text-on-surface">Sophie Dupont</h3>
+<span class="text-label-md font-bold text-secondary">11:15</span>
+</div>
+<p class="text-body-md text-on-surface-variant">Signature du Protocole Inter-services</p>
+</div>
+<span class="material-symbols-outlined text-outline">chevron_right</span>
+</div>
+</div>
+</section>
+<!-- Right Panel: Selection Details (40%) -->
+<section class="w-[40%] flex flex-col gap-gutter overflow-y-auto">
+<!-- Detail Card -->
+<div class="bg-white rounded-xl shadow-sm border border-outline-variant p-unit-lg">
+<div class="mb-unit-lg">
+<div class="flex items-center gap-2 mb-2">
+<span class="px-2 py-0.5 bg-primary-container text-on-primary-container text-label-sm rounded uppercase">Confirmé</span>
+<span class="text-label-md text-on-surface-variant">• Réf: #DG-1294</span>
+</div>
+<h2 class="text-headline-lg font-headline-lg text-primary">Détails de la visite</h2>
+</div>
+<div class="space-y-4 mb-8">
+<div>
+<p class="text-label-md text-on-surface-variant uppercase tracking-wider mb-1">Nom du visiteur</p>
+<p class="text-body-lg font-semibold text-on-surface">Jean-Pierre Durand</p>
+<p class="text-body-md text-secondary">Directeur, XYZ Corp Europe</p>
+</div>
+<div class="h-[1px] bg-outline-variant"></div>
+<div>
+<p class="text-label-md text-on-surface-variant uppercase tracking-wider mb-1">Motif</p>
+<p class="text-body-lg font-semibold text-on-surface">Réunion de Coordination</p>
+<p class="text-body-md text-on-surface-variant">Discussion sur l'intégration des nouveaux protocoles de communication sécurisés.</p>
+</div>
+<div class="h-[1px] bg-outline-variant"></div>
+<div class="flex justify-between">
+<div>
+<p class="text-label-md text-on-surface-variant uppercase tracking-wider mb-1">Heure</p>
+<p class="text-body-lg font-semibold text-on-surface">14:30 - 15:30</p>
+</div>
+<div>
+<p class="text-label-md text-on-surface-variant uppercase tracking-wider mb-1">Localisation</p>
+<p class="text-body-lg font-semibold text-on-surface">Bureau 402, Aile Ouest</p>
+</div>
+</div>
+</div>
+<!-- Security Access QR Section -->
+<div class="bg-surface rounded-lg p-unit-md border border-outline-variant/50">
+<div class="flex items-center justify-between mb-4">
+<h3 class="text-label-md font-bold text-primary flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">security</span>
+                                SECURITY ACCESS PASS
+                            </h3>
+<span class="text-[10px] text-on-surface-variant opacity-60">VALID THROUGH: 1/31/2024</span>
+</div>
+<div class="flex justify-center mb-6">
+<div class="p-4 bg-white rounded-lg shadow-inner border border-outline-variant relative overflow-hidden">
+<img alt="Secure Access QR Code" class="w-48 h-48 object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBBm0weYsmDxGPa1rsfkEkfjCVsNmLkuOfRjmdUJvuZE7-kbuJUmMGp9Q4IDRk0gnD59HcWkd8eGeeaOlMqok1mIU8yLe8dF115-7Mc3yJzhYjSEozMOGA4zxOJ5-ETM65s1RSSrwYoJvG5dfQaXZ-y11XapZJC_-ORAV8hOONaHs2L4V4pAk6olUZ2aEIz_2ySX2D7D9nQeRh7nvUhKRVbubNXdXxBRETav1ZS8FySqa5fLn4icmM3vYSk44KZ4x4T3UrlXLAn7zs1"/>
+<div class="absolute inset-0 border-[6px] border-primary/10 rounded-lg pointer-events-none"></div>
+</div>
+</div>
+<div class="space-y-3">
+<button class="w-full bg-primary text-on-primary py-3 rounded-full font-label-md flex items-center justify-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all">
+<span class="material-symbols-outlined text-lg">share</span>
+                                Partager sur WhatsApp
+                            </button>
+<button class="w-full bg-surface-container-high text-primary py-3 rounded-full font-label-md flex items-center justify-center gap-2 hover:bg-outline-variant transition-all active:scale-[0.98]">
+<span class="material-symbols-outlined text-lg">mail</span>
+                                Envoyer par Email
+                            </button>
+</div>
+</div>
+</div>
+<!-- Footer Stats / Notes -->
+<div class="bg-primary text-on-primary rounded-xl p-unit-md flex items-center justify-between shadow-sm">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-3xl opacity-60">info</span>
+<div>
+<p class="text-label-sm uppercase opacity-70">Total Visiteurs Aujourd'hui</p>
+<p class="text-headline-md">12 Confirmés</p>
+</div>
+</div>
+<button class="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-colors">
+<span class="material-symbols-outlined">print</span>
+</button>
+</div>
+</section>
+</main>
+</div>
+</body></html>

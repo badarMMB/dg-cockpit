@@ -1,0 +1,61 @@
+<div class="h-full flex flex-col bg-surface">
+  <header class="px-4 md:px-8 py-4 md:py-6 border-b border-gray-200 bg-white">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-xl md:text-2xl font-bold text-gray-900">Agenda & Visiteurs</h1>
+        <p class="text-sm text-gray-500 mt-1 capitalize">{{ today }}</p>
+      </div>
+      <button class="px-3 md:px-4 py-2 bg-primary text-white font-medium rounded text-sm hover:bg-primary/90 shadow-soft flex items-center gap-2">
+        <span>➕</span><span class="hidden sm:inline">Nouveau RDV</span>
+      </button>
+    </div>
+    <div class="flex gap-2 mt-4 overflow-x-auto pb-1">
+      <button class="px-3 py-1.5 bg-primary text-white rounded-full text-xs font-medium whitespace-nowrap">Aujourd'hui</button>
+      <button class="px-3 py-1.5 bg-white border border-gray-300 text-gray-600 rounded-full text-xs font-medium hover:border-primary hover:text-primary whitespace-nowrap">Cette semaine</button>
+      <button class="px-3 py-1.5 bg-white border border-gray-300 text-gray-600 rounded-full text-xs font-medium hover:border-primary hover:text-primary whitespace-nowrap">Planifiés</button>
+      <button class="px-3 py-1.5 bg-white border border-gray-300 text-gray-600 rounded-full text-xs font-medium hover:border-primary hover:text-primary whitespace-nowrap">Annulés</button>
+    </div>
+  </header>
+
+  <main class="flex-1 overflow-y-auto p-4 md:p-8">
+    <div *ngIf="loading()" class="flex justify-center items-center h-40">
+      <div class="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+    </div>
+
+    <div *ngIf="!loading()" class="space-y-3">
+      <a *ngFor="let rdv of rendezVous()"
+         [routerLink]="['/appointments', rdv.id]"
+         class="block bg-white rounded-xl border border-gray-200 p-4 md:p-5 hover:border-primary hover:shadow-soft transition-all cursor-pointer group">
+        <div class="flex items-center gap-4">
+          <!-- Heure -->
+          <div class="w-16 md:w-20 text-center flex-shrink-0">
+            <div class="text-lg md:text-xl font-bold text-primary">{{ rdv.heure }}</div>
+            <div class="text-xs text-gray-400">{{ rdv.duree }}</div>
+          </div>
+          <div class="w-px h-12 bg-gray-200 flex-shrink-0"></div>
+          <!-- Infos -->
+          <div class="flex-1 min-w-0">
+            <h3 class="font-semibold text-gray-900 text-sm group-hover:text-primary transition-colors truncate">{{ rdv.titre }}</h3>
+            <p class="text-xs text-gray-500 mt-0.5">
+              <span class="font-medium text-gray-700">{{ rdv.visiteur }}</span>
+              <span *ngIf="rdv.organisation"> • {{ rdv.organisation }}</span>
+            </p>
+            <p *ngIf="rdv.objet" class="text-xs text-gray-400 mt-1 truncate">{{ rdv.objet }}</p>
+          </div>
+          <!-- Statut -->
+          <div class="flex-shrink-0">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                  [ngClass]="statutColors[rdv.statut] || 'bg-gray-100 text-gray-600'">
+              {{ statutLabels[rdv.statut] || rdv.statut }}
+            </span>
+          </div>
+        </div>
+      </a>
+
+      <div *ngIf="rendezVous().length === 0" class="text-center py-16 text-gray-400">
+        <div class="text-5xl mb-4">📅</div>
+        <p class="font-medium">Aucun rendez-vous aujourd'hui</p>
+      </div>
+    </div>
+  </main>
+</div>

@@ -1,0 +1,66 @@
+<div class="h-full flex flex-col bg-gray-50">
+  <header class="bg-white border-b border-gray-200 px-4 md:px-8 py-3 md:py-4 flex items-center gap-3">
+    <a routerLink="/appointments" class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors flex-shrink-0">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+    </a>
+    <div class="flex-1 min-w-0">
+      <h1 class="text-base md:text-xl font-semibold text-gray-900 truncate">{{ rdv()?.titre || 'Chargement...' }}</h1>
+      <p class="text-xs text-gray-500">Agenda & Visiteurs</p>
+    </div>
+    <div *ngIf="rdv()?.statut === 'PLANIFIE'" class="flex-shrink-0">
+      <button (click)="annuler()"
+              class="px-3 py-1.5 border border-red-300 text-red-600 rounded text-xs font-medium hover:bg-red-50 transition-colors">
+        Annuler le RDV
+      </button>
+    </div>
+  </header>
+
+  <div *ngIf="loading()" class="flex justify-center items-center flex-1">
+    <div class="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+  </div>
+
+  <main *ngIf="!loading() && rdv()" class="flex-1 overflow-y-auto p-4 md:p-8 max-w-4xl mx-auto w-full">
+    <!-- Bloc heure/statut -->
+    <div class="bg-primary text-white rounded-xl p-4 md:p-6 mb-4 flex items-center gap-4">
+      <div class="text-4xl md:text-5xl font-bold">{{ rdv().heure }}</div>
+      <div>
+        <div class="text-lg font-semibold">{{ rdv().titre }}</div>
+        <div class="text-primary/80 text-sm">Durée : {{ rdv().duree }}</div>
+      </div>
+      <div class="ml-auto">
+        <span class="px-3 py-1 rounded-full text-xs font-bold"
+              [ngClass]="{
+                'bg-white/20 text-white': rdv().statut === 'PLANIFIE',
+                'bg-green-400/30 text-green-100': rdv().statut === 'EN_COURS',
+                'bg-white/10 text-white/70': rdv().statut === 'TERMINE',
+                'bg-red-400/30 text-red-100': rdv().statut === 'ANNULE'
+              }">
+          {{ rdv().statut === 'PLANIFIE' ? 'Planifié' : rdv().statut === 'EN_COURS' ? 'En cours' : rdv().statut === 'TERMINE' ? 'Terminé' : 'Annulé' }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Infos visiteur -->
+    <div class="bg-white rounded-xl border border-gray-200 p-4 md:p-6 mb-4 shadow-soft">
+      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Visiteur</h2>
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg flex-shrink-0">
+          {{ rdv().visiteur?.charAt(0) }}
+        </div>
+        <div>
+          <p class="font-semibold text-gray-900">{{ rdv().visiteur }}</p>
+          <p *ngIf="rdv().organisation" class="text-sm text-gray-500">{{ rdv().organisation }}</p>
+          <p *ngIf="rdv().contact" class="text-xs text-gray-400 mt-0.5">{{ rdv().contact }}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Objet -->
+    <div class="bg-white rounded-xl border border-gray-200 p-4 md:p-6 shadow-soft">
+      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Objet du rendez-vous</h2>
+      <p class="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{{ rdv().objet || 'Aucun objet renseigné.' }}</p>
+    </div>
+  </main>
+</div>

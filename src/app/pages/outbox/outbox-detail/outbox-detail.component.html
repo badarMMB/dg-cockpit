@@ -1,0 +1,71 @@
+<div class="h-full flex flex-col bg-gray-50">
+  <header class="bg-white border-b border-gray-200 px-4 md:px-8 py-3 md:py-4 flex items-center gap-3">
+    <a routerLink="/outbox" class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors flex-shrink-0">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+    </a>
+    <div class="flex-1 min-w-0">
+      <h1 class="text-base md:text-xl font-semibold text-gray-900 truncate">{{ courrier()?.objet || 'Chargement...' }}</h1>
+      <p class="text-xs text-gray-500">Courrier Départ</p>
+    </div>
+    <div *ngIf="courrier()?.statut === 'SIGNE'" class="flex-shrink-0">
+      <button (click)="marquerExpedie()"
+              class="px-3 py-1.5 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 transition-colors flex items-center gap-1.5">
+        📤 Marquer Expédié
+      </button>
+    </div>
+  </header>
+
+  <div *ngIf="loading()" class="flex justify-center items-center flex-1">
+    <div class="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+  </div>
+
+  <main *ngIf="!loading() && courrier()" class="flex-1 overflow-y-auto p-4 md:p-8 max-w-4xl mx-auto w-full">
+    <div class="bg-white rounded-xl border border-gray-200 p-4 md:p-6 mb-4 shadow-soft">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+        <div>
+          <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Destinataire</span>
+          <p class="text-sm font-semibold text-gray-900 mt-1">{{ courrier().destinataire }}</p>
+        </div>
+        <div>
+          <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Date d'envoi</span>
+          <p class="text-sm font-semibold text-gray-900 mt-1">{{ courrier().dateEnvoi }}</p>
+        </div>
+        <div>
+          <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Référence</span>
+          <p class="text-sm font-semibold text-gray-900 mt-1">{{ courrier().reference || '—' }}</p>
+        </div>
+        <div>
+          <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</span>
+          <p class="mt-1">
+            <span class="px-2.5 py-1 rounded-full text-xs font-semibold"
+                  [ngClass]="{
+                    'bg-gray-100 text-gray-600': courrier().statut === 'BROUILLON',
+                    'bg-blue-100 text-blue-700': courrier().statut === 'SIGNE',
+                    'bg-green-100 text-green-700': courrier().statut === 'EXPEDIE'
+                  }">
+              {{ courrier().statut === 'BROUILLON' ? 'Brouillon' : courrier().statut === 'SIGNE' ? 'Signé' : 'Expédié' }}
+            </span>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-200 p-4 md:p-6 mb-4 shadow-soft">
+      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Contenu</h2>
+      <p class="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{{ courrier().contenu }}</p>
+    </div>
+
+    <div *ngIf="courrier().pieceJointe" class="bg-white rounded-xl border border-gray-200 p-4 shadow-soft">
+      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Document joint</h2>
+      <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+        <span class="text-2xl text-alert">📄</span>
+        <div>
+          <p class="text-sm font-medium text-gray-800">{{ courrier().pieceJointe }}</p>
+          <p class="text-xs text-gray-500">PDF signé • Cliquez pour ouvrir</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

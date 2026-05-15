@@ -37,6 +37,39 @@ export class ApiService {
     return this.http.patch(`${this.base}/instructions/messages/${msgId}/reject`, {});
   }
 
+  // Courrier Arrivé
+  getCourriersArrive(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/courriers-arrive`);
+  }
+  getCourrierArrive(id: string): Observable<any> {
+    return this.http.get(`${this.base}/courriers-arrive/${id}`);
+  }
+  updateCourrierArrive(id: string, body: any): Observable<any> {
+    return this.http.patch(`${this.base}/courriers-arrive/${id}`, body);
+  }
+
+  // Courrier Départ
+  getCourriersDepart(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/courriers-depart`);
+  }
+  getCourrierDepart(id: string): Observable<any> {
+    return this.http.get(`${this.base}/courriers-depart/${id}`);
+  }
+  updateCourrierDepart(id: string, body: any): Observable<any> {
+    return this.http.patch(`${this.base}/courriers-depart/${id}`, body);
+  }
+
+  // Rendez-vous
+  getRendezVous(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/rendez-vous`);
+  }
+  getRendezVousById(id: string): Observable<any> {
+    return this.http.get(`${this.base}/rendez-vous/${id}`);
+  }
+  updateRendezVous(id: string, body: any): Observable<any> {
+    return this.http.patch(`${this.base}/rendez-vous/${id}`, body);
+  }
+
   // Collaborateurs
   getCollaborateurs(): Observable<any[]> {
     return this.http.get<any[]>(`${this.base}/collaborateurs`);

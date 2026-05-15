@@ -76,10 +76,6 @@ export class SettingsComponent implements OnInit {
     });
   }
 
-  updateNewUserField(field: 'name' | 'email' | 'role', value: string) {
-    this.newUser.update(u => ({ ...u, [field]: value }));
-  }
-
   deleteUser(id: string) {
     if (confirm("Confirmer la révocation des accès pour cet utilisateur ?")) {
       this.api.deleteCollaborateur(id).subscribe(() => {

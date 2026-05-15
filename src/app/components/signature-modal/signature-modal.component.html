@@ -1,0 +1,46 @@
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+  <!-- Modal Content -->
+  <div class="bg-surface w-full max-w-2xl rounded-lg shadow-2xl overflow-hidden flex flex-col">
+    <!-- Header -->
+    <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+      <h3 class="text-xl font-semibold text-gray-900">Apposition de la signature</h3>
+      <button (click)="onClose()" class="text-gray-400 hover:text-gray-700 transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div class="p-6 flex-1 flex flex-col items-center">
+      <p class="text-sm text-gray-500 mb-4 self-start">Veuillez tracer votre signature ci-dessous pour valider officiellement le document.</p>
+      
+      <!-- Canvas Area -->
+      <div class="w-full h-[300px] bg-white border-2 border-dashed border-gray-300 rounded-lg overflow-hidden relative">
+        <canvas 
+          #signatureCanvas 
+          width="800" 
+          height="400" 
+          class="w-full h-full cursor-crosshair touch-none"
+          (mousedown)="startDrawing($event)"
+          (mousemove)="draw($event)"
+          (mouseup)="stopDrawing()"
+          (mouseleave)="stopDrawing()"
+          (touchstart)="startDrawing($event)"
+          (touchmove)="draw($event)"
+          (touchend)="stopDrawing()">
+        </canvas>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-3 bg-gray-50">
+      <button (click)="clear()" class="px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded hover:bg-gray-100 transition-colors">
+        Effacer
+      </button>
+      <button (click)="onValidate()" class="px-6 py-2 bg-primary text-white font-medium rounded hover:bg-primary/90 shadow-soft transition-colors flex items-center gap-2">
+        <span class="text-lg">✍️</span> Valider la Signature
+      </button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,67 @@
+<div class="p-4 md:p-8">
+  <h1 class="text-2xl md:text-3xl font-semibold text-gray-900 mb-6 md:mb-8">Bonjour, M. le Directeur</h1>
+
+  <!-- KPIs -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 md:mb-8">
+    <div *ngFor="let stat of stats()"
+         class="bg-surface rounded-lg p-4 md:p-6 border border-gray-100 shadow-soft flex items-center gap-4">
+      <div class="w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center text-2xl flex-shrink-0"
+           [ngClass]="stat.bg + ' ' + stat.color">
+        {{ stat.icon }}
+      </div>
+      <div>
+        <div class="text-2xl md:text-3xl font-bold text-gray-900">{{ stat.value }}</div>
+        <div class="text-xs md:text-sm font-medium text-gray-500">{{ stat.label }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+    <!-- Instructions récentes -->
+    <div class="bg-surface rounded-lg border border-gray-100 shadow-soft p-4 md:p-6">
+      <div class="flex items-center justify-between mb-4 md:mb-6">
+        <h2 class="text-base md:text-lg font-semibold text-gray-900">Flux des Instructions</h2>
+        <a routerLink="/chat" class="text-sm font-medium text-primary cursor-pointer hover:underline">Voir tout</a>
+      </div>
+      <div class="space-y-3">
+        <div *ngFor="let inst of instructionsList()"
+             class="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 cursor-pointer border border-transparent hover:border-gray-200 transition-colors">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600 text-sm flex-shrink-0">
+              {{ inst.agent.charAt(0) }}
+            </div>
+            <div class="min-w-0">
+              <div class="font-medium text-gray-900 text-sm truncate">{{ inst.title }}</div>
+              <div class="text-xs text-gray-500 truncate">{{ inst.agent }} • {{ inst.date }}</div>
+            </div>
+          </div>
+          <span class="ml-2 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 whitespace-nowrap flex-shrink-0">{{ inst.status }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Parapheur -->
+    <div class="bg-surface rounded-lg border border-gray-100 shadow-soft p-4 md:p-6">
+      <div class="flex items-center justify-between mb-4 md:mb-6">
+        <h2 class="text-base md:text-lg font-semibold text-gray-900">Parapheur en attente</h2>
+        <a routerLink="/signature" class="text-sm font-medium text-primary cursor-pointer hover:underline">Ouvrir</a>
+      </div>
+      <div class="space-y-3">
+        <div *ngFor="let doc of parapheurDocs()"
+             class="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:border-primary transition-colors cursor-pointer group">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="text-alert text-2xl flex-shrink-0">📄</div>
+            <div class="min-w-0">
+              <div class="font-medium text-gray-900 group-hover:text-primary transition-colors text-sm truncate">{{ doc.title }}</div>
+              <div class="text-xs text-gray-500">PDF • {{ doc.size }}</div>
+            </div>
+          </div>
+          <button routerLink="/signature"
+                  class="ml-2 bg-primary text-white px-3 py-1 rounded text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+            Signer
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

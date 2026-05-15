@@ -1,0 +1,60 @@
+<div class="h-full flex flex-col bg-surface overflow-hidden">
+  <!-- Toolbar -->
+  <header class="px-4 md:px-6 py-3 md:py-4 border-b border-gray-200 bg-white flex justify-between items-center z-10 shadow-sm">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center text-red-600 text-sm font-bold flex-shrink-0">PDF</div>
+      <div class="min-w-0">
+        <input type="text" [ngModel]="documentTitle()" (ngModelChange)="documentTitle.set($event)"
+               class="text-base md:text-lg font-semibold text-gray-900 border-none bg-transparent hover:bg-gray-50 px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-primary/50 w-full"
+               placeholder="Nom du document...">
+        <p class="text-xs text-gray-500 px-2">Brouillon • Sauvegardé</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 flex-shrink-0">
+      <button class="hidden sm:block px-3 py-1.5 border border-gray-300 text-gray-700 font-medium rounded text-sm hover:bg-gray-100">
+        Aperçu
+      </button>
+      <button (click)="submitToSignature()"
+              class="px-3 md:px-4 py-1.5 md:py-2 bg-primary text-white font-medium rounded text-sm hover:bg-primary/90 shadow-soft flex items-center gap-1.5">
+        <span>✍️</span><span class="hidden sm:inline">Envoyer au Parapheur</span><span class="sm:hidden">Signer</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Espace éditeur -->
+  <main class="flex-1 overflow-y-auto bg-gray-100 p-3 md:p-8 flex justify-center">
+    <!-- Page A4 -->
+    <div class="w-full max-w-[210mm] bg-white shadow-lg min-h-[297mm] relative flex flex-col">
+      <!-- En-tête -->
+      <div class="p-6 md:p-12 pb-4 md:pb-6 text-center border-b border-gray-100">
+        <img src="https://ui-avatars.com/api/?name=MAG&background=00236f&color=fff&size=64" class="w-12 h-12 md:w-16 md:h-16 mx-auto mb-3 md:mb-4"/>
+        <p class="text-xs font-serif font-bold text-gray-800 whitespace-pre-wrap leading-tight uppercase">{{ header() }}</p>
+      </div>
+
+      <!-- Barre de formatage -->
+      <div class="mx-4 md:mx-12 mt-4 mb-2 flex gap-1 border-b border-gray-200 pb-2 overflow-x-auto">
+        <button class="p-1 text-gray-600 hover:text-black font-bold font-serif w-8 text-center rounded hover:bg-gray-100 text-sm flex-shrink-0">B</button>
+        <button class="p-1 text-gray-600 hover:text-black italic font-serif w-8 text-center rounded hover:bg-gray-100 text-sm flex-shrink-0">I</button>
+        <button class="p-1 text-gray-600 hover:text-black underline font-serif w-8 text-center rounded hover:bg-gray-100 text-sm flex-shrink-0">U</button>
+        <div class="w-px h-5 bg-gray-300 mx-1 self-center flex-shrink-0"></div>
+        <button class="p-1 text-gray-600 hover:text-black w-8 text-center rounded hover:bg-gray-100 text-sm flex-shrink-0">≡</button>
+        <button class="px-2 py-1 text-gray-600 hover:text-black text-xs rounded hover:bg-gray-100 font-semibold flex-shrink-0">T1</button>
+        <button class="px-2 py-1 text-gray-600 hover:text-black text-xs rounded hover:bg-gray-100 flex-shrink-0">T2</button>
+      </div>
+
+      <!-- Contenu -->
+      <div class="px-4 md:px-12 py-4 flex-1">
+        <h1 class="text-xl md:text-2xl font-bold mb-4 md:mb-6 font-serif">Objet : Révision Budgétaire Q3</h1>
+        <textarea [ngModel]="documentContent()" (ngModelChange)="documentContent.set($event)"
+                  class="w-full h-64 md:h-full resize-none border-none focus:ring-0 text-gray-800 text-sm md:text-base leading-relaxed p-0 bg-transparent font-serif outline-none"
+                  placeholder="Saisissez le contenu ici..."></textarea>
+      </div>
+
+      <!-- Pied de page -->
+      <div class="p-4 md:p-8 pt-4 text-center mt-auto">
+        <div class="w-16 h-px bg-gray-300 mx-auto mb-3"></div>
+        <p class="text-xs text-gray-500 font-mono">{{ footer() }}</p>
+      </div>
+    </div>
+  </main>
+</div>

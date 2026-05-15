@@ -128,8 +128,8 @@ export class ApiService {
     form.append('file', file);
     return this.http.post(`${this.base}/users/me/signature-assets`, form);
   }
-  getSignatureAssetUrl(id: string): Observable<{ url: string }> {
-    return this.http.get<{ url: string }>(`${this.base}/users/me/signature-assets/${id}/url`);
+  getSignatureImageUrl(id: string): string {
+    return `${this.base}/users/me/signature-assets/${id}/image`;
   }
   deleteSignatureAsset(id: string): Observable<void> {
     return this.http.delete<void>(`${this.base}/users/me/signature-assets/${id}`);

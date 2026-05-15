@@ -1,7 +1,10 @@
 package com.dgcockpit.controller;
 
 import com.dgcockpit.entity.UserSignatureAsset;
+import com.dgcockpit.service.MinioService;
 import com.dgcockpit.service.SignatureAssetService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -15,9 +18,11 @@ import java.util.Map;
 public class SignatureAssetController {
 
     private final SignatureAssetService service;
+    private final MinioService minioService;
 
-    public SignatureAssetController(SignatureAssetService service) {
+    public SignatureAssetController(SignatureAssetService service, MinioService minioService) {
         this.service = service;
+        this.minioService = minioService;
     }
 
     @GetMapping
@@ -34,10 +39,14 @@ public class SignatureAssetController {
         return ResponseEntity.ok(asset);
     }
 
-    @GetMapping("/{id}/url")
-    public ResponseEntity<Map<String, String>> getUrl(@PathVariable String id) throws Exception {
-        String url = service.getPresignedUrl(id);
-        return ResponseEntity.ok(Map.of("url", url));
+    @GetMapping("/{id}/image")
+    public ResponseEntity<byte[]> getImage(@PathVariable String id) throws Exception {
+        UserSignatureAsset asset = service.findById(id);
+        byte[] data = minioService.downloadBytes(asset.getBucket(), asset.getObjectKey());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.IMAGE_PNG_VALUE)
+                .header(HttpHeaders.CACHE_CONTROL, "max-age=3600")
+                .body(data);
     }
 
     @DeleteMapping("/{id}")

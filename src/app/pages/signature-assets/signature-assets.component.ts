@@ -146,19 +146,10 @@ export class SignatureAssetsComponent implements OnInit {
     this.loading.set(true);
     this.api.getSignatureAssets().subscribe({
       next: (list: any[]) => {
-        this.assets.set(list);
+        this.assets.set(list.map(a => ({ ...a, url: this.api.getSignatureImageUrl(a.id) })));
         this.loading.set(false);
-        list.forEach(a => this.loadUrl(a));
       },
       error: () => this.loading.set(false)
-    });
-  }
-
-  loadUrl(asset: SignatureAsset) {
-    this.api.getSignatureAssetUrl(asset.id).subscribe({
-      next: ({ url }) => {
-        this.assets.update(list => list.map(a => a.id === asset.id ? { ...a, url } : a));
-      }
     });
   }
 
@@ -179,8 +170,7 @@ export class SignatureAssetsComponent implements OnInit {
       next: (asset: any) => {
         this.uploading.set(false);
         this.cancelUpload();
-        this.assets.update(list => [asset, ...list]);
-        this.loadUrl(asset);
+        this.assets.update(list => [{ ...asset, url: this.api.getSignatureImageUrl(asset.id) }, ...list]);
       },
       error: () => this.uploading.set(false)
     });

@@ -51,10 +51,9 @@ public class SignatureAssetService {
         return repo.save(asset);
     }
 
-    public String getPresignedUrl(String assetId) throws Exception {
-        UserSignatureAsset asset = repo.findById(assetId)
+    public UserSignatureAsset findById(String assetId) {
+        return repo.findById(assetId)
                 .orElseThrow(() -> new IllegalArgumentException("Asset not found: " + assetId));
-        return minio.presignedUrl(asset.getBucket(), asset.getObjectKey());
     }
 
     public void deactivate(String assetId) {

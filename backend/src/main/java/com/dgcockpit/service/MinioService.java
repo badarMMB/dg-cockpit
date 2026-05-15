@@ -20,6 +20,12 @@ public class MinioService {
     @Value("${minio.bucket}")
     private String defaultBucket;
 
+    @Value("${minio.url}")
+    private String internalUrl;
+
+    @Value("${minio.public-url}")
+    private String publicUrl;
+
     public MinioService(MinioClient minio) {
         this.minio = minio;
     }
@@ -78,26 +84,27 @@ public class MinioService {
         }
     }
 
-    // ── URL présignée (bucket par défaut) ────────────────────────────────────
+    // ── URL présignée — générée via le client interne, puis le hostname est remplacé
+    //    par l'URL publique pour que le navigateur puisse charger la ressource ──────
 
     public String presignedUrl(String objectName) throws Exception {
-        return minio.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+        String url = minio.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                 .bucket(defaultBucket)
                 .object(objectName)
                 .method(Method.GET)
                 .expiry(1, TimeUnit.HOURS)
                 .build());
+        return url.replace(internalUrl, publicUrl);
     }
 
-    // ── URL présignée (bucket spécifique) ────────────────────────────────────
-
     public String presignedUrl(String bucket, String objectKey) throws Exception {
-        return minio.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+        String url = minio.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                 .bucket(bucket)
                 .object(objectKey)
                 .method(Method.GET)
                 .expiry(1, TimeUnit.HOURS)
                 .build());
+        return url.replace(internalUrl, publicUrl);
     }
 
     // ── Suppression ───────────────────────────────────────────────────────────

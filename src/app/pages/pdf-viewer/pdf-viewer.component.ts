@@ -180,12 +180,7 @@ export class PdfViewerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   loadAssets() {
     this.api.getSignatureAssets().subscribe((list: any[]) => {
-      this.assets.set(list);
-      list.forEach(a => {
-        this.api.getSignatureAssetUrl(a.id).subscribe(({ url }) => {
-          this.assets.update(all => all.map(x => x.id === a.id ? { ...x, url } : x));
-        });
-      });
+      this.assets.set(list.map(a => ({ ...a, url: this.api.getSignatureImageUrl(a.id) })));
     });
   }
 

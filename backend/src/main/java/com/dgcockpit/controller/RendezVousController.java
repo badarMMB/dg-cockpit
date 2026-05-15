@@ -4,6 +4,7 @@ import com.dgcockpit.entity.RendezVous;
 import com.dgcockpit.repository.RendezVousRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -40,7 +41,7 @@ public class RendezVousController {
     }
 
     private Map<String, Object> toDto(RendezVous r) {
-        var map = new java.util.HashMap<String, Object>();
+        var map = new HashMap<String, Object>();
         map.put("id", r.getId());
         map.put("titre", r.getTitre());
         map.put("visiteur", r.getVisiteur());

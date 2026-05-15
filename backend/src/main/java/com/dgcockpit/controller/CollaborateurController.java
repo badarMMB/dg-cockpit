@@ -4,8 +4,10 @@ import com.dgcockpit.entity.Collaborateur;
 import com.dgcockpit.repository.CollaborateurRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/collaborateurs")
@@ -38,12 +40,12 @@ public class CollaborateurController {
     }
 
     private Map<String, Object> toDto(Collaborateur c) {
-        return Map.of(
-            "id", c.getId(),
-            "name", c.getName(),
-            "email", c.getEmail(),
-            "role", c.getRole(),
-            "status", c.getStatut().name()
-        );
+        var map = new HashMap<String, Object>();
+        map.put("id", c.getId());
+        map.put("name", Objects.requireNonNullElse(c.getName(), ""));
+        map.put("email", Objects.requireNonNullElse(c.getEmail(), ""));
+        map.put("role", Objects.requireNonNullElse(c.getRole(), ""));
+        map.put("status", c.getStatut().name());
+        return map;
     }
 }

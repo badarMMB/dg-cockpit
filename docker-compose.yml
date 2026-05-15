@@ -1,0 +1,30 @@
+version: '3.8'
+
+# Réutilise le réseau du projet GED (ged-postgres + ged-minio déjà en cours)
+networks:
+  ged_prototype_default:
+    external: true
+
+services:
+
+  # ── Application DG Cockpit ──────────────────────────────────────────────────
+  # Seul ce service est buildé — postgres et minio viennent de ged_prototype
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dg-cockpit-app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://ged-postgres:5432/dgcockpit
+      SPRING_DATASOURCE_USERNAME: ged_user
+      SPRING_DATASOURCE_PASSWORD: ged_password
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      MINIO_URL: http://ged-minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: dgcockpit
+    networks:
+      - ged_prototype_default

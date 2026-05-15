@@ -4,6 +4,7 @@ import com.dgcockpit.entity.CourrierDepart;
 import com.dgcockpit.repository.CourrierDepartRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -40,7 +41,7 @@ public class CourrierDepartController {
     }
 
     private Map<String, Object> toDto(CourrierDepart c) {
-        var map = new java.util.HashMap<String, Object>();
+        var map = new HashMap<String, Object>();
         map.put("id", c.getId());
         map.put("objet", c.getObjet());
         map.put("destinataire", c.getDestinataire());

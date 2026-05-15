@@ -70,6 +70,16 @@ export class ApiService {
     return this.http.patch(`${this.base}/rendez-vous/${id}`, body);
   }
 
+  // Fichiers (MinIO)
+  uploadFile(file: File): Observable<{ name: string }> {
+    const form = new FormData();
+    form.append('file', file);
+    return this.http.post<{ name: string }>(`${this.base}/files/upload`, form);
+  }
+  getFileUrl(name: string): string {
+    return `${this.base}/files/${encodeURIComponent(name)}`;
+  }
+
   // Collaborateurs
   getCollaborateurs(): Observable<any[]> {
     return this.http.get<any[]>(`${this.base}/collaborateurs`);

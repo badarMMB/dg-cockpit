@@ -1,0 +1,9 @@
+node_modules/
+backend/target/
+backend/.mvn/
+backend/src/main/resources/static/
+.git/
+.gitignore
+*.md
+dist/
+.angular/

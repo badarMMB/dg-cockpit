@@ -1,8 +1,10 @@
 package com.dgcockpit.controller;
 
+import com.dgcockpit.entity.AppUser;
 import com.dgcockpit.entity.UserSignatureAsset;
 import com.dgcockpit.service.MinioService;
 import com.dgcockpit.service.SignatureAssetService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -26,17 +28,24 @@ public class SignatureAssetController {
     }
 
     @GetMapping
-    public List<UserSignatureAsset> list(@RequestParam(defaultValue = "admin") String userId) {
+    public List<UserSignatureAsset> list(HttpServletRequest request) {
+        String userId = currentUserId(request);
         return service.listForUser(userId);
     }
 
     @PostMapping
     public ResponseEntity<UserSignatureAsset> upload(
-            @RequestParam(defaultValue = "admin") String userId,
+            HttpServletRequest request,
             @RequestParam String assetType,
             @RequestParam MultipartFile file) throws Exception {
+        String userId = currentUserId(request);
         UserSignatureAsset asset = service.upload(userId, assetType, file);
         return ResponseEntity.ok(asset);
+    }
+
+    private String currentUserId(HttpServletRequest request) {
+        AppUser user = (AppUser) request.getAttribute("currentUser");
+        return user != null ? user.getId() : "anonymous";
     }
 
     @GetMapping("/{id}/image")

@@ -3,11 +3,14 @@ package com.dgcockpit.controller;
 import com.dgcockpit.entity.Assignee;
 import com.dgcockpit.entity.Instruction;
 import com.dgcockpit.entity.InstructionMessage;
+import com.dgcockpit.entity.InstructionType;
 import com.dgcockpit.repository.InstructionMessageRepository;
 import com.dgcockpit.repository.InstructionRepository;
+import com.dgcockpit.repository.InstructionTypeRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import java.time.LocalDateTime;
+
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,11 +21,14 @@ public class InstructionController {
 
     private final InstructionRepository instructionRepo;
     private final InstructionMessageRepository messageRepo;
+    private final InstructionTypeRepository instructionTypeRepo;
 
     public InstructionController(InstructionRepository instructionRepo,
-                                 InstructionMessageRepository messageRepo) {
+                                 InstructionMessageRepository messageRepo,
+                                 InstructionTypeRepository instructionTypeRepo) {
         this.instructionRepo = instructionRepo;
         this.messageRepo = messageRepo;
+        this.instructionTypeRepo = instructionTypeRepo;
     }
 
     @GetMapping
@@ -36,8 +42,35 @@ public class InstructionController {
     public Map<String, Object> createInstruction(@RequestBody Map<String, Object> body) {
         Instruction instruction = new Instruction();
         instruction.setTitle((String) body.getOrDefault("title", ""));
-        instruction.setType((String) body.getOrDefault("type", "Autre"));
 
+        // ── InstructionType FK ──────────────────────────────────────────
+        String typeId = (String) body.get("instructionTypeId");
+        InstructionType itype = null;
+        if (typeId != null && !typeId.isBlank()) {
+            itype = instructionTypeRepo.findById(typeId).orElse(null);
+        }
+        if (itype != null) {
+            instruction.setInstructionType(itype);
+            instruction.setType(itype.getLabel()); // mirror for search
+        } else {
+            instruction.setType((String) body.getOrDefault("type", "Autre"));
+        }
+
+        // ── Urgence ─────────────────────────────────────────────────────
+        String urgence = (String) body.get("urgence");
+        if (urgence == null && itype != null) {
+            urgence = itype.getUrgenceDefaut().name();
+        }
+        instruction.setUrgence(urgence != null ? urgence : "NORMAL");
+
+        // ── Confidentialité + Échéance ───────────────────────────────────
+        instruction.setConfidentialite(Boolean.TRUE.equals(body.get("confidentialite")));
+        String echeanceStr = (String) body.get("echeance");
+        if (echeanceStr != null && !echeanceStr.isBlank()) {
+            instruction.setEcheance(LocalDate.parse(echeanceStr));
+        }
+
+        // ── Assignees ────────────────────────────────────────────────────
         @SuppressWarnings("unchecked")
         List<Map<String, String>> assigneesData = (List<Map<String, String>>) body.getOrDefault("assignees", List.of());
         String agentDisplay = assigneesData.size() > 1
@@ -59,7 +92,8 @@ public class InstructionController {
             saved.getAssignees().add(assignee);
         }
 
-        String msgText = buildInitialMessageText(body, assigneesData);
+        // ── Initial message ──────────────────────────────────────────────
+        String msgText = buildInitialMessageText(body, assigneesData, itype, instruction);
         InstructionMessage msg = new InstructionMessage();
         msg.setInstruction(saved);
         msg.setSender("DG");
@@ -137,14 +171,27 @@ public class InstructionController {
     }
 
     private Map<String, Object> toThreadDto(Instruction i) {
-        return Map.of(
-            "id", i.getId(),
-            "title", i.getTitle() != null ? i.getTitle() : "Sans titre",
-            "agent", i.getAgentDisplay() != null ? i.getAgentDisplay() : "—",
-            "date", i.getCreatedAt().toLocalTime().toString().substring(0, 5),
-            "statut", i.getStatut().name(),
-            "unread", 0
-        );
+        Map<String, Object> m = new HashMap<>();
+        m.put("id", i.getId());
+        m.put("title", i.getTitle() != null ? i.getTitle() : "Sans titre");
+        m.put("type", i.getType() != null ? i.getType() : "");
+        m.put("agent", i.getAgentDisplay() != null ? i.getAgentDisplay() : "—");
+        m.put("date", i.getCreatedAt().toLocalDate().toString());
+        m.put("statut", i.getStatut().name());
+        m.put("unread", 0);
+        m.put("urgence", i.getUrgence() != null ? i.getUrgence() : "NORMAL");
+        m.put("confidentialite", i.isConfidentialite());
+        m.put("echeance", i.getEcheance() != null ? i.getEcheance().toString() : null);
+        if (i.getInstructionType() != null) {
+            m.put("instructionTypeId", i.getInstructionType().getId());
+            m.put("typeLivrable", i.getInstructionType().getLivrableAttendu().name());
+            m.put("typeCategorie", i.getInstructionType().getCategorie().name());
+        } else {
+            m.put("instructionTypeId", null);
+            m.put("typeLivrable", null);
+            m.put("typeCategorie", null);
+        }
+        return m;
     }
 
     private Map<String, Object> toMessageDto(InstructionMessage m) {
@@ -163,19 +210,33 @@ public class InstructionController {
         return map;
     }
 
-    private String buildInitialMessageText(Map<String, Object> body, List<Map<String, String>> assignees) {
+    private String buildInitialMessageText(Map<String, Object> body,
+                                            List<Map<String, String>> assignees,
+                                            InstructionType itype,
+                                            Instruction instruction) {
         StringBuilder sb = new StringBuilder();
-        sb.append("[Type: ").append(body.getOrDefault("type", "Autre")).append("]\n");
+        String typeLabel = itype != null ? itype.getLabel() : (String) body.getOrDefault("type", "Autre");
+        sb.append("[Type : ").append(typeLabel).append("]");
+
+        if (instruction.getUrgence() != null && !"NORMAL".equals(instruction.getUrgence())) {
+            sb.append(" — ").append("URGENT".equals(instruction.getUrgence()) ? "🔴 URGENT" : "📅 Planifié");
+        }
+        if (instruction.getEcheance() != null) {
+            sb.append("\n[Échéance : ").append(instruction.getEcheance()).append("]");
+        }
+        if (instruction.isConfidentialite()) {
+            sb.append("\n[🔒 Confidentiel]");
+        }
         if (!assignees.isEmpty()) {
-            sb.append("[Attentes: ");
+            sb.append("\n[Intervenants : ");
             sb.append(assignees.stream()
                 .map(a -> a.get("agent") + " (" + a.getOrDefault("role", "avis") + ")")
                 .reduce((a, b) -> a + ", " + b).orElse(""));
-            sb.append("]\n");
+            sb.append("]");
         }
         String text = (String) body.get("message");
         if (text != null && !text.isBlank()) {
-            sb.append("\n").append(text);
+            sb.append("\n\n").append(text);
         }
         return sb.toString();
     }

@@ -1,6 +1,7 @@
 package com.dgcockpit.entity;
 
 import jakarta.persistence.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,8 +15,19 @@ public class Instruction {
     private String id;
 
     private String title;
-    private String type;
-    private String agentDisplay;
+    private String type;         // kept for search compat — mirrors instructionType.label
+    private String agentDisplay; // kept for search compat
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "instruction_type_id")
+    private InstructionType instructionType;
+
+    private String urgence; // URGENT | NORMAL | PLANIFIE
+
+    @Column(columnDefinition = "boolean DEFAULT false")
+    private boolean confidentialite = false;
+
+    private LocalDate echeance;
 
     @Enumerated(EnumType.STRING)
     private StatutInstruction statut = StatutInstruction.OUVERT;
@@ -46,4 +58,13 @@ public class Instruction {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public List<InstructionMessage> getMessages() { return messages; }
     public List<Assignee> getAssignees() { return assignees; }
+
+    public InstructionType getInstructionType() { return instructionType; }
+    public void setInstructionType(InstructionType instructionType) { this.instructionType = instructionType; }
+    public String getUrgence() { return urgence; }
+    public void setUrgence(String urgence) { this.urgence = urgence; }
+    public boolean isConfidentialite() { return confidentialite; }
+    public void setConfidentialite(boolean confidentialite) { this.confidentialite = confidentialite; }
+    public LocalDate getEcheance() { return echeance; }
+    public void setEcheance(LocalDate echeance) { this.echeance = echeance; }
 }

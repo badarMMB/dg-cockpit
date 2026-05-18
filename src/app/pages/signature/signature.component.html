@@ -1,75 +1,265 @@
-<div class="h-full flex flex-col bg-gray-100">
-  <!-- Header -->
-  <header class="bg-surface border-b border-gray-200 px-4 md:px-8 py-3 md:py-4 flex items-center justify-between">
-    <div class="min-w-0">
-      <h1 class="text-base md:text-2xl font-semibold text-gray-900 truncate">Avenant_Contrat_Nettoyage.pdf</h1>
-      <p class="text-xs md:text-sm text-gray-500">Sophie Martin • Aujourd'hui à 10:30</p>
+<div class="h-full flex flex-col bg-gray-50">
+
+  <!-- ── Header ───────────────────────────────────────────────────────── -->
+  <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
+    <div>
+      <h1 class="text-xl font-semibold text-gray-900">Parapheur</h1>
+      <p class="text-sm text-gray-500">Documents en attente de signature électronique</p>
     </div>
-    <div class="flex items-center gap-2 flex-shrink-0 ml-3">
-      <button class="hidden sm:block px-3 py-1.5 border border-gray-300 text-gray-700 font-medium rounded text-sm hover:bg-gray-50">
-        Refuser
-      </button>
-      <button *ngIf="!isSigned() && !isSaving()" (click)="openModal()"
-              class="px-3 md:px-6 py-1.5 md:py-2 bg-primary text-white font-medium rounded hover:bg-primary/90 shadow-soft flex items-center gap-1.5 text-sm">
-        <span>✍️</span> Signer
-      </button>
-      <div *ngIf="isSaving()" class="px-3 py-1.5 bg-gray-100 text-gray-600 rounded flex items-center gap-2 text-sm">
-        <div class="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
-        Enregistrement…
-      </div>
-      <div *ngIf="isSigned()" class="px-3 py-1.5 bg-green-600 text-white font-medium rounded shadow-soft flex items-center gap-1.5 text-sm">
-        <span>✅</span> Signé
-      </div>
-    </div>
+    <button *ngIf="isSecretaire()" (click)="openSubmitModal()"
+            class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+      </svg>
+      Soumettre un document
+    </button>
   </header>
 
-  <!-- Body -->
-  <main class="flex-1 overflow-auto p-4 md:p-8 flex justify-center relative">
+  <!-- ── Tabs ─────────────────────────────────────────────────────────── -->
+  <div class="bg-white border-b border-gray-200 px-6 flex gap-6 flex-shrink-0">
+    <button (click)="activeTab.set('pending')"
+            class="py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2"
+            [ngClass]="activeTab() === 'pending'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-gray-500 hover:text-gray-800'">
+      À signer
+      <span *ngIf="pendingCount() > 0"
+            class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+        {{ pendingCount() }}
+      </span>
+    </button>
+    <button (click)="activeTab.set('history')"
+            class="py-3 text-sm font-medium border-b-2 transition-colors"
+            [ngClass]="activeTab() === 'history'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-gray-500 hover:text-gray-800'">
+      Historique
+    </button>
+  </div>
 
-    <!-- Résumé IA -->
-    <div class="absolute top-4 right-4 md:top-12 md:right-12 w-64 md:w-80 bg-white/95 backdrop-blur shadow-2xl rounded-lg border border-gray-200 p-4 z-10">
-      <div class="flex items-center gap-2 mb-2 text-primary">
-        <span>✨</span>
-        <h3 class="font-bold text-sm">Executive Summary (IA)</h3>
-      </div>
-      <ul class="text-xs md:text-sm text-gray-700 space-y-1.5 list-disc pl-4">
-        <li>Prolongation du contrat de 12 mois.</li>
-        <li>Augmentation tarifaire de 4%.</li>
-        <li>Validation recommandée par la Direction.</li>
-      </ul>
+  <!-- ── Content ───────────────────────────────────────────────────────── -->
+  <div class="flex-1 overflow-y-auto px-6 py-5">
+
+    <!-- Loading -->
+    <div *ngIf="loading()" class="flex justify-center py-16">
+      <div class="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
     </div>
 
-    <!-- Document A4 -->
-    <div class="w-full max-w-[800px] bg-white shadow-lg border border-gray-300 p-6 md:p-12 min-h-[500px] md:min-h-[1130px] flex flex-col">
-      <div class="border-b-2 border-gray-900 pb-3 mb-6">
-        <h2 class="text-xl md:text-3xl font-bold text-center">AVENANT AU CONTRAT</h2>
-      </div>
-      <div class="space-y-4 text-gray-700 flex-1 text-sm md:text-base">
-        <p>Entre les soussignés, la Direction Générale et la société externe...</p>
-        <div class="w-full h-3 bg-gray-200 rounded animate-pulse"></div>
-        <div class="w-5/6 h-3 bg-gray-200 rounded animate-pulse"></div>
-        <div class="w-full h-3 bg-gray-200 rounded animate-pulse"></div>
-        <p>Article 1 : Modification de la durée. Le contrat est étendu jusqu'au 31 décembre 2027.</p>
-        <div class="w-full h-3 bg-gray-200 rounded animate-pulse"></div>
-        <div class="w-full h-3 bg-gray-200 rounded animate-pulse"></div>
+    <!-- ── Tab: À signer ───────────────────────────────────────────────── -->
+    <ng-container *ngIf="!loading() && activeTab() === 'pending'">
+
+      <div *ngIf="pending().length === 0"
+           class="flex flex-col items-center justify-center py-20 text-gray-400">
+        <span class="text-5xl mb-4">✍️</span>
+        <p class="text-sm font-medium">Aucun document en attente de signature</p>
+        <p *ngIf="isSecretaire()" class="text-xs mt-1">Soumettez un document via le bouton ci-dessus</p>
       </div>
 
-      <!-- Zone de signature -->
-      <div class="mt-8 md:mt-16 flex justify-end">
-        <div class="w-48 md:w-64 border border-dashed border-gray-400 p-4 rounded bg-gray-50 flex flex-col items-center justify-center min-h-[100px] md:min-h-[150px]">
-          <span *ngIf="!isSigned() && !isSaving()" class="text-sm text-gray-500 font-medium text-center">Zone de signature DG</span>
-          <div *ngIf="isSaving()" class="flex flex-col items-center gap-2">
-            <div class="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
-            <span class="text-xs text-gray-500">Enregistrement…</span>
+      <div class="space-y-3">
+        <div *ngFor="let doc of pending()"
+             class="bg-white border border-gray-200 rounded-xl p-4 flex items-start gap-4 hover:border-primary/30 hover:shadow-sm transition-all">
+
+          <!-- Icon -->
+          <div class="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
           </div>
-          <img *ngIf="isSigned() && signatureImage()" [src]="signatureImage()" class="max-w-full max-h-24" alt="Signature"/>
-          <div *ngIf="isSigned()" class="mt-1 text-[10px] text-green-700 font-semibold bg-green-100 px-2 py-0.5 rounded-full text-center">✓ Scellé</div>
-          <div *ngIf="isSigned() && signedAt()" class="mt-1 text-[9px] text-gray-500 text-center leading-tight">{{ signedAt() }}</div>
+
+          <!-- Info -->
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1 flex-wrap">
+              <span class="font-semibold text-gray-900 text-sm truncate">{{ doc.title }}</span>
+              <span class="px-2 py-0.5 rounded-full text-xs font-medium" [ngClass]="typeClass(doc.parapheurType)">
+                {{ typeLabel(doc.parapheurType) }}
+              </span>
+            </div>
+            <p class="text-xs text-gray-500">
+              Soumis par <span class="font-medium text-gray-700">{{ doc.submittedBy }}</span>
+              · {{ formatDate(doc.submittedAt) }}
+            </p>
+            <p *ngIf="doc.destinataire" class="text-xs text-gray-500 mt-0.5">
+              Destinataire : {{ doc.destinataire }}
+            </p>
+            <p class="text-xs text-gray-400 mt-0.5">{{ doc.pageCount }} page{{ doc.pageCount > 1 ? 's' : '' }}</p>
+          </div>
+
+          <!-- Actions -->
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <button (click)="openRejectModal(doc)"
+                    class="px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors">
+              Refuser
+            </button>
+            <button (click)="openDoc(doc)"
+                    class="px-3 py-1.5 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-1.5">
+              <span>✍️</span> Ouvrir et signer
+            </button>
+          </div>
+
         </div>
       </div>
-    </div>
-  </main>
+    </ng-container>
 
-  <app-signature-modal *ngIf="isModalOpen()" (close)="closeModal()" (validate)="handleValidation($event)">
-  </app-signature-modal>
+    <!-- ── Tab: Historique ────────────────────────────────────────────── -->
+    <ng-container *ngIf="!loading() && activeTab() === 'history'">
+
+      <div *ngIf="historique().length === 0"
+           class="flex flex-col items-center justify-center py-20 text-gray-400">
+        <span class="text-5xl mb-4">📋</span>
+        <p class="text-sm font-medium">Aucun document dans l'historique</p>
+      </div>
+
+      <div class="space-y-3">
+        <div *ngFor="let doc of historique()"
+             class="bg-white border border-gray-200 rounded-xl p-4 flex items-start gap-4">
+
+          <!-- Icon -->
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+               [ngClass]="doc.parapheurStatut === 'REFUSE' ? 'bg-red-50' : 'bg-green-50'">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"
+                 [ngClass]="doc.parapheurStatut === 'REFUSE' ? 'text-red-500' : 'text-green-600'">
+              <path *ngIf="doc.parapheurStatut !== 'REFUSE'" stroke-linecap="round" stroke-linejoin="round"
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              <path *ngIf="doc.parapheurStatut === 'REFUSE'" stroke-linecap="round" stroke-linejoin="round"
+                    d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+
+          <!-- Info -->
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1 flex-wrap">
+              <span class="font-semibold text-gray-900 text-sm truncate">{{ doc.title }}</span>
+              <span class="px-2 py-0.5 rounded-full text-xs font-medium" [ngClass]="typeClass(doc.parapheurType)">
+                {{ typeLabel(doc.parapheurType) }}
+              </span>
+              <span class="px-2 py-0.5 rounded-full text-xs font-medium" [ngClass]="statutClass(doc.parapheurStatut)">
+                {{ statutLabel(doc.parapheurStatut) }}
+              </span>
+            </div>
+            <p class="text-xs text-gray-500">
+              Soumis par <span class="font-medium text-gray-700">{{ doc.submittedBy }}</span>
+              <ng-container *ngIf="doc.signedAt"> · Traité le {{ formatDate(doc.signedAt) }}</ng-container>
+            </p>
+            <p *ngIf="doc.rejectionComment" class="text-xs text-red-600 mt-1 italic">
+              Motif : {{ doc.rejectionComment }}
+            </p>
+          </div>
+
+          <!-- Open button (history) -->
+          <button (click)="openDoc(doc)"
+                  class="flex-shrink-0 px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
+            Consulter
+          </button>
+
+        </div>
+      </div>
+    </ng-container>
+
+  </div>
+</div>
+
+<!-- ── Modal : Soumettre un document ───────────────────────────────────── -->
+<div *ngIf="showSubmitModal()"
+     class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+     (click)="$event.target === $event.currentTarget && showSubmitModal.set(false)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+    <div class="flex items-center justify-between mb-5">
+      <h2 class="text-base font-semibold text-gray-900">Soumettre pour signature</h2>
+      <button (click)="showSubmitModal.set(false)" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+    </div>
+
+    <div class="space-y-4">
+
+      <!-- File picker -->
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">Fichier PDF *</label>
+        <label class="flex items-center gap-3 border-2 border-dashed border-gray-200 rounded-lg px-4 py-3 cursor-pointer hover:border-primary/50 transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+          </svg>
+          <span class="text-sm text-gray-500 truncate">
+            {{ submitFile() ? submitFile()!.name : 'Choisir un fichier PDF…' }}
+          </span>
+          <input type="file" accept=".pdf" class="hidden" (change)="onFileSelected($event)">
+        </label>
+      </div>
+
+      <!-- Title -->
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">Titre *</label>
+        <input type="text" [ngModel]="submitTitle()" (ngModelChange)="submitTitle.set($event)"
+               placeholder="Intitulé du document"
+               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary">
+      </div>
+
+      <!-- Type -->
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">Type de document</label>
+        <div class="flex gap-3">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="submitType" value="COURRIER"
+                   [ngModel]="submitType()" (ngModelChange)="submitType.set($event)">
+            <span class="text-sm text-gray-700">Courrier</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="submitType" value="NOTE_SERVICE"
+                   [ngModel]="submitType()" (ngModelChange)="submitType.set($event)">
+            <span class="text-sm text-gray-700">Note de service</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Destinataire (COURRIER only) -->
+      <div *ngIf="submitType() === 'COURRIER'">
+        <label class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">Destinataire</label>
+        <input type="text" [ngModel]="submitDestinataire()" (ngModelChange)="submitDestinataire.set($event)"
+               placeholder="Nom ou organisation destinataire"
+               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary">
+      </div>
+
+      <!-- Error -->
+      <p *ngIf="submitError()" class="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">
+        {{ submitError() }}
+      </p>
+    </div>
+
+    <div class="flex gap-3 mt-6">
+      <button (click)="showSubmitModal.set(false)"
+              class="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+        Annuler
+      </button>
+      <button (click)="submitDocument()" [disabled]="submitting() || !submitFile() || !submitTitle()"
+              class="flex-1 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+        <div *ngIf="submitting()" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
+        {{ submitting() ? 'Envoi en cours…' : 'Soumettre' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal : Rejeter ─────────────────────────────────────────────────── -->
+<div *ngIf="showRejectModal()"
+     class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+     (click)="$event.target === $event.currentTarget && showRejectModal.set(false)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+    <h2 class="text-base font-semibold text-gray-900 mb-1">Refuser le document</h2>
+    <p class="text-xs text-gray-500 mb-4">Indiquez le motif du refus pour informer l'auteur.</p>
+
+    <textarea rows="3" [ngModel]="rejectComment()" (ngModelChange)="rejectComment.set($event)"
+              placeholder="Motif du refus…"
+              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400">
+    </textarea>
+
+    <div class="flex gap-3 mt-4">
+      <button (click)="showRejectModal.set(false)"
+              class="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+        Annuler
+      </button>
+      <button (click)="confirmReject()" [disabled]="rejecting() || !rejectComment().trim()"
+              class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+        <div *ngIf="rejecting()" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
+        {{ rejecting() ? 'En cours…' : 'Confirmer le refus' }}
+      </button>
+    </div>
+  </div>
 </div>

@@ -1,4 +1,6 @@
 import { Routes } from '@angular/router';
+import { AppLayoutComponent } from './layout/app-layout/app-layout.component';
+import { LoginComponent } from './pages/login/login.component';
 import { DashboardComponent } from './pages/dashboard/dashboard.component';
 import { SignatureComponent } from './pages/signature/signature.component';
 import { ChatComponent } from './pages/chat/chat.component';
@@ -13,21 +15,36 @@ import { AppointmentDetailComponent } from './pages/appointments/appointment-det
 import { SignatureAssetsComponent } from './pages/signature-assets/signature-assets.component';
 import { PdfDocumentsComponent } from './pages/pdf-documents/pdf-documents.component';
 import { PdfViewerComponent } from './pages/pdf-viewer/pdf-viewer.component';
+import { ParametresComponent } from './pages/parametres/parametres.component';
+import { BureauComponent } from './pages/bureau/bureau.component';
+import { BureauPlacementComponent } from './pages/bureau/bureau-placement.component';
+import { authGuard } from './guards/auth.guard';
 
 export const routes: Routes = [
-  { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
-  { path: 'dashboard',         component: DashboardComponent },
-  { path: 'chat',              component: ChatComponent },
-  { path: 'editor',            component: EditorComponent },
-  { path: 'signature',         component: SignatureComponent },
-  { path: 'signature-assets',  component: SignatureAssetsComponent },
-  { path: 'pdf-documents',     component: PdfDocumentsComponent },
-  { path: 'pdf-viewer/:id',    component: PdfViewerComponent },
-  { path: 'settings',          component: SettingsComponent },
-  { path: 'inbox',             component: InboxListComponent },
-  { path: 'inbox/:id',         component: InboxDetailComponent },
-  { path: 'outbox',            component: OutboxListComponent },
-  { path: 'outbox/:id',        component: OutboxDetailComponent },
-  { path: 'appointments',      component: AppointmentListComponent },
-  { path: 'appointments/:id',  component: AppointmentDetailComponent },
+  { path: 'login', component: LoginComponent },
+  {
+    path: '',
+    component: AppLayoutComponent,
+    canActivate: [authGuard],
+    children: [
+      { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
+      { path: 'dashboard',         component: DashboardComponent },
+      { path: 'chat',              component: ChatComponent },
+      { path: 'editor',            component: EditorComponent },
+      { path: 'signature',         component: SignatureComponent },
+      { path: 'signature-assets',  component: SignatureAssetsComponent },
+      { path: 'pdf-documents',     component: PdfDocumentsComponent },
+      { path: 'pdf-viewer/:id',    component: PdfViewerComponent },
+      { path: 'settings',          component: SettingsComponent },
+      { path: 'inbox',             component: InboxListComponent },
+      { path: 'inbox/:id',         component: InboxDetailComponent },
+      { path: 'outbox',            component: OutboxListComponent },
+      { path: 'outbox/:id',        component: OutboxDetailComponent },
+      { path: 'appointments',      component: AppointmentListComponent },
+      { path: 'appointments/:id',  component: AppointmentDetailComponent },
+      { path: 'parametres',         component: ParametresComponent },
+      { path: 'bureau',             component: BureauComponent },
+      { path: 'bureau-placement/:id', component: BureauPlacementComponent },
+    ]
+  }
 ];

@@ -1,9 +1,23 @@
-import { Component, signal } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router, NavigationEnd } from '@angular/router';
 import { SearchBarComponent } from '../../components/search-bar/search-bar.component';
 import { filter } from 'rxjs/operators';
+import { signal } from '@angular/core';
 import { NotificationService } from '../../services/notification.service';
+import { AuthService } from '../../services/auth.service';
+
+const ALL_MENU_ITEMS = [
+  { label: 'Tableau de bord',       icon: '📊', route: '/dashboard',    roles: ['DG', 'SECRETAIRE', 'SUBORDONNE', 'ADMIN_IT'], unread: 0, alert: false },
+  { label: 'Flux des Instructions', icon: '💬', route: '/chat',         roles: ['DG', 'SECRETAIRE', 'SUBORDONNE'],             unread: 0, alert: false },
+  { label: 'Bureau',                icon: '🗂️', route: '/bureau',       roles: ['SECRETAIRE'],                                 unread: 0, alert: false },
+  { label: 'Parapheur',             icon: '✍️', route: '/signature',    roles: ['DG', 'SECRETAIRE'],                           unread: 0, alert: false },
+  { label: 'Courrier Arrivé',       icon: '📥', route: '/inbox',        roles: ['DG', 'SECRETAIRE'],                           unread: 0, alert: false },
+  { label: 'Courrier Départ',       icon: '📤', route: '/outbox',       roles: ['DG', 'SECRETAIRE'],                           unread: 0, alert: false },
+  { label: 'Agenda & Visiteurs',    icon: '📅', route: '/appointments', roles: ['DG', 'SECRETAIRE'],                           unread: 0, alert: false },
+  { label: 'Mes Signatures',         icon: '🖊️', route: '/signature-assets', roles: ['DG', 'SECRETAIRE', 'SUBORDONNE', 'ADMIN_IT'], unread: 0, alert: false },
+  { label: 'Paramètres',            icon: '⚙️', route: '/parametres',   roles: ['DG', 'ADMIN_IT'],                             unread: 0, alert: false },
+];
 
 @Component({
   selector: 'app-sidebar-navigation',
@@ -13,28 +27,24 @@ import { NotificationService } from '../../services/notification.service';
   styleUrl: './sidebar-navigation.component.css'
 })
 export class SidebarNavigationComponent {
-  menuItems = signal([
-    { label: 'Tableau de bord',       icon: '📊', route: '/dashboard',         unread: 0, alert: false },
-    { label: 'Flux des Instructions', icon: '💬', route: '/chat',              unread: 3, alert: true  },
-    { label: 'Éditeur de Documents',  icon: '📝', route: '/editor',            unread: 0, alert: false },
-    { label: 'Parapheur',             icon: '✍️', route: '/signature',         unread: 2, alert: true  },
-    { label: 'Signatures & Cachets',  icon: '🖊️', route: '/signature-assets',  unread: 0, alert: false },
-    { label: 'Documents PDF',         icon: '📄', route: '/pdf-documents',     unread: 0, alert: false },
-    { label: 'Courrier Arrivé',       icon: '📥', route: '/inbox',             unread: 5, alert: false },
-    { label: 'Courrier Départ',       icon: '📤', route: '/outbox',            unread: 0, alert: false },
-    { label: 'Agenda & Visiteurs',    icon: '📅', route: '/appointments',      unread: 0, alert: false },
-    { label: 'Administration',        icon: '⚙️', route: '/settings',          unread: 0, alert: false },
-  ]);
+  private auth = inject(AuthService);
 
-  activeRoute = signal('/dashboard');
+  menuItems = computed(() => {
+    const role = this.auth.currentUser()?.role ?? '';
+    return ALL_MENU_ITEMS.filter(item => item.roles.includes(role));
+  });
+
+  currentUser = computed(() => this.auth.currentUser());
+
+  activeRoute  = signal('/dashboard');
   isMobileMenuOpen = signal(false);
-  showNotifPanel = signal(false);
+  showNotifPanel   = signal(false);
 
   readonly unreadCount;
   readonly notifications;
 
   constructor(private router: Router, notifService: NotificationService) {
-    this.unreadCount = notifService.unreadCount;
+    this.unreadCount  = notifService.unreadCount;
     this.notifications = notifService.notifications;
 
     this.router.events.pipe(
@@ -50,15 +60,23 @@ export class SidebarNavigationComponent {
     this.isMobileMenuOpen.set(false);
   }
 
-  toggleMobileMenu() {
-    this.isMobileMenuOpen.update(v => !v);
+  toggleMobileMenu()  { this.isMobileMenuOpen.update(v => !v); }
+  toggleNotifPanel()  { this.showNotifPanel.update(v => !v); }
+  clearNotifs()       { this.showNotifPanel.set(false); }
+  logout()            { this.auth.logout(); }
+
+  userInitials(): string {
+    const nom = this.currentUser()?.nomComplet ?? '';
+    return nom.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
   }
 
-  toggleNotifPanel() {
-    this.showNotifPanel.update(v => !v);
-  }
-
-  clearNotifs() {
-    this.showNotifPanel.set(false);
+  roleLabel(): string {
+    const map: Record<string, string> = {
+      DG: 'Directeur Général',
+      SECRETAIRE: 'Secrétaire',
+      SUBORDONNE: 'Subordonné',
+      ADMIN_IT: 'Admin IT',
+    };
+    return map[this.currentUser()?.role ?? ''] ?? '';
   }
 }

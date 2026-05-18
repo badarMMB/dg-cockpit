@@ -123,6 +123,24 @@ public class DocumentFinalizationService {
         }
     }
 
+    public byte[] renderPageFromStorage(String bucket, String objectKey, int pageIndex) throws Exception {
+        byte[] pdfBytes = minio.downloadBytes(bucket, objectKey);
+        try (PDDocument pdf = Loader.loadPDF(pdfBytes)) {
+            PDFRenderer renderer = new PDFRenderer(pdf);
+            BufferedImage img = renderer.renderImageWithDPI(pageIndex, 150, ImageType.RGB);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            ImageIO.write(img, "png", out);
+            return out.toByteArray();
+        }
+    }
+
+    public int getPageCount(String bucket, String objectKey) throws Exception {
+        byte[] pdfBytes = minio.downloadBytes(bucket, objectKey);
+        try (PDDocument pdf = Loader.loadPDF(pdfBytes)) {
+            return pdf.getNumberOfPages();
+        }
+    }
+
     public byte[] downloadFinal(String documentId) throws Exception {
         PdfDocument doc = docRepo.findById(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));

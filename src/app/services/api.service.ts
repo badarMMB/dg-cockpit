@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -131,6 +132,10 @@ export class ApiService {
   getSignatureImageUrl(id: string): string {
     return `${this.base}/users/me/signature-assets/${id}/image`;
   }
+  getSignatureImageBlob(id: string): Observable<string> {
+    return this.http.get(`${this.base}/users/me/signature-assets/${id}/image`, { responseType: 'blob' })
+      .pipe(map(blob => URL.createObjectURL(blob)));
+  }
   deleteSignatureAsset(id: string): Observable<void> {
     return this.http.delete<void>(`${this.base}/users/me/signature-assets/${id}`);
   }
@@ -170,6 +175,114 @@ export class ApiService {
   }
   deletePdfDocument(docId: string): Observable<void> {
     return this.http.delete<void>(`${this.base}/pdf-documents/${docId}`);
+  }
+
+  // Paramètres — Types d'Instructions
+  getInstructionTypes(activeOnly = false): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/parametres/instruction-types`, { params: { activeOnly } });
+  }
+  createInstructionType(body: any): Observable<any> {
+    return this.http.post(`${this.base}/parametres/instruction-types`, body);
+  }
+  updateInstructionType(id: string, body: any): Observable<any> {
+    return this.http.put(`${this.base}/parametres/instruction-types/${id}`, body);
+  }
+  toggleInstructionType(id: string): Observable<void> {
+    return this.http.patch<void>(`${this.base}/parametres/instruction-types/${id}/toggle`, {});
+  }
+  deleteInstructionType(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/parametres/instruction-types/${id}`);
+  }
+
+  // Paramètres — Types de Preuves
+  getProofTypes(activeOnly = false): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/parametres/proof-types`, { params: { activeOnly } });
+  }
+  createProofType(body: any): Observable<any> {
+    return this.http.post(`${this.base}/parametres/proof-types`, body);
+  }
+  updateProofType(id: string, body: any): Observable<any> {
+    return this.http.put(`${this.base}/parametres/proof-types/${id}`, body);
+  }
+  toggleProofType(id: string): Observable<void> {
+    return this.http.patch<void>(`${this.base}/parametres/proof-types/${id}/toggle`, {});
+  }
+  deleteProofType(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/parametres/proof-types/${id}`);
+  }
+
+  // Users
+  getUsers(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/parametres/users`);
+  }
+  createUser(body: any): Observable<any> {
+    return this.http.post(`${this.base}/parametres/users`, body);
+  }
+  updateUser(id: string, body: any): Observable<any> {
+    return this.http.put(`${this.base}/parametres/users/${id}`, body);
+  }
+  resetUserPassword(id: string, password: string): Observable<void> {
+    return this.http.patch<void>(`${this.base}/parametres/users/${id}/reset-password`, { password });
+  }
+  toggleUser(id: string): Observable<void> {
+    return this.http.patch<void>(`${this.base}/parametres/users/${id}/toggle`, {});
+  }
+  deleteUser(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/parametres/users/${id}`);
+  }
+
+  // Bureau Secrétaire
+  getBureauDocuments(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/bureau/documents`);
+  }
+  uploadBureauDocument(file: File, type: string, titre?: string, destinataire?: string): Observable<any> {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('type', type);
+    if (titre) form.append('titre', titre);
+    if (destinataire) form.append('destinataire', destinataire);
+    return this.http.post(`${this.base}/bureau/documents`, form);
+  }
+  getBureauPageUrl(docId: string, pageIndex: number): string {
+    return `${this.base}/bureau/documents/${docId}/page/${pageIndex}`;
+  }
+  getBureauPage(docId: string, pageIndex: number): Observable<string> {
+    return this.http.get(`${this.base}/bureau/documents/${docId}/page/${pageIndex}`, { responseType: 'blob' })
+      .pipe(map(blob => URL.createObjectURL(blob)));
+  }
+  saveBureauZones(docId: string, zones: any): Observable<any> {
+    return this.http.post(`${this.base}/bureau/documents/${docId}/zones`, zones);
+  }
+  soumettreAuParapheur(docId: string): Observable<any> {
+    return this.http.post(`${this.base}/bureau/documents/${docId}/soumettre`, {});
+  }
+  deleteBureauDocument(docId: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/bureau/documents/${docId}`);
+  }
+
+  // Parapheur
+  getParapheurPending(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/parapheur`);
+  }
+  getParapheurHistorique(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/parapheur/historique`);
+  }
+  getNotesDeService(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/parapheur/notes-de-service`);
+  }
+  soumettreDocument(file: File, title: string, type: string, destinataire?: string): Observable<any> {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('title', title);
+    form.append('parapheurType', type);
+    if (destinataire) form.append('destinataire', destinataire);
+    return this.http.post(`${this.base}/parapheur/soumettre`, form);
+  }
+  signerDocument(docId: string): Observable<any> {
+    return this.http.post(`${this.base}/parapheur/${docId}/signer`, {});
+  }
+  rejeterDocument(docId: string, comment: string): Observable<any> {
+    return this.http.post(`${this.base}/parapheur/${docId}/rejeter`, { comment });
   }
 
   // Collaborateurs

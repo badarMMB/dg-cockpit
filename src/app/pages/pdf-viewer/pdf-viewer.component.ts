@@ -1,8 +1,9 @@
 import {
   Component, signal, inject, OnInit, OnDestroy, AfterViewInit,
-  ElementRef, ViewChild
+  ElementRef, ViewChild, computed
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import Konva from 'konva';
@@ -21,7 +22,7 @@ interface Annotation {
 @Component({
   selector: 'app-pdf-viewer',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="flex h-screen bg-gray-100 overflow-hidden">
 
@@ -30,6 +31,11 @@ interface Annotation {
         <div class="p-4 border-b border-gray-200">
           <button (click)="back()" class="text-sm text-blue-600 hover:underline">&larr; Retour</button>
           <h2 class="font-semibold text-gray-800 mt-1 truncate text-sm">{{ doc()?.title || 'Document PDF' }}</h2>
+          @if (isParapheur()) {
+            <span class="mt-1 inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800">
+              En attente de signature
+            </span>
+          }
         </div>
 
         <!-- Thumbnails -->
@@ -45,7 +51,7 @@ interface Annotation {
           }
         </div>
 
-        <!-- Assets -->
+        <!-- Assets (signature drag panel) -->
         <div class="border-t border-gray-200 p-3">
           <p class="text-xs font-semibold text-gray-500 uppercase mb-2">Signatures &amp; Cachets</p>
           <div class="space-y-2 overflow-y-auto max-h-48">
@@ -64,25 +70,46 @@ interface Annotation {
 
       <!-- Main area -->
       <div class="flex-1 flex flex-col overflow-hidden">
+
         <!-- Toolbar -->
         <div class="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-3">
           <span class="text-sm text-gray-500">Page {{ currentPage() + 1 }} / {{ pages().length }}</span>
           <div class="flex-1"></div>
+
           @if (selectedId()) {
             <button (click)="deleteSelected()"
                     class="px-3 py-1 text-sm text-red-600 border border-red-300 rounded-lg hover:bg-red-50">
               Supprimer sélection
             </button>
           }
-          <button (click)="finalize()" [disabled]="finalizing()"
-                  class="px-4 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50">
-            {{ finalizing() ? 'Finalisation…' : 'Finaliser le document' }}
-          </button>
-          @if (doc()?.status === 'FINALIZED') {
-            <a [href]="api.downloadFinalPdf(docId)" target="_blank"
-               class="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
-              Télécharger PDF final
-            </a>
+
+          <!-- Parapheur actions (En attente) -->
+          @if (isParapheur()) {
+            <button (click)="openRejectModal()"
+                    class="px-4 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-colors">
+              Refuser
+            </button>
+            <button (click)="signerDocument()" [disabled]="signing()"
+                    class="px-4 py-1.5 bg-primary text-white text-sm rounded-lg hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2 transition-colors">
+              <div *ngIf="signing()" class="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
+              {{ signing() ? 'Signature en cours…' : '✍️ Signer le document' }}
+            </button>
+          }
+
+          <!-- Standard finalize / download (non-parapheur) -->
+          @if (!isParapheur()) {
+            @if (doc()?.status !== 'FINALIZED') {
+              <button (click)="finalize()" [disabled]="finalizing()"
+                      class="px-4 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50">
+                {{ finalizing() ? 'Finalisation…' : 'Finaliser le document' }}
+              </button>
+            }
+            @if (doc()?.status === 'FINALIZED') {
+              <a [href]="api.downloadFinalPdf(docId)" target="_blank"
+                 class="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+                Télécharger PDF final
+              </a>
+            }
           }
         </div>
 
@@ -93,22 +120,56 @@ interface Annotation {
         </div>
       </div>
     </div>
+
+    <!-- ── Reject modal ────────────────────────────────────────────────── -->
+    @if (showRejectModal()) {
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+           (click)="$event.target === $event.currentTarget && showRejectModal.set(false)">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+          <h2 class="text-base font-semibold text-gray-900 mb-1">Refuser le document</h2>
+          <p class="text-xs text-gray-500 mb-4">Indiquez le motif du refus.</p>
+          <textarea rows="3" [(ngModel)]="rejectCommentValue"
+                    placeholder="Motif du refus…"
+                    class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400">
+          </textarea>
+          <div class="flex gap-3 mt-4">
+            <button (click)="showRejectModal.set(false)"
+                    class="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-50">
+              Annuler
+            </button>
+            <button (click)="confirmReject()" [disabled]="rejecting() || !rejectCommentValue.trim()"
+                    class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2">
+              <div *ngIf="rejecting()" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
+              {{ rejecting() ? 'En cours…' : 'Confirmer le refus' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    }
   `
 })
 export class PdfViewerComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('konvaContainer') containerRef!: ElementRef<HTMLDivElement>;
 
   api = inject(ApiService);
-  private route = inject(ActivatedRoute);
+  private route  = inject(ActivatedRoute);
   private router = inject(Router);
 
   docId = '';
-  doc = signal<any>(null);
+  doc   = signal<any>(null);
   pages = signal<number[]>([]);
   assets = signal<any[]>([]);
   currentPage = signal(0);
-  selectedId = signal<string | null>(null);
-  finalizing = signal(false);
+  selectedId  = signal<string | null>(null);
+  finalizing  = signal(false);
+
+  // Parapheur sign/reject
+  signing         = signal(false);
+  showRejectModal = signal(false);
+  rejectCommentValue = '';
+  rejecting       = signal(false);
+
+  isParapheur = computed(() => this.doc()?.parapheurStatut === 'EN_ATTENTE_SIGNATURE');
 
   private stage!: Konva.Stage;
   private bgLayer!: Konva.Layer;
@@ -116,7 +177,6 @@ export class PdfViewerComponent implements OnInit, OnDestroy, AfterViewInit {
   private transformer!: Konva.Transformer;
   private draggedAsset: any = null;
 
-  // konvaNodeId -> backendAnnotationId
   private nodeAnnotMap = new Map<string, string>();
 
   ngOnInit() {
@@ -125,15 +185,18 @@ export class PdfViewerComponent implements OnInit, OnDestroy, AfterViewInit {
     this.loadAssets();
   }
 
-  ngAfterViewInit() {
-    // stage init deferred until first page loads (needs image dimensions)
-  }
+  ngAfterViewInit() {}
 
-  ngOnDestroy() {
-    this.stage?.destroy();
-  }
+  ngOnDestroy() { this.stage?.destroy(); }
 
-  back() { this.router.navigate(['/pdf-documents']); }
+  back() {
+    const d = this.doc();
+    if (d?.parapheurStatut) {
+      this.router.navigate(['/signature']);
+    } else {
+      this.router.navigate(['/pdf-documents']);
+    }
+  }
 
   // ── Stage ────────────────────────────────────────────────────────────────
 
@@ -156,7 +219,6 @@ export class PdfViewerComponent implements OnInit, OnDestroy, AfterViewInit {
     });
     this.annotLayer.add(this.transformer);
 
-    // click on stage bg → deselect
     this.stage.on('click tap', (e) => {
       if (e.target === this.stage || !e.target.draggable()) {
         this.transformer.nodes([]);
@@ -180,7 +242,13 @@ export class PdfViewerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   loadAssets() {
     this.api.getSignatureAssets().subscribe((list: any[]) => {
-      this.assets.set(list.map(a => ({ ...a, url: this.api.getSignatureImageUrl(a.id) })));
+      const withUrls = list.map(a => ({ ...a, url: '' }));
+      this.assets.set(withUrls);
+      list.forEach((a, i) => {
+        this.api.getSignatureImageBlob(a.id).subscribe(url => {
+          this.assets.update(arr => arr.map((x, idx) => idx === i ? { ...x, url } : x));
+        });
+      });
     });
   }
 
@@ -230,7 +298,7 @@ export class PdfViewerComponent implements OnInit, OnDestroy, AfterViewInit {
     img.src = asset.url;
   }
 
-  // ── Drag & drop from assets panel ────────────────────────────────────────
+  // ── Drag & drop ──────────────────────────────────────────────────────────
 
   onDragStart(ev: DragEvent, asset: any) {
     this.draggedAsset = asset;
@@ -282,18 +350,13 @@ export class PdfViewerComponent implements OnInit, OnDestroy, AfterViewInit {
     img.src = asset.url;
   }
 
-  // ── Sync to backend after move/resize ────────────────────────────────────
-
   syncAnnotation(node: Konva.Image) {
     const annotId = this.nodeAnnotMap.get(node.id());
     if (!annotId) return;
-
     const stageW = this.stage.width();
     const stageH = this.stage.height();
-    // scaleX/Y applied by Transformer — multiply into width/height then reset
     const w = node.width() * node.scaleX();
     const h = node.height() * node.scaleY();
-
     this.api.updateAnnotation(annotId, {
       xPercent: (node.x() / stageW) * 100,
       yPercent: (node.y() / stageH) * 100,
@@ -301,8 +364,6 @@ export class PdfViewerComponent implements OnInit, OnDestroy, AfterViewInit {
       heightPercent: (h / stageH) * 100,
     }).subscribe();
   }
-
-  // ── Delete selected ───────────────────────────────────────────────────────
 
   deleteSelected() {
     const nodes = this.transformer.nodes();
@@ -319,13 +380,35 @@ export class PdfViewerComponent implements OnInit, OnDestroy, AfterViewInit {
     this.selectedId.set(null);
   }
 
-  // ── Finalize ─────────────────────────────────────────────────────────────
-
   finalize() {
     this.finalizing.set(true);
     this.api.finalizePdfDocument(this.docId).subscribe({
       next: (updated: any) => { this.doc.set(updated); this.finalizing.set(false); },
       error: () => this.finalizing.set(false),
+    });
+  }
+
+  // ── Parapheur actions ────────────────────────────────────────────────────
+
+  signerDocument() {
+    this.signing.set(true);
+    this.api.signerDocument(this.docId).subscribe({
+      next: () => { this.signing.set(false); this.router.navigate(['/signature']); },
+      error: () => this.signing.set(false),
+    });
+  }
+
+  openRejectModal() {
+    this.rejectCommentValue = '';
+    this.showRejectModal.set(true);
+  }
+
+  confirmReject() {
+    if (!this.rejectCommentValue.trim()) return;
+    this.rejecting.set(true);
+    this.api.rejeterDocument(this.docId, this.rejectCommentValue).subscribe({
+      next: () => { this.rejecting.set(false); this.router.navigate(['/signature']); },
+      error: () => this.rejecting.set(false),
     });
   }
 
@@ -337,7 +420,6 @@ export class PdfViewerComponent implements OnInit, OnDestroy, AfterViewInit {
       image: img, x, y, width, height,
       draggable: true,
     });
-    // select on click
     node.on('click tap', () => {
       this.transformer.nodes([node]);
       this.selectedId.set(this.nodeAnnotMap.get(node.id()) ?? null);

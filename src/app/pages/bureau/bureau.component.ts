@@ -1,0 +1,169 @@
+import { Component, OnInit, signal, inject, computed } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
+import { ApiService } from '../../services/api.service';
+import { AuthService } from '../../services/auth.service';
+
+interface BureauDoc {
+  id: string;
+  titre: string;
+  type: string;
+  destinataire: string | null;
+  originalFileName: string;
+  pageCount: number;
+  statut: 'BROUILLON' | 'SOUMIS';
+  pdfDocumentId: string | null;
+  createdAt: string;
+  hasSignatureZone: boolean;
+  hasStampZone: boolean;
+}
+
+@Component({
+  selector: 'app-bureau',
+  standalone: true,
+  imports: [CommonModule, FormsModule],
+  templateUrl: './bureau.component.html',
+})
+export class BureauComponent implements OnInit {
+  private api    = inject(ApiService);
+  private auth   = inject(AuthService);
+  private router = inject(Router);
+
+  docs      = signal<BureauDoc[]>([]);
+  loading   = signal(false);
+  uploading = signal(false);
+
+  // Upload modal
+  showUploadModal  = signal(false);
+  uploadFile: File | null = null;
+  uploadTitre      = '';
+  uploadType       = 'COURRIER';
+  uploadDestinataire = '';
+
+  // Confirm delete
+  deletingId = signal<string | null>(null);
+
+  // Confirm soumettre
+  soumettreId = signal<string | null>(null);
+  submitting  = signal(false);
+
+  readonly docTypes = [
+    { value: 'COURRIER',      label: 'Courrier officiel' },
+    { value: 'NOTE_SERVICE',  label: 'Note de service' },
+    { value: 'DECISION',      label: 'Décision' },
+    { value: 'TRANSMISSION',  label: 'Lettre de transmission' },
+    { value: 'INVITATION',    label: 'Invitation' },
+    { value: 'VOEUX',         label: 'Vœux' },
+    { value: 'AUTRE',         label: 'Autre' },
+  ];
+
+  readonly statutCls: Record<string, string> = {
+    BROUILLON: 'bg-amber-100 text-amber-700',
+    SOUMIS:    'bg-blue-100 text-blue-700',
+  };
+  readonly statutLabel: Record<string, string> = {
+    BROUILLON: 'Brouillon',
+    SOUMIS:    'Soumis au parapheur',
+  };
+
+  ngOnInit() { this.load(); }
+
+  load() {
+    this.loading.set(true);
+    this.api.getBureauDocuments().subscribe({
+      next: list => { this.docs.set(list); this.loading.set(false); },
+      error: () => this.loading.set(false),
+    });
+  }
+
+  // ── Upload ────────────────────────────────────────────────────────────────
+
+  openUploadModal() {
+    this.uploadFile = null;
+    this.uploadTitre = '';
+    this.uploadType = 'COURRIER';
+    this.uploadDestinataire = '';
+    this.showUploadModal.set(true);
+  }
+
+  onFileSelected(ev: Event) {
+    const f = (ev.target as HTMLInputElement).files?.[0];
+    if (!f) return;
+    this.uploadFile = f;
+    if (!this.uploadTitre) this.uploadTitre = f.name.replace(/\.pdf$/i, '');
+  }
+
+  doUpload() {
+    if (!this.uploadFile) return;
+    this.uploading.set(true);
+    this.api.uploadBureauDocument(
+      this.uploadFile,
+      this.uploadType,
+      this.uploadTitre || undefined,
+      this.uploadDestinataire || undefined
+    ).subscribe({
+      next: doc => {
+        this.docs.update(list => [doc, ...list]);
+        this.uploading.set(false);
+        this.showUploadModal.set(false);
+      },
+      error: () => this.uploading.set(false),
+    });
+  }
+
+  // ── Placement zones ───────────────────────────────────────────────────────
+
+  openPlacement(doc: BureauDoc) {
+    this.router.navigate(['/bureau-placement', doc.id]);
+  }
+
+  // ── Soumettre au parapheur ────────────────────────────────────────────────
+
+  confirmSoumettre(doc: BureauDoc) {
+    if (!doc.hasSignatureZone) {
+      alert('Veuillez d\'abord placer la zone de signature avant de soumettre.');
+      return;
+    }
+    this.soumettreId.set(doc.id);
+  }
+
+  doSoumettre() {
+    const id = this.soumettreId();
+    if (!id) return;
+    this.submitting.set(true);
+    this.api.soumettreAuParapheur(id).subscribe({
+      next: () => {
+        this.docs.update(list => list.map(d =>
+          d.id === id ? { ...d, statut: 'SOUMIS' as const } : d
+        ));
+        this.submitting.set(false);
+        this.soumettreId.set(null);
+      },
+      error: () => this.submitting.set(false),
+    });
+  }
+
+  // ── Suppression ───────────────────────────────────────────────────────────
+
+  confirmDelete(id: string) { this.deletingId.set(id); }
+
+  doDelete() {
+    const id = this.deletingId();
+    if (!id) return;
+    this.api.deleteBureauDocument(id).subscribe({
+      next: () => {
+        this.docs.update(list => list.filter(d => d.id !== id));
+        this.deletingId.set(null);
+      },
+    });
+  }
+
+  typeLabel(v: string): string {
+    return this.docTypes.find(t => t.value === v)?.label ?? v;
+  }
+
+  formatDate(s: string): string {
+    return new Date(s).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+}

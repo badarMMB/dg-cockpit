@@ -37,6 +37,7 @@ public class MinioService {
         ensureBucket("ged-stamps");
         ensureBucket("ged-documents");
         ensureBucket("ged-final-documents");
+        ensureBucket("ged-bureau-documents");
     }
 
     // ── Bucket management ────────────────────────────────────────────────────

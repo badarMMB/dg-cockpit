@@ -1,0 +1,184 @@
+<div class="p-6 max-w-6xl mx-auto">
+
+  <!-- En-tête -->
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-800">Bureau Secrétaire</h1>
+      <p class="text-sm text-gray-500 mt-0.5">Préparez et soumettez vos documents au parapheur du DG</p>
+    </div>
+    <button (click)="openUploadModal()"
+            class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2">
+      <span class="text-base">+</span> Uploader un PDF
+    </button>
+  </div>
+
+  <!-- Liste des documents -->
+  @if (loading()) {
+    <p class="text-gray-400 text-sm py-12 text-center">Chargement…</p>
+  } @else if (docs().length === 0) {
+    <div class="bg-white border border-gray-200 rounded-xl py-16 text-center">
+      <p class="text-4xl mb-3">📄</p>
+      <p class="text-gray-500 font-medium">Aucun document en cours</p>
+      <p class="text-gray-400 text-sm mt-1">Uploadez un PDF ou imprimez depuis Word vers "Secrétariat Douanes"</p>
+      <button (click)="openUploadModal()"
+              class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
+        + Uploader un PDF
+      </button>
+    </div>
+  } @else {
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            <th class="px-4 py-3">Document</th>
+            <th class="px-4 py-3">Type</th>
+            <th class="px-4 py-3">Destinataire</th>
+            <th class="px-4 py-3">Zones</th>
+            <th class="px-4 py-3">Statut</th>
+            <th class="px-4 py-3">Date</th>
+            <th class="px-4 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          @for (doc of docs(); track doc.id) {
+            <tr [class]="doc.statut === 'SOUMIS' ? 'opacity-60' : ''">
+              <td class="px-4 py-3">
+                <p class="font-medium text-gray-800 truncate max-w-xs">{{ doc.titre }}</p>
+                <p class="text-xs text-gray-400">{{ doc.originalFileName }} · {{ doc.pageCount }} p.</p>
+              </td>
+              <td class="px-4 py-3">
+                <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                  {{ typeLabel(doc.type) }}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-gray-500 text-xs">{{ doc.destinataire || '—' }}</td>
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-1.5">
+                  <span [class]="doc.hasSignatureZone
+                    ? 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700'
+                    : 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-400'">
+                    ✍️ Sig.
+                  </span>
+                  <span [class]="doc.hasStampZone
+                    ? 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-50 text-red-700'
+                    : 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-400'">
+                    🔴 Tampon
+                  </span>
+                </div>
+              </td>
+              <td class="px-4 py-3">
+                <span [class]="'px-2 py-0.5 rounded-full text-xs font-medium ' + statutCls[doc.statut]">
+                  {{ statutLabel[doc.statut] }}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-gray-400 text-xs">{{ formatDate(doc.createdAt) }}</td>
+              <td class="px-4 py-3 text-right">
+                @if (doc.statut === 'BROUILLON') {
+                  <div class="flex justify-end items-center gap-3">
+                    <button (click)="openPlacement(doc)"
+                            class="text-xs text-indigo-600 hover:underline font-medium">
+                      {{ doc.hasSignatureZone ? 'Modifier zones' : 'Placer zones' }}
+                    </button>
+                    <button (click)="confirmSoumettre(doc)"
+                            [disabled]="!doc.hasSignatureZone"
+                            class="text-xs text-blue-600 hover:underline font-medium disabled:text-gray-300 disabled:cursor-not-allowed">
+                      Soumettre
+                    </button>
+                    <button (click)="confirmDelete(doc.id)"
+                            class="text-xs text-red-400 hover:underline">
+                      Supprimer
+                    </button>
+                  </div>
+                } @else {
+                  <span class="text-xs text-gray-400">Envoyé au DG</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
+
+<!-- ── Modal Upload ─────────────────────────────────────────────────────────── -->
+@if (showUploadModal()) {
+  <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
+      <h2 class="text-lg font-semibold mb-4">Uploader un document</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Fichier PDF</label>
+          <input type="file" accept=".pdf" (change)="onFileSelected($event)"
+                 class="w-full text-sm text-gray-600 border border-gray-300 rounded-lg px-3 py-2" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Titre du document</label>
+          <input [(ngModel)]="uploadTitre" placeholder="Ex : Lettre de convocation N°12"
+                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Type</label>
+          <select [(ngModel)]="uploadType"
+                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            @for (t of docTypes; track t.value) {
+              <option [value]="t.value">{{ t.label }}</option>
+            }
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Destinataire (optionnel)</label>
+          <input [(ngModel)]="uploadDestinataire" placeholder="Ex : Ministère des Finances"
+                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <div class="flex justify-end gap-3 mt-6">
+        <button (click)="showUploadModal.set(false)"
+                class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Annuler</button>
+        <button (click)="doUpload()" [disabled]="!uploadFile || uploading()"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50">
+          {{ uploading() ? 'Envoi…' : 'Uploader' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Modal Confirmer Soumettre ────────────────────────────────────────────── -->
+@if (soumettreId()) {
+  <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
+      <h2 class="text-lg font-semibold mb-2">Soumettre au Parapheur</h2>
+      <p class="text-sm text-gray-500 mb-6">
+        Le document sera envoyé au DG pour signature. Les zones que vous avez placées
+        seront remplacées par la signature et le tampon officiels lors de la validation.
+      </p>
+      <div class="flex justify-end gap-3">
+        <button (click)="soumettreId.set(null)"
+                class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Annuler</button>
+        <button (click)="doSoumettre()" [disabled]="submitting()"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50">
+          {{ submitting() ? 'Envoi…' : 'Confirmer la soumission' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Modal Confirmer Suppression ─────────────────────────────────────────── -->
+@if (deletingId()) {
+  <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
+      <h2 class="text-lg font-semibold mb-2">Supprimer le document ?</h2>
+      <p class="text-sm text-gray-500 mb-6">Cette action est irréversible.</p>
+      <div class="flex justify-end gap-3">
+        <button (click)="deletingId.set(null)"
+                class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Annuler</button>
+        <button (click)="doDelete()"
+                class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">
+          Supprimer
+        </button>
+      </div>
+    </div>
+  </div>
+}

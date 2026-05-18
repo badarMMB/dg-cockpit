@@ -21,10 +21,38 @@ public class PdfDocument {
 
     private String status; // DRAFT | FINALIZED
 
-    private String finalizedObjectKey; // nullable — set after finalization
+    private String finalizedObjectKey;
 
     private LocalDateTime createdAt = LocalDateTime.now();
     private LocalDateTime updatedAt = LocalDateTime.now();
+
+    // ── Parapheur ────────────────────────────────────────────────────────────
+
+    public enum ParapheurStatut {
+        EN_ATTENTE_SIGNATURE, SIGNE, REFUSE, ARCHIVE, PUBLIE
+    }
+
+    public enum ParapheurType {
+        COURRIER, NOTE_SERVICE
+    }
+
+    @Enumerated(EnumType.STRING)
+    private ParapheurStatut parapheurStatut;
+
+    @Enumerated(EnumType.STRING)
+    private ParapheurType parapheurType;
+
+    private String submittedBy;
+    private LocalDateTime submittedAt;
+
+    @Column(columnDefinition = "TEXT")
+    private String rejectionComment;
+
+    private LocalDateTime signedAt;
+
+    private String destinataire;
+
+    // ── Getters / Setters ────────────────────────────────────────────────────
 
     public String getId() { return id; }
 
@@ -54,4 +82,25 @@ public class PdfDocument {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public ParapheurStatut getParapheurStatut() { return parapheurStatut; }
+    public void setParapheurStatut(ParapheurStatut parapheurStatut) { this.parapheurStatut = parapheurStatut; }
+
+    public ParapheurType getParapheurType() { return parapheurType; }
+    public void setParapheurType(ParapheurType parapheurType) { this.parapheurType = parapheurType; }
+
+    public String getSubmittedBy() { return submittedBy; }
+    public void setSubmittedBy(String submittedBy) { this.submittedBy = submittedBy; }
+
+    public LocalDateTime getSubmittedAt() { return submittedAt; }
+    public void setSubmittedAt(LocalDateTime submittedAt) { this.submittedAt = submittedAt; }
+
+    public String getRejectionComment() { return rejectionComment; }
+    public void setRejectionComment(String rejectionComment) { this.rejectionComment = rejectionComment; }
+
+    public LocalDateTime getSignedAt() { return signedAt; }
+    public void setSignedAt(LocalDateTime signedAt) { this.signedAt = signedAt; }
+
+    public String getDestinataire() { return destinataire; }
+    public void setDestinataire(String destinataire) { this.destinataire = destinataire; }
 }

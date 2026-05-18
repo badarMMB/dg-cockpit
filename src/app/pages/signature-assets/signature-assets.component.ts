@@ -1,4 +1,4 @@
-import { Component, signal, inject, OnInit } from '@angular/core';
+import { Component, signal, inject, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
@@ -113,8 +113,9 @@ interface SignatureAsset {
     </div>
   `
 })
-export class SignatureAssetsComponent implements OnInit {
+export class SignatureAssetsComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
+  private blobUrls: string[] = [];
 
   assets = signal<SignatureAsset[]>([]);
   loading = signal(false);
@@ -146,11 +147,24 @@ export class SignatureAssetsComponent implements OnInit {
     this.loading.set(true);
     this.api.getSignatureAssets().subscribe({
       next: (list: any[]) => {
-        this.assets.set(list.map(a => ({ ...a, url: this.api.getSignatureImageUrl(a.id) })));
+        this.blobUrls.forEach(u => URL.revokeObjectURL(u));
+        this.blobUrls = [];
+        const withUrls = list.map(a => ({ ...a, url: '' }));
+        this.assets.set(withUrls);
         this.loading.set(false);
+        list.forEach((a, i) => {
+          this.api.getSignatureImageBlob(a.id).subscribe(url => {
+            this.blobUrls.push(url);
+            this.assets.update(arr => arr.map((x, idx) => idx === i ? { ...x, url } : x));
+          });
+        });
       },
       error: () => this.loading.set(false)
     });
+  }
+
+  ngOnDestroy() {
+    this.blobUrls.forEach(u => URL.revokeObjectURL(u));
   }
 
   onFileSelected(ev: Event) {
@@ -170,7 +184,10 @@ export class SignatureAssetsComponent implements OnInit {
       next: (asset: any) => {
         this.uploading.set(false);
         this.cancelUpload();
-        this.assets.update(list => [{ ...asset, url: this.api.getSignatureImageUrl(asset.id) }, ...list]);
+        this.api.getSignatureImageBlob(asset.id).subscribe(url => {
+          this.blobUrls.push(url);
+          this.assets.update(list => [{ ...asset, url }, ...list]);
+        });
       },
       error: () => this.uploading.set(false)
     });

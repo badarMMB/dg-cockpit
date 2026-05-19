@@ -27,16 +27,27 @@ export class OutboxListComponent implements OnInit {
   formContenu = signal('');
   saving = signal(false);
 
+  // Livraison modal
+  showLivraisonModal = signal(false);
+  livraisonCourrierId = signal<string>('');
+  livraisonCourrierObjet = signal<string>('');
+  livraisonScan = signal<File | null>(null);
+  livraisonClasseurIds = signal<string[]>([]);
+  classeurs = signal<any[]>([]);
+  livraisonSaving = signal(false);
+
   readonly statutColors: Record<string, string> = {
     'BROUILLON': 'bg-gray-100 text-gray-600',
     'SIGNE':     'bg-blue-100 text-blue-700',
-    'EXPEDIE':   'bg-green-100 text-green-700'
+    'EXPEDIE':   'bg-green-100 text-green-700',
+    'LIVRE':     'bg-emerald-100 text-emerald-700',
   };
 
   readonly statutLabels: Record<string, string> = {
     'BROUILLON': 'Brouillon',
     'SIGNE':     'Signé',
-    'EXPEDIE':   'Expédié'
+    'EXPEDIE':   'Expédié',
+    'LIVRE':     'Livré',
   };
 
   filtered = computed(() => {
@@ -45,11 +56,16 @@ export class OutboxListComponent implements OnInit {
   });
 
   ngOnInit() {
+    this.load();
+    this.api.getTemplatesCourrier().subscribe(data => this.templates.set(data));
+    this.api.getClasseurs().subscribe(data => this.classeurs.set(data));
+  }
+
+  load() {
     this.api.getCourriersDepart().subscribe(data => {
       this.courriers.set(data);
       this.loading.set(false);
     });
-    this.api.getTemplatesCourrier().subscribe(data => this.templates.set(data));
   }
 
   openModal() {
@@ -82,6 +98,50 @@ export class OutboxListComponent implements OnInit {
       this.saving.set(false);
       this.showModal.set(false);
       this.router.navigate(['/outbox', created['id']]);
+    });
+  }
+
+  // ── Livraison ──────────────────────────────────────────────────────────────
+
+  openLivraison(courrier: any, event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.livraisonCourrierId.set(courrier['id']);
+    this.livraisonCourrierObjet.set(courrier['objet']);
+    this.livraisonScan.set(null);
+    this.livraisonClasseurIds.set([]);
+    this.showLivraisonModal.set(true);
+  }
+
+  onScanChange(event: Event) {
+    const input = event.target as HTMLInputElement;
+    this.livraisonScan.set(input.files?.[0] ?? null);
+  }
+
+  toggleClasseur(id: string) {
+    const current = this.livraisonClasseurIds();
+    if (current.includes(id)) {
+      this.livraisonClasseurIds.set(current.filter(x => x !== id));
+    } else {
+      this.livraisonClasseurIds.set([...current, id]);
+    }
+  }
+
+  confirmerLivraison() {
+    const scan = this.livraisonScan();
+    if (!scan || this.livraisonClasseurIds().length === 0) return;
+    this.livraisonSaving.set(true);
+    this.api.livrerCourrier(
+      this.livraisonCourrierId(),
+      scan,
+      this.livraisonClasseurIds()
+    ).subscribe({
+      next: () => {
+        this.livraisonSaving.set(false);
+        this.showLivraisonModal.set(false);
+        this.load();
+      },
+      error: () => this.livraisonSaving.set(false)
     });
   }
 }

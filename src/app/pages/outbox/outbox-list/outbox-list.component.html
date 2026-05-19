@@ -1,12 +1,17 @@
-<div class="h-full flex flex-col bg-surface">
-  <header class="px-4 md:px-8 py-4 md:py-6 border-b border-gray-200 bg-white">
+<div class="h-full flex flex-col bg-gray-50">
+
+  <!-- ── Header ─────────────────────────────────────────────────────────────── -->
+  <header class="px-5 md:px-8 py-5 border-b border-gray-200 bg-white shadow-sm">
     <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-xl md:text-2xl font-bold text-gray-900">Courrier Départ</h1>
-        <p class="text-sm text-gray-500 mt-1">Correspondances officielles émises par la Direction</p>
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-xl">📤</div>
+        <div>
+          <h1 class="text-xl font-bold text-gray-900">Courrier Départ</h1>
+          <p class="text-xs text-gray-500 mt-0.5">Correspondances officielles émises par la Direction</p>
+        </div>
       </div>
       <button (click)="openModal()"
-              class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm">
+              class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
         </svg>
@@ -15,52 +20,109 @@
     </div>
 
     <!-- Filtres statut -->
-    <div class="flex gap-2 mt-4 overflow-x-auto pb-1">
-      <button *ngFor="let f of [['TOUS','Tous'],['BROUILLON','Brouillons'],['SIGNE','Signés'],['EXPEDIE','Expédiés']]"
+    <div class="flex gap-2 mt-4 overflow-x-auto pb-1 scrollbar-none">
+      <button *ngFor="let f of [['TOUS','Tous'],['BROUILLON','Brouillons'],['SIGNE','Signés'],['EXPEDIE','Expédiés'],['LIVRE','Livrés']]"
               (click)="filterStatut.set(f[0])"
               class="px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors"
               [ngClass]="filterStatut() === f[0]
-                ? 'bg-primary text-white'
-                : 'bg-white border border-gray-300 text-gray-600 hover:border-primary hover:text-primary'">
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-white border border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-600'">
         {{ f[1] }}
       </button>
     </div>
   </header>
 
-  <main class="flex-1 overflow-y-auto p-4 md:p-8">
-    <div *ngIf="loading()" class="flex justify-center items-center h-40">
-      <div class="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+  <!-- ── Corps ──────────────────────────────────────────────────────────────── -->
+  <main class="flex-1 overflow-y-auto p-4 md:p-6">
+
+    <!-- Spinner -->
+    <div *ngIf="loading()" class="flex justify-center items-center h-48">
+      <div class="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
     </div>
 
-    <div *ngIf="!loading()" class="space-y-3">
-      <a *ngFor="let c of filtered()"
-         [routerLink]="['/outbox', c['id']]"
-         class="block bg-white rounded-xl border border-gray-200 p-4 md:p-5 hover:border-primary hover:shadow-soft transition-all cursor-pointer group">
-        <div class="flex items-start justify-between gap-3">
-          <div class="flex items-start gap-3 md:gap-4 min-w-0">
-            <div class="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 font-bold text-xl flex-shrink-0">📤</div>
-            <div class="min-w-0">
-              <h3 class="font-semibold text-gray-900 text-sm group-hover:text-primary transition-colors truncate">{{ c['objet'] }}</h3>
-              <p class="text-xs text-gray-500 mt-0.5">À : <span class="font-medium text-gray-700">{{ c['destinataire'] }}</span></p>
-              <p class="text-xs text-gray-400 mt-1 truncate">{{ c['apercu'] }}</p>
+    <!-- Etat vide -->
+    <div *ngIf="!loading() && filtered().length === 0"
+         class="flex flex-col items-center justify-center py-20 text-center">
+      <div class="w-16 h-16 rounded-2xl bg-white border-2 border-dashed border-gray-200 flex items-center justify-center text-3xl mb-4 shadow-sm">📤</div>
+      <p class="text-gray-600 font-semibold text-sm">
+        {{ filterStatut() === 'TOUS' ? 'Aucun courrier départ' : 'Aucun courrier dans ce statut' }}
+      </p>
+      <p class="text-gray-400 text-xs mt-1">{{ filterStatut() === 'TOUS' ? 'Créez votre premier courrier' : 'Changez le filtre pour voir d\'autres courriers' }}</p>
+    </div>
+
+    <!-- Liste cartes -->
+    <div *ngIf="!loading() && filtered().length > 0" class="space-y-3">
+      <div *ngFor="let c of filtered()"
+           class="group bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md hover:-translate-y-px transition-all duration-200 overflow-hidden cursor-pointer"
+           [routerLink]="['/outbox', c['id']]">
+
+        <div class="flex">
+          <!-- Bande latérale statut -->
+          <div class="w-1 flex-shrink-0"
+               [ngClass]="{
+                 'bg-gray-300':    c['statut'] === 'BROUILLON',
+                 'bg-blue-400':    c['statut'] === 'SIGNE',
+                 'bg-green-400':   c['statut'] === 'EXPEDIE',
+                 'bg-emerald-500': c['statut'] === 'LIVRE'
+               }"></div>
+
+          <div class="flex-1 px-4 py-4 flex items-start gap-4 min-w-0">
+
+            <!-- Icône -->
+            <div class="w-11 h-11 rounded-xl flex items-center justify-center text-xl flex-shrink-0 mt-0.5"
+                 [ngClass]="{
+                   'bg-gray-50':    c['statut'] === 'BROUILLON',
+                   'bg-blue-50':    c['statut'] === 'SIGNE',
+                   'bg-green-50':   c['statut'] === 'EXPEDIE',
+                   'bg-emerald-50': c['statut'] === 'LIVRE'
+                 }">
+              {{ c['statut'] === 'LIVRE' ? '✅'
+               : c['statut'] === 'EXPEDIE' ? '✉️'
+               : c['statut'] === 'SIGNE' ? '✍️'
+               : '📝' }}
             </div>
-          </div>
-          <div class="flex flex-col items-end gap-2 flex-shrink-0">
-            <span class="text-xs text-gray-400 whitespace-nowrap">{{ c['dateEnvoi'] }}</span>
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold"
-                  [ngClass]="statutColors[c['statut']] || 'bg-gray-100 text-gray-600'">
-              {{ statutLabels[c['statut']] || c['statut'] }}
-            </span>
-            <div *ngIf="c['pieceJointe']" class="text-gray-400 text-xs flex items-center gap-1">
-              📎 <span>{{ c['pieceJointe'] }}</span>
+
+            <!-- Infos -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <h3 class="font-bold text-gray-900 text-sm leading-snug truncate group-hover:text-blue-700 transition-colors">
+                    {{ c['objet'] }}
+                  </h3>
+                  <p class="text-xs text-gray-500 mt-0.5">
+                    À : <span class="font-semibold text-gray-700">{{ c['destinataire'] }}</span>
+                  </p>
+                  <p *ngIf="c['apercu']" class="text-xs text-gray-400 mt-1 truncate">{{ c['apercu'] }}</p>
+                </div>
+
+                <div class="flex flex-col items-end gap-1.5 flex-shrink-0">
+                  <span class="px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide"
+                        [ngClass]="statutColors[c['statut']] || 'bg-gray-100 text-gray-600'">
+                    {{ statutLabels[c['statut']] || c['statut'] }}
+                  </span>
+                  <span class="text-[10px] text-gray-400 whitespace-nowrap">{{ c['dateEnvoi'] }}</span>
+                </div>
+              </div>
+
+              <!-- Zone basse : pièce jointe + bouton livraison -->
+              <div class="mt-2.5 flex items-center justify-between gap-2 flex-wrap">
+                <div *ngIf="c['pieceJointe']" class="flex items-center gap-1.5 text-xs text-gray-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                  </svg>
+                  <span class="truncate max-w-[160px]">{{ c['pieceJointe'] }}</span>
+                </div>
+                <div *ngIf="!c['pieceJointe']" class="flex-1"></div>
+
+                <button *ngIf="c['statut'] === 'SIGNE'"
+                        (click)="openLivraison(c, $event)"
+                        class="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors whitespace-nowrap">
+                  🗂️ Marquer livré
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </a>
-
-      <div *ngIf="filtered().length === 0" class="text-center py-16 text-gray-400">
-        <div class="text-5xl mb-4">📤</div>
-        <p class="font-medium">Aucun courrier départ</p>
       </div>
     </div>
   </main>
@@ -69,65 +131,109 @@
 <!-- ── Modal nouveau courrier ────────────────────────────────────────── -->
 <div *ngIf="showModal()" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
-
-    <!-- En-tête modal -->
-    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-      <h2 class="text-base font-semibold text-gray-900">Nouveau courrier départ</h2>
-      <button (click)="showModal.set(false)" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <h2 class="text-base font-bold text-gray-900">Nouveau courrier départ</h2>
+      <button (click)="showModal.set(false)"
+              class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors">&times;</button>
     </div>
-
-    <!-- Corps modal -->
     <div class="overflow-y-auto flex-1 px-6 py-5 space-y-4">
-
-      <!-- Sélecteur de modèle -->
       <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1.5">Partir d'un modèle <span class="text-gray-400">(optionnel)</span></label>
+        <label class="block text-xs font-semibold text-gray-700 mb-1.5">Partir d'un modèle <span class="text-gray-400 font-normal">(optionnel)</span></label>
         <select [ngModel]="selectedTemplateId()" (ngModelChange)="onTemplateChange($event)"
-                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-white">
+                class="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 bg-white transition-all">
           <option value="">— Aucun modèle —</option>
           <option *ngFor="let t of templates()" [value]="t['id']">{{ t['nom'] }}</option>
         </select>
       </div>
-
-      <!-- Objet -->
       <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1.5">Objet <span class="text-red-500">*</span></label>
+        <label class="block text-xs font-semibold text-gray-700 mb-1.5">Objet <span class="text-red-500">*</span></label>
         <input type="text" [ngModel]="formObjet()" (ngModelChange)="formObjet.set($event)"
                placeholder="Objet du courrier"
-               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary">
+               class="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all">
       </div>
-
-      <!-- Destinataire -->
       <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1.5">Destinataire <span class="text-red-500">*</span></label>
+        <label class="block text-xs font-semibold text-gray-700 mb-1.5">Destinataire <span class="text-red-500">*</span></label>
         <input type="text" [ngModel]="formDestinataire()" (ngModelChange)="formDestinataire.set($event)"
                placeholder="Nom ou entité destinataire"
-               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary">
+               class="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all">
       </div>
-
-      <!-- Contenu -->
       <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1.5">Contenu</label>
+        <label class="block text-xs font-semibold text-gray-700 mb-1.5">Contenu</label>
         <textarea [ngModel]="formContenu()" (ngModelChange)="formContenu.set($event)"
                   rows="7" placeholder="Corps du courrier…"
-                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary resize-none font-mono leading-relaxed">
+                  class="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 resize-none font-mono leading-relaxed transition-all">
         </textarea>
       </div>
     </div>
-
-    <!-- Pied modal -->
-    <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+    <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
       <button (click)="showModal.set(false)"
-              class="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-        Annuler
-      </button>
+              class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">Annuler</button>
       <button (click)="createDraft()"
               [disabled]="!formObjet() || !formDestinataire() || saving()"
-              class="px-4 py-2 text-sm text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+              class="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-40 flex items-center gap-2">
         <div *ngIf="saving()" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
         <span>{{ saving() ? 'Création…' : 'Créer le brouillon' }}</span>
       </button>
     </div>
+  </div>
+</div>
 
+<!-- ── Modal livraison ──────────────────────────────────────────────────── -->
+<div *ngIf="showLivraisonModal()" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <div>
+        <h2 class="text-base font-bold text-gray-900">Confirmer la livraison</h2>
+        <p class="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{{ livraisonCourrierObjet() }}</p>
+      </div>
+      <button (click)="showLivraisonModal.set(false)"
+              class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors">&times;</button>
+    </div>
+    <div class="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Scan de preuve de livraison <span class="text-red-500">*</span></label>
+        <p class="text-xs text-gray-400 mb-2">Document tamponné et signé par le destinataire</p>
+        <input type="file" accept="image/*,.pdf" (change)="onScanChange($event)"
+               class="block w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer border border-gray-200 rounded-xl px-3 py-2">
+        <div *ngIf="livraisonScan()" class="mt-1.5 text-xs text-emerald-700 font-medium">✓ {{ livraisonScan()!.name }}</div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Classer dans <span class="text-red-500">*</span></label>
+        <p class="text-xs text-gray-400 mb-2">Un ou plusieurs classeurs</p>
+        <div class="space-y-2 max-h-48 overflow-y-auto">
+          <label *ngFor="let cl of classeurs()"
+                 class="flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors"
+                 [ngClass]="livraisonClasseurIds().includes(cl['id'])
+                   ? 'border-emerald-400 bg-emerald-50'
+                   : 'border-gray-200 hover:border-gray-300 bg-white'">
+            <input type="checkbox"
+                   [checked]="livraisonClasseurIds().includes(cl['id'])"
+                   (change)="toggleClasseur(cl['id'])"
+                   class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+            <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                 [style.background-color]="cl['couleur'] + '20'">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                   [style.stroke]="cl['couleur']">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/>
+              </svg>
+            </div>
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-gray-800 truncate">{{ cl['nom'] }}</p>
+              <p class="text-xs text-gray-400">{{ cl['documentCount'] }} document{{ cl['documentCount'] !== 1 ? 's' : '' }}</p>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+      <button (click)="showLivraisonModal.set(false)"
+              class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">Annuler</button>
+      <button (click)="confirmerLivraison()"
+              [disabled]="!livraisonScan() || livraisonClasseurIds().length === 0 || livraisonSaving()"
+              class="px-5 py-2 text-sm font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-40 flex items-center gap-2">
+        <div *ngIf="livraisonSaving()" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+        <span>{{ livraisonSaving() ? 'Enregistrement…' : '✓ Confirmer la livraison' }}</span>
+      </button>
+    </div>
   </div>
 </div>

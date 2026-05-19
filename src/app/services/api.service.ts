@@ -315,6 +315,35 @@ export class ApiService {
     return this.http.post(`${this.base}/parapheur/${docId}/correction`, form);
   }
 
+  // Classeurs Numériques
+  getClasseurs(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/classeurs`);
+  }
+  createClasseur(body: any): Observable<any> {
+    return this.http.post(`${this.base}/classeurs`, body);
+  }
+  deleteClasseur(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/classeurs/${id}`);
+  }
+  getClasseurDocuments(id: string): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/classeurs/${id}/documents`);
+  }
+  livrerCourrier(courrierDepartId: string, scan: File, classeurIds: string[]): Observable<any> {
+    const form = new FormData();
+    form.append('scan', scan);
+    form.append('classeurIds', classeurIds.join(','));
+    return this.http.post(`${this.base}/classeurs/livraison/${courrierDepartId}`, form);
+  }
+  livrerBureauDoc(bureauDocId: string, scan: File, classeurIds: string[]): Observable<any> {
+    const form = new FormData();
+    form.append('scan', scan);
+    form.append('classeurIds', classeurIds.join(','));
+    return this.http.post(`${this.base}/classeurs/livraison-bureau/${bureauDocId}`, form);
+  }
+  getScanUrl(key: string): string {
+    return `${this.base}/classeurs/scan/${encodeURIComponent(key)}`;
+  }
+
   // Collaborateurs
   getCollaborateurs(): Observable<any[]> {
     return this.http.get<any[]>(`${this.base}/collaborateurs`);

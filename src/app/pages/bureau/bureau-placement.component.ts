@@ -107,15 +107,17 @@ interface ZoneEntry extends ZoneXY { page: number; }
             <p class="text-xs text-gray-400 text-center mt-1">Au moins une zone signature requise</p>
           }
 
-          <!-- Remplacer le PDF source -->
-          <input #replacePdfInput type="file" accept=".pdf" class="hidden"
-                 (change)="onReplacePdfSelected($event)" />
-          <button (click)="replacePdfInput.click()" [disabled]="replacing()"
-                  class="w-full px-3 py-2 rounded-lg text-xs font-medium border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40">
-            {{ replacing() ? 'Remplacement…' : '↑ Remplacer le PDF' }}
-          </button>
-          @if (replaced()) {
-            <p class="text-xs text-green-600 text-center">✓ PDF remplacé</p>
+          <!-- Remplacer le PDF source — uniquement si document renvoyé par le DG -->
+          @if (docStatut() === 'RETOURNE') {
+            <input #replacePdfInput type="file" accept=".pdf" class="hidden"
+                   (change)="onReplacePdfSelected($event)" />
+            <button (click)="replacePdfInput.click()" [disabled]="replacing()"
+                    class="w-full px-3 py-2 rounded-lg text-xs font-medium border border-orange-300 text-orange-600 hover:bg-orange-50 disabled:opacity-40">
+              {{ replacing() ? 'Remplacement…' : '↑ Remplacer le PDF' }}
+            </button>
+            @if (replaced()) {
+              <p class="text-xs text-green-600 text-center">✓ PDF remplacé</p>
+            }
           }
         </div>
       </div>
@@ -189,6 +191,7 @@ export class BureauPlacementComponent implements OnInit, OnDestroy {
 
   private docId = '';
   docTitre     = signal('');
+  docStatut    = signal<string>('BROUILLON');
   renvoyeMotif = signal<string | null>(null);
   pageCount    = signal(0);
   pages       = signal<number[]>([]);
@@ -227,6 +230,7 @@ export class BureauPlacementComponent implements OnInit, OnDestroy {
       const doc = list.find((d: any) => d.id === this.docId);
       if (!doc) { this.router.navigate(['/bureau']); return; }
       this.docTitre.set(doc.titre);
+      this.docStatut.set(doc.statut ?? 'BROUILLON');
       this.renvoyeMotif.set(doc.renvoyeMotif ?? null);
       this.pageCount.set(doc.pageCount ?? 1);
       this.pages.set(Array.from({ length: doc.pageCount ?? 1 }, (_, i) => i));

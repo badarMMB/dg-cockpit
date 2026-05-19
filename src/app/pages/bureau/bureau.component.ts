@@ -12,7 +12,7 @@ interface BureauDoc {
   destinataire: string | null;
   originalFileName: string;
   pageCount: number;
-  statut: 'BROUILLON' | 'SOUMIS' | 'RETOURNE' | 'SIGNE';
+  statut: 'BROUILLON' | 'SOUMIS' | 'RETOURNE' | 'SIGNE' | 'LIVRE';
   pdfDocumentId: string | null;
   createdAt: string;
   hasSignatureZone: boolean;
@@ -27,13 +27,20 @@ interface BureauDoc {
   templateUrl: './bureau.component.html',
 })
 export class BureauComponent implements OnInit {
-  private api    = inject(ApiService);
+  private api = inject(ApiService);
   private auth   = inject(AuthService);
   private router = inject(Router);
 
   docs      = signal<BureauDoc[]>([]);
   loading   = signal(false);
   uploading = signal(false);
+
+  filterStatut = signal<string>('TOUS');
+
+  filtered = computed(() => {
+    const f = this.filterStatut();
+    return f === 'TOUS' ? this.docs() : this.docs().filter(d => d.statut === f);
+  });
 
   // Upload modal
   showUploadModal  = signal(false);
@@ -64,15 +71,29 @@ export class BureauComponent implements OnInit {
     SOUMIS:    'bg-blue-100 text-blue-700',
     RETOURNE:  'bg-orange-100 text-orange-700',
     SIGNE:     'bg-green-100 text-green-700',
+    LIVRE:     'bg-emerald-100 text-emerald-700',
   };
   readonly statutLabel: Record<string, string> = {
     BROUILLON: 'Brouillon',
     SOUMIS:    'Soumis au parapheur',
     RETOURNE:  'Renvoyé par le DG',
     SIGNE:     'Signé par le DG',
+    LIVRE:     'Livré & Classé',
   };
 
-  ngOnInit() { this.load(); }
+  // Modale livraison bureau
+  showLivraisonModal  = signal(false);
+  livraisonDocId      = signal<string>('');
+  livraisonDocTitre   = signal<string>('');
+  livraisonScan       = signal<File | null>(null);
+  livraisonClasseurs  = signal<any[]>([]);
+  livraisonSelected   = signal<string[]>([]);
+  livraisonSaving     = signal(false);
+
+  ngOnInit() {
+    this.load();
+    this.api.getClasseurs().subscribe(data => this.livraisonClasseurs.set(data));
+  }
 
   load() {
     this.loading.set(true);
@@ -162,6 +183,53 @@ export class BureauComponent implements OnInit {
         this.deletingId.set(null);
       },
     });
+  }
+
+  downloadSigned(doc: BureauDoc) {
+    if (!doc.pdfDocumentId) return;
+    this.api.downloadFinalPdfBlob(doc.pdfDocumentId, doc.titre + '.pdf');
+  }
+
+  // ── Modale livraison ──────────────────────────────────────────────────────
+
+  openLivraison(doc: BureauDoc) {
+    this.livraisonDocId.set(doc.id);
+    this.livraisonDocTitre.set(doc.titre);
+    this.livraisonScan.set(null);
+    this.livraisonSelected.set([]);
+    this.showLivraisonModal.set(true);
+  }
+
+  onLivraisonScan(event: Event) {
+    const f = (event.target as HTMLInputElement).files?.[0] ?? null;
+    this.livraisonScan.set(f);
+  }
+
+  toggleLivraisonClasseur(id: string) {
+    const cur = this.livraisonSelected();
+    this.livraisonSelected.set(
+      cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id]
+    );
+  }
+
+  confirmerLivraison() {
+    const scan = this.livraisonScan();
+    if (!scan || this.livraisonSelected().length === 0) return;
+    this.livraisonSaving.set(true);
+    this.api.livrerBureauDoc(this.livraisonDocId(), scan, this.livraisonSelected())
+      .subscribe({
+        next: () => {
+          this.livraisonSaving.set(false);
+          this.showLivraisonModal.set(false);
+          this.docs.update(list =>
+            list.map(d => d.id === this.livraisonDocId()
+              ? { ...d, statut: 'LIVRE' as const }
+              : d
+            )
+          );
+        },
+        error: () => this.livraisonSaving.set(false),
+      });
   }
 
   typeLabel(v: string): string {

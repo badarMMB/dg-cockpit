@@ -238,6 +238,30 @@ public class DataInitializer {
         };
     }
 
+    @Bean
+    CommandLineRunner seedClasseurs(ClasseurRepository classeurRepo) {
+        return args -> {
+            if (!classeurRepo.existsByType(Classeur.Type.COURRIER_ARRIVE)) {
+                Classeur ca = new Classeur();
+                ca.setNom("Courrier Arrivé");
+                ca.setType(Classeur.Type.COURRIER_ARRIVE);
+                ca.setDescription("Classeur système — Courriers reçus");
+                ca.setCouleur("#10B981");
+                ca.setSysteme(true);
+                classeurRepo.save(ca);
+            }
+            if (!classeurRepo.existsByType(Classeur.Type.COURRIER_DEPART)) {
+                Classeur cd = new Classeur();
+                cd.setNom("Courrier Départ");
+                cd.setType(Classeur.Type.COURRIER_DEPART);
+                cd.setDescription("Classeur système — Courriers envoyés et livrés");
+                cd.setCouleur("#3B82F6");
+                cd.setSysteme(true);
+                classeurRepo.save(cd);
+            }
+        };
+    }
+
     private Collaborateur collab(String name, String email, String role) {
         Collaborateur c = new Collaborateur();
         c.setName(name); c.setEmail(email); c.setRole(role);

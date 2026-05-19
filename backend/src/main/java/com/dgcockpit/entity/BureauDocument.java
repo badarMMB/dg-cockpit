@@ -62,10 +62,13 @@ public class BureauDocument {
     @Column(columnDefinition = "TEXT")
     private String highlightsJson;
 
+    // Clé MinIO du scan de preuve de livraison
+    private String scanLivraisonKey;
+
     private LocalDateTime createdAt = LocalDateTime.now();
     private LocalDateTime updatedAt = LocalDateTime.now();
 
-    public enum Statut { BROUILLON, SOUMIS, RETOURNE, SIGNE }
+    public enum Statut { BROUILLON, SOUMIS, RETOURNE, SIGNE, LIVRE }
 
     public String getId() { return id; }
     public String getSecretaireId() { return secretaireId; }
@@ -120,6 +123,8 @@ public class BureauDocument {
     public void setStampZonesJson(String stampZonesJson) { this.stampZonesJson = stampZonesJson; }
     public String getPdfDocumentId() { return pdfDocumentId; }
     public void setPdfDocumentId(String pdfDocumentId) { this.pdfDocumentId = pdfDocumentId; }
+    public String getScanLivraisonKey() { return scanLivraisonKey; }
+    public void setScanLivraisonKey(String scanLivraisonKey) { this.scanLivraisonKey = scanLivraisonKey; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }

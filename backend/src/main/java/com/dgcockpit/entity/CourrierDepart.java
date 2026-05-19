@@ -27,7 +27,10 @@ public class CourrierDepart {
     @Enumerated(EnumType.STRING)
     private Statut statut = Statut.BROUILLON;
 
-    public enum Statut { BROUILLON, SIGNE, EXPEDIE }
+    // Clé MinIO du scan de preuve de livraison
+    private String scanLivraisonKey;
+
+    public enum Statut { BROUILLON, SIGNE, EXPEDIE, LIVRE }
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -47,4 +50,6 @@ public class CourrierDepart {
     public void setDateEnvoi(LocalDate dateEnvoi) { this.dateEnvoi = dateEnvoi; }
     public Statut getStatut() { return statut; }
     public void setStatut(Statut statut) { this.statut = statut; }
+    public String getScanLivraisonKey() { return scanLivraisonKey; }
+    public void setScanLivraisonKey(String scanLivraisonKey) { this.scanLivraisonKey = scanLivraisonKey; }
 }

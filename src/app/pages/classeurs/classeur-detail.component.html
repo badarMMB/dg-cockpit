@@ -1,0 +1,155 @@
+<div class="h-full flex flex-col bg-gray-50">
+
+  <!-- Header avec couleur du classeur -->
+  <header class="bg-white border-b border-gray-200 shadow-sm">
+
+    <!-- Bande colorée en haut -->
+    <div *ngIf="classeur()" class="h-1.5 w-full" [style.background-color]="classeur()['couleur']"></div>
+
+    <div class="px-5 md:px-8 py-4 flex items-center gap-4">
+      <!-- Bouton retour -->
+      <button (click)="back()"
+              class="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/>
+        </svg>
+      </button>
+
+      <!-- Identité classeur -->
+      <div *ngIf="classeur()" class="flex items-center gap-3 min-w-0">
+        <div class="w-11 h-11 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
+             [style.background-color]="classeur()['couleur'] + '20'">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+               [style.stroke]="classeur()['couleur']">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <h1 class="text-lg font-bold text-gray-900 truncate">{{ classeur()['nom'] }}</h1>
+          <div class="flex items-center gap-2 mt-0.5">
+            <span class="text-xs text-gray-400">{{ classeur()['type'] | lowercase }}</span>
+            <span class="text-gray-300">·</span>
+            <span class="text-xs font-semibold" [style.color]="classeur()['couleur']">
+              {{ classeur()['documentCount'] }} document{{ classeur()['documentCount'] !== 1 ? 's' : '' }}
+            </span>
+            <span *ngIf="classeur()['systeme']"
+                  class="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">
+              Système
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Skeleton header -->
+      <div *ngIf="!classeur()" class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-xl bg-gray-200 animate-pulse"></div>
+        <div>
+          <div class="h-4 w-40 bg-gray-200 rounded animate-pulse"></div>
+          <div class="h-3 w-24 bg-gray-100 rounded animate-pulse mt-1.5"></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Corps -->
+  <main class="flex-1 overflow-y-auto">
+
+    <!-- Spinner -->
+    <div *ngIf="loading()" class="flex justify-center items-center h-48">
+      <div class="w-8 h-8 border-4 border-gray-200 border-t-gray-500 rounded-full animate-spin"></div>
+    </div>
+
+    <!-- Etat vide -->
+    <div *ngIf="!loading() && documents().length === 0"
+         class="flex flex-col items-center justify-center py-20 px-6 text-center">
+      <div class="w-20 h-20 rounded-2xl bg-white border-2 border-dashed border-gray-200 flex items-center justify-center text-4xl mb-5 shadow-sm">
+        📂
+      </div>
+      <p class="text-gray-700 font-semibold text-sm">Ce classeur est vide</p>
+      <p class="text-gray-400 text-xs mt-1.5 max-w-xs">
+        Les documents livrés et classés dans ce classeur apparaîtront ici automatiquement.
+      </p>
+    </div>
+
+    <!-- Liste documents -->
+    <div *ngIf="!loading() && documents().length > 0" class="p-5 md:p-8 space-y-3">
+
+      <div *ngFor="let doc of documents()"
+           class="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+
+        <!-- Bandeau latéral coloré selon type -->
+        <div class="flex">
+          <div class="w-1 flex-shrink-0 rounded-l-2xl"
+               [ngClass]="doc['documentType'] === 'COURRIER_ARRIVE' ? 'bg-violet-400'
+                         : doc['documentType'] === 'COURRIER_DEPART' ? 'bg-blue-400'
+                         : 'bg-emerald-400'">
+          </div>
+
+          <div class="flex-1 p-4 md:p-5 flex items-start gap-4 min-w-0">
+
+            <!-- Icône type -->
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                 [ngClass]="doc['documentType'] === 'COURRIER_ARRIVE' ? 'bg-violet-50'
+                           : doc['documentType'] === 'COURRIER_DEPART' ? 'bg-blue-50'
+                           : 'bg-emerald-50'">
+              {{ doc['documentType'] === 'COURRIER_ARRIVE' ? '📥'
+               : doc['documentType'] === 'COURRIER_DEPART' ? '📤'
+               : '📄' }}
+            </div>
+
+            <!-- Infos document -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <h3 class="font-bold text-gray-900 text-sm truncate leading-snug">{{ doc['titre'] }}</h3>
+                  <p *ngIf="doc['destinataire']" class="text-xs text-gray-500 mt-0.5">
+                    Destinataire : <span class="font-semibold text-gray-700">{{ doc['destinataire'] }}</span>
+                  </p>
+                  <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
+                    <span *ngIf="doc['reference']"
+                          class="inline-flex items-center gap-1 text-xs text-gray-500">
+                      <span class="text-gray-300">#</span>{{ doc['reference'] }}
+                    </span>
+                    <span *ngIf="doc['dateDocument']" class="text-xs text-gray-400">
+                      {{ doc['dateDocument'] }}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Badge type + date classement -->
+                <div class="flex flex-col items-end gap-1.5 flex-shrink-0">
+                  <span class="px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase"
+                        [ngClass]="doc['documentType'] === 'COURRIER_ARRIVE'
+                          ? 'bg-violet-100 text-violet-700'
+                          : doc['documentType'] === 'COURRIER_DEPART'
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-emerald-100 text-emerald-700'">
+                    {{ typeLabel[doc['documentType']] || doc['documentType'] }}
+                  </span>
+                  <span class="text-[10px] text-gray-400 whitespace-nowrap">
+                    {{ doc['classeAt'] | slice:0:10 }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Scan preuve de livraison -->
+              <div *ngIf="doc['scanKey']"
+                   class="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 cursor-pointer hover:bg-emerald-100 transition-colors"
+                   (click)="openScan(doc['scanKey'])">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                </svg>
+                <span class="text-xs font-medium text-emerald-700">Preuve de livraison</span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                </svg>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>

@@ -11,10 +11,11 @@ const ALL_MENU_ITEMS = [
   { label: 'Tableau de bord',       icon: '📊', route: '/dashboard',    roles: ['DG', 'SECRETAIRE', 'SUBORDONNE', 'ADMIN_IT'], unread: 0, alert: false },
   { label: 'Flux des Instructions', icon: '💬', route: '/chat',         roles: ['DG', 'SECRETAIRE', 'SUBORDONNE'],             unread: 0, alert: false },
   { label: 'Bureau',                icon: '🗂️', route: '/bureau',       roles: ['SECRETAIRE'],                                 unread: 0, alert: false },
-  { label: 'Parapheur',             icon: '✍️', route: '/signature',    roles: ['DG', 'SECRETAIRE'],                           unread: 0, alert: false },
+  { label: 'Parapheur',             icon: '✍️', route: '/signature',    roles: ['DG'],                                         unread: 0, alert: false },
   { label: 'Courrier Arrivé',       icon: '📥', route: '/inbox',        roles: ['DG', 'SECRETAIRE'],                           unread: 0, alert: false },
   { label: 'Courrier Départ',       icon: '📤', route: '/outbox',       roles: ['DG', 'SECRETAIRE'],                           unread: 0, alert: false },
   { label: 'Agenda & Visiteurs',    icon: '📅', route: '/appointments', roles: ['DG', 'SECRETAIRE'],                           unread: 0, alert: false },
+  { label: 'Classeurs',              icon: '🗂️', route: '/classeurs',    roles: ['DG', 'SECRETAIRE'],                           unread: 0, alert: false },
   { label: 'Mes Signatures',         icon: '🖊️', route: '/signature-assets', roles: ['DG', 'SECRETAIRE', 'SUBORDONNE', 'ADMIN_IT'], unread: 0, alert: false },
   { label: 'Paramètres',            icon: '⚙️', route: '/parametres',   roles: ['DG', 'ADMIN_IT'],                             unread: 0, alert: false },
 ];

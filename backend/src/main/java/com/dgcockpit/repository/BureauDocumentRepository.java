@@ -6,4 +6,5 @@ import java.util.List;
 
 public interface BureauDocumentRepository extends JpaRepository<BureauDocument, String> {
     List<BureauDocument> findBySecretaireIdOrderByCreatedAtDesc(String secretaireId);
+    java.util.Optional<BureauDocument> findByPdfDocumentId(String pdfDocumentId);
 }

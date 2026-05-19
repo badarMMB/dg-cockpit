@@ -27,6 +27,9 @@ public class InstructionMessage {
     private String attachmentName;
     private String audioUrl;
 
+    @Column(columnDefinition = "TEXT")
+    private String highlightsJson;
+
     @Enumerated(EnumType.STRING)
     private ActionType actionType;
 
@@ -56,6 +59,8 @@ public class InstructionMessage {
     public void setAttachmentName(String attachmentName) { this.attachmentName = attachmentName; }
     public String getAudioUrl() { return audioUrl; }
     public void setAudioUrl(String audioUrl) { this.audioUrl = audioUrl; }
+    public String getHighlightsJson() { return highlightsJson; }
+    public void setHighlightsJson(String highlightsJson) { this.highlightsJson = highlightsJson; }
     public ActionType getActionType() { return actionType; }
     public void setActionType(ActionType actionType) { this.actionType = actionType; }
     public StatutMessage getStatut() { return statut; }

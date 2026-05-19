@@ -12,11 +12,12 @@ interface BureauDoc {
   destinataire: string | null;
   originalFileName: string;
   pageCount: number;
-  statut: 'BROUILLON' | 'SOUMIS';
+  statut: 'BROUILLON' | 'SOUMIS' | 'RETOURNE' | 'SIGNE';
   pdfDocumentId: string | null;
   createdAt: string;
   hasSignatureZone: boolean;
   hasStampZone: boolean;
+  renvoyeMotif: string | null;
 }
 
 @Component({
@@ -61,10 +62,14 @@ export class BureauComponent implements OnInit {
   readonly statutCls: Record<string, string> = {
     BROUILLON: 'bg-amber-100 text-amber-700',
     SOUMIS:    'bg-blue-100 text-blue-700',
+    RETOURNE:  'bg-orange-100 text-orange-700',
+    SIGNE:     'bg-green-100 text-green-700',
   };
   readonly statutLabel: Record<string, string> = {
     BROUILLON: 'Brouillon',
     SOUMIS:    'Soumis au parapheur',
+    RETOURNE:  'Renvoyé par le DG',
+    SIGNE:     'Signé par le DG',
   };
 
   ngOnInit() { this.load(); }
@@ -135,7 +140,7 @@ export class BureauComponent implements OnInit {
     this.api.soumettreAuParapheur(id).subscribe({
       next: () => {
         this.docs.update(list => list.map(d =>
-          d.id === id ? { ...d, statut: 'SOUMIS' as const } : d
+          d.id === id ? { ...d, statut: 'SOUMIS' as const, renvoyeMotif: null } : d
         ));
         this.submitting.set(false);
         this.soumettreId.set(null);

@@ -207,6 +207,7 @@ public class InstructionController {
         map.put("actionType", m.getActionType() != null ? m.getActionType().name().toLowerCase() : null);
         map.put("status", m.getStatut() != null ? m.getStatut().name().toLowerCase() : null);
         map.put("audioUrl", m.getAudioUrl());
+        map.put("highlightsJson", m.getHighlightsJson());
         return map;
     }
 

@@ -26,27 +26,46 @@ public class BureauDocument {
     @Enumerated(EnumType.STRING)
     private Statut statut = Statut.BROUILLON;
 
-    // Zone signature (coordonnées en % de la page)
+    // Zone signature (coordonnées en % de la page) — legacy, conservé pour compat
     private Integer signatureZonePage;
     private Double signatureZoneX;
     private Double signatureZoneY;
     private Double signatureZoneW;
     private Double signatureZoneH;
+    @Column(columnDefinition = "boolean DEFAULT false")
+    private boolean signatureZoneAllPages = false;
 
-    // Zone tampon (coordonnées en % de la page)
+    // Zone tampon — legacy
     private Integer stampZonePage;
     private Double stampZoneX;
     private Double stampZoneY;
     private Double stampZoneW;
     private Double stampZoneH;
+    @Column(columnDefinition = "boolean DEFAULT false")
+    private boolean stampZoneAllPages = false;
+
+    // Zones multi-pages (JSON) — [{page,x,y,w,h}, ...]
+    @Column(columnDefinition = "TEXT")
+    private String signatureZonesJson;
+
+    @Column(columnDefinition = "TEXT")
+    private String stampZonesJson;
 
     // Rempli après soumission au parapheur
     private String pdfDocumentId;
 
+    // Motif de renvoi par le DG
+    @Column(columnDefinition = "TEXT")
+    private String renvoyeMotif;
+
+    // Surlignages posés par le DG avant le renvoi — JSON [{page,x,y,w,h}, ...]
+    @Column(columnDefinition = "TEXT")
+    private String highlightsJson;
+
     private LocalDateTime createdAt = LocalDateTime.now();
     private LocalDateTime updatedAt = LocalDateTime.now();
 
-    public enum Statut { BROUILLON, SOUMIS }
+    public enum Statut { BROUILLON, SOUMIS, RETOURNE, SIGNE }
 
     public String getId() { return id; }
     public String getSecretaireId() { return secretaireId; }
@@ -77,6 +96,8 @@ public class BureauDocument {
     public void setSignatureZoneW(Double signatureZoneW) { this.signatureZoneW = signatureZoneW; }
     public Double getSignatureZoneH() { return signatureZoneH; }
     public void setSignatureZoneH(Double signatureZoneH) { this.signatureZoneH = signatureZoneH; }
+    public boolean isSignatureZoneAllPages() { return signatureZoneAllPages; }
+    public void setSignatureZoneAllPages(boolean v) { this.signatureZoneAllPages = v; }
     public Integer getStampZonePage() { return stampZonePage; }
     public void setStampZonePage(Integer stampZonePage) { this.stampZonePage = stampZonePage; }
     public Double getStampZoneX() { return stampZoneX; }
@@ -87,6 +108,16 @@ public class BureauDocument {
     public void setStampZoneW(Double stampZoneW) { this.stampZoneW = stampZoneW; }
     public Double getStampZoneH() { return stampZoneH; }
     public void setStampZoneH(Double stampZoneH) { this.stampZoneH = stampZoneH; }
+    public boolean isStampZoneAllPages() { return stampZoneAllPages; }
+    public void setStampZoneAllPages(boolean v) { this.stampZoneAllPages = v; }
+    public String getRenvoyeMotif() { return renvoyeMotif; }
+    public void setRenvoyeMotif(String renvoyeMotif) { this.renvoyeMotif = renvoyeMotif; }
+    public String getHighlightsJson() { return highlightsJson; }
+    public void setHighlightsJson(String highlightsJson) { this.highlightsJson = highlightsJson; }
+    public String getSignatureZonesJson() { return signatureZonesJson; }
+    public void setSignatureZonesJson(String signatureZonesJson) { this.signatureZonesJson = signatureZonesJson; }
+    public String getStampZonesJson() { return stampZonesJson; }
+    public void setStampZonesJson(String stampZonesJson) { this.stampZonesJson = stampZonesJson; }
     public String getPdfDocumentId() { return pdfDocumentId; }
     public void setPdfDocumentId(String pdfDocumentId) { this.pdfDocumentId = pdfDocumentId; }
     public LocalDateTime getCreatedAt() { return createdAt; }

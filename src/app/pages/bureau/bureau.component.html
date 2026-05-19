@@ -26,32 +26,35 @@
       </button>
     </div>
   } @else {
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <table class="w-full text-sm">
+    <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+      <table class="w-full text-sm min-w-[430px]">
         <thead>
           <tr class="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-            <th class="px-4 py-3">Document</th>
-            <th class="px-4 py-3">Type</th>
-            <th class="px-4 py-3">Destinataire</th>
-            <th class="px-4 py-3">Zones</th>
-            <th class="px-4 py-3">Statut</th>
-            <th class="px-4 py-3">Date</th>
-            <th class="px-4 py-3 text-right">Actions</th>
+            <th class="px-4 py-3 w-[100px]">Document</th>
+            <th class="px-4 py-3 w-[64px]">Type</th>
+            <th class="px-4 py-3 w-[56px]">Zones</th>
+            <th class="px-4 py-3 w-[72px]">Statut</th>
+            <th class="px-4 py-3 w-[48px]">Date</th>
+            <th class="px-4 py-3 w-[72px] text-right">Actions</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
           @for (doc of docs(); track doc.id) {
             <tr [class]="doc.statut === 'SOUMIS' ? 'opacity-60' : ''">
               <td class="px-4 py-3">
-                <p class="font-medium text-gray-800 truncate max-w-xs">{{ doc.titre }}</p>
-                <p class="text-xs text-gray-400">{{ doc.originalFileName }} · {{ doc.pageCount }} p.</p>
+                <p class="font-medium text-gray-800 truncate max-w-[80px]" [title]="doc.titre">{{ doc.titre }}</p>
+                <p class="text-xs text-gray-400 truncate max-w-[80px]" [title]="doc.originalFileName">{{ doc.originalFileName }} · {{ doc.pageCount }} p.</p>
+                @if (doc.statut === 'RETOURNE' && doc.renvoyeMotif) {
+                  <p class="text-xs text-orange-600 mt-1 max-w-[80px] truncate italic" [title]="doc.renvoyeMotif">
+                    ↩ "{{ doc.renvoyeMotif }}"
+                  </p>
+                }
               </td>
               <td class="px-4 py-3">
                 <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
                   {{ typeLabel(doc.type) }}
                 </span>
               </td>
-              <td class="px-4 py-3 text-gray-500 text-xs">{{ doc.destinataire || '—' }}</td>
               <td class="px-4 py-3">
                 <div class="flex items-center gap-1.5">
                   <span [class]="doc.hasSignatureZone
@@ -72,25 +75,30 @@
                 </span>
               </td>
               <td class="px-4 py-3 text-gray-400 text-xs">{{ formatDate(doc.createdAt) }}</td>
-              <td class="px-4 py-3 text-right">
-                @if (doc.statut === 'BROUILLON') {
-                  <div class="flex justify-end items-center gap-3">
+              <td class="px-4 py-3 w-[72px] text-right">
+                @if (doc.statut === 'BROUILLON' || doc.statut === 'RETOURNE') {
+                  <div class="flex flex-col items-end gap-1.5">
                     <button (click)="openPlacement(doc)"
-                            class="text-xs text-indigo-600 hover:underline font-medium">
+                            class="text-xs text-indigo-600 hover:underline font-medium whitespace-nowrap">
                       {{ doc.hasSignatureZone ? 'Modifier zones' : 'Placer zones' }}
                     </button>
                     <button (click)="confirmSoumettre(doc)"
                             [disabled]="!doc.hasSignatureZone"
-                            class="text-xs text-blue-600 hover:underline font-medium disabled:text-gray-300 disabled:cursor-not-allowed">
-                      Soumettre
+                            [title]="!doc.hasSignatureZone ? 'Placez d\'abord une zone de signature' : ''"
+                            [ngClass]="doc.hasSignatureZone
+                              ? 'text-xs font-medium whitespace-nowrap text-blue-600 hover:underline'
+                              : 'text-xs font-medium whitespace-nowrap text-gray-400 opacity-50 cursor-not-allowed'">
+                      {{ doc.statut === 'RETOURNE' ? 'Re-soumettre' : 'Soumettre au DG' }}
                     </button>
                     <button (click)="confirmDelete(doc.id)"
-                            class="text-xs text-red-400 hover:underline">
+                            class="text-xs text-red-400 hover:underline whitespace-nowrap">
                       Supprimer
                     </button>
                   </div>
+                } @else if (doc.statut === 'SIGNE') {
+                  <span class="text-xs text-green-600 font-medium whitespace-nowrap">✓ Signé</span>
                 } @else {
-                  <span class="text-xs text-gray-400">Envoyé au DG</span>
+                  <span class="text-xs text-gray-400 whitespace-nowrap">Envoyé au DG</span>
                 }
               </td>
             </tr>

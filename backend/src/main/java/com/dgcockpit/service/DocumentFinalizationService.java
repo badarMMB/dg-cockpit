@@ -15,6 +15,8 @@ import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import javax.imageio.ImageIO;
@@ -27,6 +29,8 @@ import java.util.UUID;
 
 @Service
 public class DocumentFinalizationService {
+
+    private static final Logger log = LoggerFactory.getLogger(DocumentFinalizationService.class);
 
     private final PdfDocumentRepository docRepo;
     private final PageAnnotationRepository annotRepo;
@@ -50,7 +54,13 @@ public class DocumentFinalizationService {
         PdfDocument doc = docRepo.findById(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
 
-        byte[] pdfBytes = minio.downloadBytes(doc.getBucket(), doc.getObjectKey());
+        // Si le document est finalisé, on rend depuis le PDF final (avec signature intégrée)
+        String bucket    = "FINALIZED".equals(doc.getStatus()) && doc.getFinalizedObjectKey() != null
+                           ? "ged-final-documents" : doc.getBucket();
+        String objectKey = "FINALIZED".equals(doc.getStatus()) && doc.getFinalizedObjectKey() != null
+                           ? doc.getFinalizedObjectKey() : doc.getObjectKey();
+
+        byte[] pdfBytes = minio.downloadBytes(bucket, objectKey);
         try (PDDocument pdf = Loader.loadPDF(pdfBytes)) {
             PDFRenderer renderer = new PDFRenderer(pdf);
             BufferedImage img = renderer.renderImageWithDPI(pageIndex, 150, ImageType.RGB);
@@ -79,9 +89,11 @@ public class DocumentFinalizationService {
                 if (annotations.isEmpty()) continue;
 
                 PDPage page = pdf.getPage(p);
-                PDRectangle mediaBox = page.getMediaBox();
-                float pageWidth = mediaBox.getWidth();
-                float pageHeight = mediaBox.getHeight();
+                // Use CropBox — matches what PDFRenderer renders (accounts for trimming)
+                PDRectangle cropBox = page.getCropBox();
+                if (cropBox == null) cropBox = page.getMediaBox();
+                float pageWidth  = cropBox.getWidth();
+                float pageHeight = cropBox.getHeight();
 
                 try (PDPageContentStream cs = new PDPageContentStream(
                         pdf, page, PDPageContentStream.AppendMode.APPEND, true, true)) {
@@ -98,11 +110,23 @@ public class DocumentFinalizationService {
 
                         PDImageXObject pdImg = LosslessFactory.createFromImage(pdf, buffered);
 
-                        float annW = (float) (ann.getWidthPercent() / 100.0 * pageWidth);
-                        float annH = (float) (ann.getHeightPercent() / 100.0 * pageHeight);
-                        // PDFBox origin: bottom-left; browser origin: top-left
-                        float annX = (float) (ann.getXPercent() / 100.0 * pageWidth);
-                        float annY = pageHeight - (float) (ann.getYPercent() / 100.0 * pageHeight) - annH;
+                        // Clamp coordinates to [0,100] to guard against drift from drag/draw
+                        float xPct = (float) Math.max(0, Math.min(100, ann.getXPercent()));
+                        float yPct = (float) Math.max(0, Math.min(100, ann.getYPercent()));
+                        float wPct = (float) Math.max(1, Math.min(100 - xPct, ann.getWidthPercent()));
+                        float hPct = (float) Math.max(1, Math.min(100 - yPct, ann.getHeightPercent()));
+
+                        float annW = wPct / 100.0f * pageWidth;
+                        float annH = hPct / 100.0f * pageHeight;
+                        float annX = xPct / 100.0f * pageWidth;
+                        // Browser Y=0 is page top; PDFBox Y=0 is page bottom → flip
+                        float annY = pageHeight - (yPct / 100.0f * pageHeight) - annH;
+
+                        log.info("Place annotation doc={} p={} type={} stored=[x={} y={} w={} h={}] clamped=[x={} y={} w={} h={}] pdf=[annX={} annY={} annW={} annH={}] pageW={} pageH={}",
+                            documentId, p, ann.getAnnotationType(),
+                            ann.getXPercent(), ann.getYPercent(), ann.getWidthPercent(), ann.getHeightPercent(),
+                            xPct, yPct, wPct, hPct,
+                            annX, annY, annW, annH, pageWidth, pageHeight);
 
                         cs.drawImage(pdImg, annX, annY, annW, annH);
                     }

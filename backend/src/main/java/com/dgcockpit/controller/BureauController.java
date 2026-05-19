@@ -9,6 +9,8 @@ import com.dgcockpit.repository.PageAnnotationRepository;
 import com.dgcockpit.repository.PdfDocumentRepository;
 import com.dgcockpit.service.DocumentFinalizationService;
 import com.dgcockpit.service.MinioService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,17 +37,20 @@ public class BureauController {
     private final PageAnnotationRepository annotRepo;
     private final MinioService minio;
     private final DocumentFinalizationService finalizer;
+    private final ObjectMapper objectMapper;
 
     public BureauController(BureauDocumentRepository bureauRepo,
                             PdfDocumentRepository pdfRepo,
                             PageAnnotationRepository annotRepo,
                             MinioService minio,
-                            DocumentFinalizationService finalizer) {
+                            DocumentFinalizationService finalizer,
+                            ObjectMapper objectMapper) {
         this.bureauRepo = bureauRepo;
         this.pdfRepo = pdfRepo;
         this.annotRepo = annotRepo;
         this.minio = minio;
         this.finalizer = finalizer;
+        this.objectMapper = objectMapper;
     }
 
     // ── POST /api/bureau/documents ── upload PDF (navigateur OU imprimante virtuelle)
@@ -100,6 +106,36 @@ public class BureauController {
                 .body(png);
     }
 
+    // ── PUT /api/bureau/documents/:id/pdf ── remplace le PDF source sans toucher aux métadonnées
+    @PutMapping("/documents/{id}/pdf")
+    public ResponseEntity<Map<String, Object>> replacePdf(
+            @PathVariable String id,
+            @RequestParam MultipartFile file,
+            HttpServletRequest request) throws Exception {
+
+        BureauDocument doc = bureauRepo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("BureauDocument introuvable: " + id));
+
+        if (doc.getStatut() == BureauDocument.Statut.SOUMIS) {
+            return ResponseEntity.status(403).build();
+        }
+
+        // Supprimer l'ancien fichier
+        try { minio.delete(doc.getBucket(), doc.getObjectKey()); } catch (Exception ignored) {}
+
+        // Upload du nouveau fichier
+        String newKey = UUID.randomUUID() + "_" + file.getOriginalFilename();
+        minio.uploadBytes(BUCKET, newKey, file.getBytes(), "application/pdf");
+        int newPageCount = finalizer.getPageCount(BUCKET, newKey);
+
+        doc.setObjectKey(newKey);
+        doc.setOriginalFileName(file.getOriginalFilename());
+        doc.setPageCount(newPageCount);
+        doc.setUpdatedAt(LocalDateTime.now());
+
+        return ResponseEntity.ok(toDto(bureauRepo.save(doc)));
+    }
+
     // ── DELETE /api/bureau/documents/:id
     @DeleteMapping("/documents/{id}")
     public ResponseEntity<Void> delete(@PathVariable String id, HttpServletRequest request) {
@@ -113,7 +149,8 @@ public class BureauController {
         return ResponseEntity.noContent().build();
     }
 
-    // ── POST /api/bureau/documents/:id/zones ── sauvegarder positions signature + tampon
+    // ── POST /api/bureau/documents/:id/zones ── sauvegarder positions signature + tampon (par page)
+    // Body: { signatureZones: [{page,x,y,w,h}, ...], stampZones: [{page,x,y,w,h}, ...] }
     @PostMapping("/documents/{id}/zones")
     public ResponseEntity<Map<String, Object>> saveZones(
             @PathVariable String id,
@@ -122,24 +159,18 @@ public class BureauController {
         BureauDocument doc = bureauRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("BureauDocument introuvable: " + id));
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> sig = (Map<String, Object>) body.get("signatureZone");
-        if (sig != null) {
-            doc.setSignatureZonePage(toInt(sig.get("page")));
-            doc.setSignatureZoneX(toDouble(sig.get("x")));
-            doc.setSignatureZoneY(toDouble(sig.get("y")));
-            doc.setSignatureZoneW(toDouble(sig.get("w")));
-            doc.setSignatureZoneH(toDouble(sig.get("h")));
-        }
+        try {
+            Object sigZones = body.get("signatureZones");
+            if (sigZones != null) {
+                doc.setSignatureZonesJson(objectMapper.writeValueAsString(sigZones));
+            }
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> stamp = (Map<String, Object>) body.get("stampZone");
-        if (stamp != null) {
-            doc.setStampZonePage(toInt(stamp.get("page")));
-            doc.setStampZoneX(toDouble(stamp.get("x")));
-            doc.setStampZoneY(toDouble(stamp.get("y")));
-            doc.setStampZoneW(toDouble(stamp.get("w")));
-            doc.setStampZoneH(toDouble(stamp.get("h")));
+            Object stZones = body.get("stampZones");
+            if (stZones != null) {
+                doc.setStampZonesJson(objectMapper.writeValueAsString(stZones));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
         }
 
         doc.setUpdatedAt(LocalDateTime.now());
@@ -158,19 +189,24 @@ public class BureauController {
         if (doc.getStatut() == BureauDocument.Statut.SOUMIS) {
             return ResponseEntity.badRequest().build();
         }
-        if (doc.getSignatureZonePage() == null) {
-            return ResponseEntity.badRequest().build(); // zone signature obligatoire
+        // Réinitialiser le motif de renvoi et les surlignages en cas de re-soumission
+        if (doc.getStatut() == BureauDocument.Statut.RETOURNE) {
+            doc.setRenvoyeMotif(null);
+            doc.setHighlightsJson(null);
+        }
+
+        List<Map<String, Object>> sigZones = parseZones(doc.getSignatureZonesJson());
+        if (sigZones.isEmpty()) {
+            return ResponseEntity.badRequest().build(); // au moins une zone signature obligatoire
         }
 
         AppUser currentUser = (AppUser) request.getAttribute("currentUser");
         String submittedBy = currentUser != null ? currentUser.getUsername() : "secretaire";
 
-        // Déterminer le type parapheur
         PdfDocument.ParapheurType parapheurType = "NOTE_SERVICE".equals(doc.getType())
                 ? PdfDocument.ParapheurType.NOTE_SERVICE
                 : PdfDocument.ParapheurType.COURRIER;
 
-        // Créer le PdfDocument
         PdfDocument pdf = new PdfDocument();
         pdf.setTitle(doc.getTitre());
         pdf.setOriginalFileName(doc.getOriginalFileName());
@@ -186,31 +222,32 @@ public class BureauController {
 
         PdfDocument savedPdf = pdfRepo.save(pdf);
 
-        // Créer annotation SIGNATURE_ZONE
-        PageAnnotation sigAnnot = new PageAnnotation();
-        sigAnnot.setPageId(savedPdf.getId() + "::" + doc.getSignatureZonePage());
-        sigAnnot.setAnnotationType("SIGNATURE_ZONE");
-        sigAnnot.setXPercent(doc.getSignatureZoneX());
-        sigAnnot.setYPercent(doc.getSignatureZoneY());
-        sigAnnot.setWidthPercent(doc.getSignatureZoneW());
-        sigAnnot.setHeightPercent(doc.getSignatureZoneH());
-        sigAnnot.setCreatedBy(submittedBy);
-        annotRepo.save(sigAnnot);
-
-        // Créer annotation STAMP_ZONE si présente
-        if (doc.getStampZonePage() != null) {
-            PageAnnotation stampAnnot = new PageAnnotation();
-            stampAnnot.setPageId(savedPdf.getId() + "::" + doc.getStampZonePage());
-            stampAnnot.setAnnotationType("STAMP_ZONE");
-            stampAnnot.setXPercent(doc.getStampZoneX());
-            stampAnnot.setYPercent(doc.getStampZoneY());
-            stampAnnot.setWidthPercent(doc.getStampZoneW());
-            stampAnnot.setHeightPercent(doc.getStampZoneH());
-            stampAnnot.setCreatedBy(submittedBy);
-            annotRepo.save(stampAnnot);
+        // Créer une annotation SIGNATURE_ZONE par entrée dans le JSON
+        for (Map<String, Object> z : sigZones) {
+            PageAnnotation a = new PageAnnotation();
+            a.setPageId(savedPdf.getId() + "::" + toInt(z.get("page")));
+            a.setAnnotationType("SIGNATURE_ZONE");
+            a.setXPercent(toDouble(z.get("x")));
+            a.setYPercent(toDouble(z.get("y")));
+            a.setWidthPercent(toDouble(z.get("w")));
+            a.setHeightPercent(toDouble(z.get("h")));
+            a.setCreatedBy(submittedBy);
+            annotRepo.save(a);
         }
 
-        // Marquer le BureauDocument comme soumis
+        // Créer une annotation STAMP_ZONE par entrée dans le JSON
+        for (Map<String, Object> z : parseZones(doc.getStampZonesJson())) {
+            PageAnnotation a = new PageAnnotation();
+            a.setPageId(savedPdf.getId() + "::" + toInt(z.get("page")));
+            a.setAnnotationType("STAMP_ZONE");
+            a.setXPercent(toDouble(z.get("x")));
+            a.setYPercent(toDouble(z.get("y")));
+            a.setWidthPercent(toDouble(z.get("w")));
+            a.setHeightPercent(toDouble(z.get("h")));
+            a.setCreatedBy(submittedBy);
+            annotRepo.save(a);
+        }
+
         doc.setStatut(BureauDocument.Statut.SOUMIS);
         doc.setPdfDocumentId(savedPdf.getId());
         doc.setUpdatedAt(LocalDateTime.now());
@@ -236,27 +273,26 @@ public class BureauController {
         m.put("statut", d.getStatut().name());
         m.put("pdfDocumentId", d.getPdfDocumentId());
         m.put("createdAt", d.getCreatedAt().toString());
-        m.put("hasSignatureZone", d.getSignatureZonePage() != null);
-        m.put("hasStampZone", d.getStampZonePage() != null);
-        if (d.getSignatureZonePage() != null) {
-            Map<String, Object> sig = new HashMap<>();
-            sig.put("page", d.getSignatureZonePage());
-            sig.put("x", d.getSignatureZoneX());
-            sig.put("y", d.getSignatureZoneY());
-            sig.put("w", d.getSignatureZoneW());
-            sig.put("h", d.getSignatureZoneH());
-            m.put("signatureZone", sig);
-        }
-        if (d.getStampZonePage() != null) {
-            Map<String, Object> stamp = new HashMap<>();
-            stamp.put("page", d.getStampZonePage());
-            stamp.put("x", d.getStampZoneX());
-            stamp.put("y", d.getStampZoneY());
-            stamp.put("w", d.getStampZoneW());
-            stamp.put("h", d.getStampZoneH());
-            m.put("stampZone", stamp);
-        }
+
+        List<Map<String, Object>> sigZones = parseZones(d.getSignatureZonesJson());
+        List<Map<String, Object>> stZones  = parseZones(d.getStampZonesJson());
+        m.put("signatureZones", sigZones);
+        m.put("stampZones", stZones);
+        m.put("hasSignatureZone", !sigZones.isEmpty());
+        m.put("hasStampZone", !stZones.isEmpty());
+        m.put("renvoyeMotif", d.getRenvoyeMotif());
+        m.put("highlights", parseZones(d.getHighlightsJson()));
         return m;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> parseZones(String json) {
+        if (json == null || json.isBlank()) return new ArrayList<>();
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<Map<String, Object>>>() {});
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
     }
 
     private double toDouble(Object v) {

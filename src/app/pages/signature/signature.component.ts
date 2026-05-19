@@ -124,6 +124,7 @@ export class SignatureComponent implements OnInit {
   statutLabel(s: string): string {
     const m: Record<string, string> = {
       SIGNE: 'Signé', REFUSE: 'Refusé', PUBLIE: 'Publié', ARCHIVE: 'Archivé',
+      RENVOYE: 'Renvoyé pour correction',
     };
     return m[s] ?? s;
   }
@@ -132,6 +133,7 @@ export class SignatureComponent implements OnInit {
     switch (s) {
       case 'SIGNE': case 'PUBLIE': return 'bg-green-100 text-green-800';
       case 'REFUSE':               return 'bg-red-100 text-red-800';
+      case 'RENVOYE':              return 'bg-amber-100 text-amber-800';
       default:                     return 'bg-gray-100 text-gray-700';
     }
   }

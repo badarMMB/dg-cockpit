@@ -140,8 +140,11 @@
               Soumis par <span class="font-medium text-gray-700">{{ doc.submittedBy }}</span>
               <ng-container *ngIf="doc.signedAt"> · Traité le {{ formatDate(doc.signedAt) }}</ng-container>
             </p>
-            <p *ngIf="doc.rejectionComment" class="text-xs text-red-600 mt-1 italic">
+            <p *ngIf="doc.rejectionComment && doc.parapheurStatut === 'REFUSE'" class="text-xs text-red-600 mt-1 italic">
               Motif : {{ doc.rejectionComment }}
+            </p>
+            <p *ngIf="doc.rejectionComment && doc.parapheurStatut === 'RENVOYE'" class="text-xs text-amber-700 mt-1 italic">
+              ↩ Correction : {{ doc.rejectionComment }}
             </p>
           </div>
 

@@ -167,11 +167,26 @@ export class ApiService {
   renderPage(docId: string, page: number): string {
     return `${this.base}/pdf-documents/${docId}/pages/${page}/image`;
   }
+  renderPageBlob(docId: string, page: number): Observable<string> {
+    return this.http.get(`${this.base}/pdf-documents/${docId}/pages/${page}/image`, { responseType: 'blob' })
+      .pipe(map(blob => URL.createObjectURL(blob)));
+  }
   finalizePdfDocument(docId: string): Observable<any> {
     return this.http.post(`${this.base}/pdf-documents/${docId}/finalize`, {});
   }
   downloadFinalPdf(docId: string): string {
     return `${this.base}/pdf-documents/${docId}/final`;
+  }
+  downloadFinalPdfBlob(docId: string, filename = 'document-final.pdf'): void {
+    this.http.get(`${this.base}/pdf-documents/${docId}/final`, { responseType: 'blob' })
+      .subscribe(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
   }
   deletePdfDocument(docId: string): Observable<void> {
     return this.http.delete<void>(`${this.base}/pdf-documents/${docId}`);
@@ -253,6 +268,11 @@ export class ApiService {
   saveBureauZones(docId: string, zones: any): Observable<any> {
     return this.http.post(`${this.base}/bureau/documents/${docId}/zones`, zones);
   }
+  replaceBureauPdf(docId: string, file: File): Observable<any> {
+    const form = new FormData();
+    form.append('file', file);
+    return this.http.put(`${this.base}/bureau/documents/${docId}/pdf`, form);
+  }
   soumettreAuParapheur(docId: string): Observable<any> {
     return this.http.post(`${this.base}/bureau/documents/${docId}/soumettre`, {});
   }
@@ -283,6 +303,16 @@ export class ApiService {
   }
   rejeterDocument(docId: string, comment: string): Observable<any> {
     return this.http.post(`${this.base}/parapheur/${docId}/rejeter`, { comment });
+  }
+  renvoyerDocument(docId: string, comment: string): Observable<any> {
+    return this.http.post(`${this.base}/parapheur/${docId}/renvoyer`, { comment });
+  }
+  envoyerCorrection(docId: string, comment: string, audio?: File, highlights?: string): Observable<any> {
+    const form = new FormData();
+    form.append('comment', comment);
+    if (audio) form.append('audio', audio);
+    if (highlights) form.append('highlights', highlights);
+    return this.http.post(`${this.base}/parapheur/${docId}/correction`, form);
   }
 
   // Collaborateurs

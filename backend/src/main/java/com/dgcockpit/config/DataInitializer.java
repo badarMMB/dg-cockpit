@@ -16,10 +16,16 @@ public class DataInitializer {
             com.dgcockpit.service.AuthService authService) {
 
         return args -> {
-            if (userRepo.count() > 0) return;
+            if (userRepo.count() > 0) {
+                userRepo.findByUsername("secretaire").ifPresent(u -> {
+                    u.setPasswordHash(authService.hashPassword("123456"));
+                    userRepo.save(u);
+                });
+                return;
+            }
 
             userRepo.save(user("dg",           "Directeur Général",           authService.hashPassword("dg1234"),          AppUser.Role.DG));
-            userRepo.save(user("secretaire",   "Secrétaire de Direction",     authService.hashPassword("sec1234"),         AppUser.Role.SECRETAIRE));
+            userRepo.save(user("secretaire",   "Secrétaire de Direction",     authService.hashPassword("123456"),         AppUser.Role.SECRETAIRE));
             userRepo.save(user("agent.douane", "Mohamed Ali (Chef de Service)", authService.hashPassword("agent1234"),     AppUser.Role.SUBORDONNE));
             userRepo.save(user("admin",        "Administrateur IT",           authService.hashPassword("admin1234"),       AppUser.Role.ADMIN_IT));
         };

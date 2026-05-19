@@ -1,23 +1,10 @@
-import {
-  Component, signal, inject, OnInit, OnDestroy, AfterViewInit,
-  ElementRef, ViewChild, computed
-} from '@angular/core';
+import { Component, signal, computed, inject, OnInit, OnDestroy, ElementRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
-import Konva from 'konva';
 
-interface Annotation {
-  id?: string;
-  pageId: string;
-  annotationType: string;
-  signatureAssetId?: string;
-  xPercent: number;
-  yPercent: number;
-  widthPercent: number;
-  heightPercent: number;
-}
+interface Highlight { x: number; y: number; w: number; h: number; }
 
 @Component({
   selector: 'app-pdf-viewer',
@@ -26,14 +13,19 @@ interface Annotation {
   template: `
     <div class="flex h-screen bg-gray-100 overflow-hidden">
 
-      <!-- Left panel -->
-      <div class="w-64 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
+      <!-- Panneau gauche -->
+      <div class="w-56 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
         <div class="p-4 border-b border-gray-200">
           <button (click)="back()" class="text-sm text-blue-600 hover:underline">&larr; Retour</button>
-          <h2 class="font-semibold text-gray-800 mt-1 truncate text-sm">{{ doc()?.title || 'Document PDF' }}</h2>
+          <h2 class="font-semibold text-gray-800 mt-2 truncate text-sm">{{ doc()?.title || 'Document' }}</h2>
           @if (isParapheur()) {
             <span class="mt-1 inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800">
               En attente de signature
+            </span>
+          }
+          @if (doc()?.status === 'FINALIZED') {
+            <span class="mt-1 inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-800">
+              Signé
             </span>
           }
         </div>
@@ -43,94 +35,130 @@ interface Annotation {
           @for (p of pages(); track p) {
             <div (click)="goToPage(p)"
                  [class]="currentPage() === p
-                   ? 'border-2 border-blue-500 rounded-lg overflow-hidden cursor-pointer'
-                   : 'border border-gray-200 rounded-lg overflow-hidden cursor-pointer hover:border-blue-300'">
-              <img [src]="api.renderPage(docId, p)" class="w-full object-contain" />
+                   ? 'border-2 border-blue-500 rounded-lg overflow-hidden cursor-pointer relative'
+                   : 'border border-gray-200 rounded-lg overflow-hidden cursor-pointer hover:border-blue-300 relative'">
+              @if (thumbUrls()[p]) {
+                <img [src]="thumbUrls()[p]" class="w-full object-contain block" />
+              } @else {
+                <div class="bg-gray-100 h-16 flex items-center justify-center text-xs text-gray-400">{{ p + 1 }}</div>
+              }
               <p class="text-center text-xs text-gray-500 py-1">{{ p + 1 }}</p>
+              <!-- Badge zones surlignées sur vignette -->
+              @if (highlights()[p] && highlights()[p].length) {
+                <span class="absolute top-1 right-1 bg-yellow-400 text-yellow-900 text-[9px] font-bold px-1 rounded">
+                  {{ highlights()[p].length }}🖊️
+                </span>
+              }
             </div>
           }
         </div>
-
-        <!-- Assets (signature drag panel) -->
-        <div class="border-t border-gray-200 p-3">
-          <p class="text-xs font-semibold text-gray-500 uppercase mb-2">Signatures &amp; Cachets</p>
-          <div class="space-y-2 overflow-y-auto max-h-48">
-            @for (asset of assets(); track asset.id) {
-              <div draggable="true" (dragstart)="onDragStart($event, asset)"
-                   class="flex items-center gap-2 p-2 rounded-lg border border-gray-200 cursor-grab hover:bg-gray-50 select-none">
-                @if (asset.url) {
-                  <img [src]="asset.url" class="w-12 h-8 object-contain flex-shrink-0" />
-                }
-                <span class="text-xs text-gray-600 truncate">{{ asset.originalFileName }}</span>
-              </div>
-            }
-          </div>
-        </div>
       </div>
 
-      <!-- Main area -->
+      <!-- Zone principale -->
       <div class="flex-1 flex flex-col overflow-hidden">
 
         <!-- Toolbar -->
-        <div class="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-3">
+        <div class="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-3 flex-wrap">
           <span class="text-sm text-gray-500">Page {{ currentPage() + 1 }} / {{ pages().length }}</span>
           <div class="flex-1"></div>
 
-          @if (selectedId()) {
-            <button (click)="deleteSelected()"
-                    class="px-3 py-1 text-sm text-red-600 border border-red-300 rounded-lg hover:bg-red-50">
-              Supprimer sélection
-            </button>
-          }
-
-          <!-- Parapheur actions (En attente) -->
           @if (isParapheur()) {
+            <!-- Bouton surligner -->
+            <button (click)="toggleHighlightMode()"
+                    [class]="highlightMode()
+                      ? 'px-3 py-1.5 bg-yellow-400 text-yellow-900 text-sm rounded-lg font-medium flex items-center gap-1.5'
+                      : 'px-3 py-1.5 border border-yellow-400 text-yellow-700 text-sm rounded-lg hover:bg-yellow-50 flex items-center gap-1.5'">
+              🖊️
+              <span>{{ highlightMode() ? 'Terminer' : 'Surligner' }}</span>
+              @if (totalHighlights() > 0) {
+                <span class="bg-yellow-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">{{ totalHighlights() }}</span>
+              }
+            </button>
+
+            <button (click)="openCorrectionModal()"
+                    class="px-4 py-1.5 border border-amber-300 text-amber-700 text-sm rounded-lg hover:bg-amber-50">
+              ✏️ Correction/modification demandées
+            </button>
             <button (click)="openRejectModal()"
-                    class="px-4 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-colors">
+                    class="px-4 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-300">
               Refuser
             </button>
             <button (click)="signerDocument()" [disabled]="signing()"
-                    class="px-4 py-1.5 bg-primary text-white text-sm rounded-lg hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2 transition-colors">
-              <div *ngIf="signing()" class="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
+                    class="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
+              @if (signing()) { <span class="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin inline-block"></span> }
               {{ signing() ? 'Signature en cours…' : '✍️ Signer le document' }}
             </button>
           }
 
-          <!-- Standard finalize / download (non-parapheur) -->
-          @if (!isParapheur()) {
-            @if (doc()?.status !== 'FINALIZED') {
-              <button (click)="finalize()" [disabled]="finalizing()"
-                      class="px-4 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50">
-                {{ finalizing() ? 'Finalisation…' : 'Finaliser le document' }}
-              </button>
-            }
-            @if (doc()?.status === 'FINALIZED') {
-              <a [href]="api.downloadFinalPdf(docId)" target="_blank"
-                 class="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
-                Télécharger PDF final
-              </a>
-            }
+          @if (doc()?.status === 'FINALIZED') {
+            <button (click)="api.downloadFinalPdfBlob(docId, (doc()?.title || 'document') + '.pdf')"
+                    class="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+              Télécharger PDF final
+            </button>
           }
         </div>
 
-        <!-- Canvas -->
-        <div class="flex-1 overflow-auto flex items-start justify-center p-6"
-             (dragover)="$event.preventDefault()" (drop)="onDrop($event)">
-          <div #konvaContainer class="shadow-lg"></div>
+        <!-- Instruction mode surlignage -->
+        @if (highlightMode()) {
+          <div class="bg-yellow-50 border-b border-yellow-200 px-4 py-1.5 text-xs text-yellow-800 flex items-center gap-2">
+            <span>🖊️</span>
+            <span>Cliquez-glissez pour surligner une zone. Survolez une zone pour la supprimer.</span>
+          </div>
+        }
+
+        <!-- Page courante -->
+        <div class="flex-1 overflow-auto flex items-start justify-center p-6 bg-gray-100">
+          @if (pageUrl()) {
+            <div class="relative inline-block shadow-xl"
+                 #pageWrapper
+                 [class.cursor-crosshair]="highlightMode()"
+                 (mousedown)="startDrawHighlight($event)">
+
+              <img [src]="pageUrl()!" class="block max-w-full select-none"
+                   [class.pointer-events-none]="highlightMode()" />
+
+              <!-- Zones surlignées existantes -->
+              @for (h of currentPageHighlights(); track $index) {
+                <div class="absolute bg-yellow-300/50 border-2 border-yellow-500 group"
+                     [style.left.%]="h.x"
+                     [style.top.%]="h.y"
+                     [style.width.%]="h.w"
+                     [style.height.%]="h.h"
+                     (mousedown)="$event.stopPropagation()">
+                  <button (click)="removeHighlight($index)"
+                          class="absolute -top-3 -right-3 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow">
+                    ×
+                  </button>
+                </div>
+              }
+
+              <!-- Aperçu du dessin en cours -->
+              @if (drawingHighlight()) {
+                <div class="absolute border-2 border-dashed border-yellow-600 bg-yellow-300/30 pointer-events-none"
+                     [style.left.%]="drawingHighlight()!.x"
+                     [style.top.%]="drawingHighlight()!.y"
+                     [style.width.%]="drawingHighlight()!.w"
+                     [style.height.%]="drawingHighlight()!.h">
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="flex items-center justify-center h-full text-gray-400">Chargement…</div>
+          }
         </div>
       </div>
     </div>
 
-    <!-- ── Reject modal ────────────────────────────────────────────────── -->
+    <!-- Modal Refus -->
     @if (showRejectModal()) {
-      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
            (click)="$event.target === $event.currentTarget && showRejectModal.set(false)">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
           <h2 class="text-base font-semibold text-gray-900 mb-1">Refuser le document</h2>
           <p class="text-xs text-gray-500 mb-4">Indiquez le motif du refus.</p>
           <textarea rows="3" [(ngModel)]="rejectCommentValue"
                     placeholder="Motif du refus…"
-                    class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400">
+                    class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-300">
           </textarea>
           <div class="flex gap-3 mt-4">
             <button (click)="showRejectModal.set(false)"
@@ -138,9 +166,65 @@ interface Annotation {
               Annuler
             </button>
             <button (click)="confirmReject()" [disabled]="rejecting() || !rejectCommentValue.trim()"
-                    class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2">
-              <div *ngIf="rejecting()" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
+                    class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50">
               {{ rejecting() ? 'En cours…' : 'Confirmer le refus' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Modal Correction/modification demandées -->
+    @if (showCorrectionModal()) {
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+           (click)="$event.target === $event.currentTarget && showCorrectionModal.set(false)">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+          <h2 class="text-base font-semibold text-gray-900 mb-1">Correction/modification demandées</h2>
+          <p class="text-xs text-gray-500 mb-4">
+            Le document sera renvoyé à la secrétaire et une instruction sera créée automatiquement.
+          </p>
+
+          <!-- Résumé des zones surlignées -->
+          @if (totalHighlights() > 0) {
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 mb-4 flex items-center gap-2">
+              <span class="text-yellow-600 text-base">🖊️</span>
+              <p class="text-xs text-yellow-700">
+                <strong>{{ totalHighlights() }}</strong> zone(s) surlignée(s) sur <strong>{{ highlightedPageCount() }}</strong> page(s) jointes à la correction
+              </p>
+            </div>
+          }
+
+          <!-- Commentaire texte -->
+          <label class="block text-xs font-medium text-gray-600 mb-1">Description des corrections <span class="text-red-500">*</span></label>
+          <textarea rows="3" [(ngModel)]="correctionComment"
+                    placeholder="Décrivez les corrections à apporter…"
+                    class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-300 mb-4">
+          </textarea>
+
+          <!-- Message vocal optionnel -->
+          <label class="block text-xs font-medium text-gray-600 mb-2">Message vocal (optionnel)</label>
+          @if (!correctionAudio()) {
+            <label class="flex items-center gap-2 cursor-pointer w-full px-3 py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-amber-400 hover:text-amber-600 mb-4">
+              <span>🎙️</span>
+              <span>Ajouter un enregistrement audio</span>
+              <input type="file" accept="audio/*" class="hidden" (change)="onCorrectionAudioSelected($event)" />
+            </label>
+          } @else {
+            <div class="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+              <span class="text-amber-600">🎙️</span>
+              <span class="text-xs text-amber-700 flex-1 truncate">{{ correctionAudio()!.name }}</span>
+              <button (click)="correctionAudio.set(null)" class="text-xs text-gray-400 hover:text-red-500 flex-shrink-0">✕</button>
+            </div>
+          }
+
+          <div class="flex gap-3">
+            <button (click)="showCorrectionModal.set(false)"
+                    class="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-50">
+              Annuler
+            </button>
+            <button (click)="confirmCorrection()" [disabled]="sendingCorrection() || !correctionComment.trim()"
+                    class="flex-1 px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 disabled:opacity-50">
+              {{ sendingCorrection() ? 'Envoi…' : 'Envoyer les corrections' }}
             </button>
           </div>
         </div>
@@ -148,252 +232,113 @@ interface Annotation {
     }
   `
 })
-export class PdfViewerComponent implements OnInit, OnDestroy, AfterViewInit {
-  @ViewChild('konvaContainer') containerRef!: ElementRef<HTMLDivElement>;
+export class PdfViewerComponent implements OnInit, OnDestroy {
+  @ViewChild('pageWrapper') pageWrapper!: ElementRef<HTMLDivElement>;
 
-  api = inject(ApiService);
+  api    = inject(ApiService);
   private route  = inject(ActivatedRoute);
   private router = inject(Router);
 
   docId = '';
-  doc   = signal<any>(null);
-  pages = signal<number[]>([]);
-  assets = signal<any[]>([]);
+  doc         = signal<any>(null);
+  pages       = signal<number[]>([]);
+  thumbUrls   = signal<Record<number, string>>({});
   currentPage = signal(0);
-  selectedId  = signal<string | null>(null);
-  finalizing  = signal(false);
+  pageUrl     = signal<string | null>(null);
 
-  // Parapheur sign/reject
   signing         = signal(false);
   showRejectModal = signal(false);
   rejectCommentValue = '';
   rejecting       = signal(false);
 
-  isParapheur = computed(() => this.doc()?.parapheurStatut === 'EN_ATTENTE_SIGNATURE');
+  private cameFromParapheur = false;
 
-  private stage!: Konva.Stage;
-  private bgLayer!: Konva.Layer;
-  private annotLayer!: Konva.Layer;
-  private transformer!: Konva.Transformer;
-  private draggedAsset: any = null;
+  showCorrectionModal = signal(false);
+  correctionComment   = '';
+  correctionAudio     = signal<File | null>(null);
+  sendingCorrection   = signal(false);
 
-  private nodeAnnotMap = new Map<string, string>();
+  isParapheur = signal(false);
+
+  // ── Surlignage ───────────────────────────────────────────────────────────
+  highlights      = signal<Record<number, Highlight[]>>({});
+  highlightMode   = signal(false);
+  drawingHighlight = signal<Highlight | null>(null);
+
+  currentPageHighlights = computed(() => this.highlights()[this.currentPage()] ?? []);
+  totalHighlights       = computed(() => Object.values(this.highlights()).reduce((s, a) => s + a.length, 0));
+  highlightedPageCount  = computed(() => Object.values(this.highlights()).filter(a => a.length > 0).length);
+
+  private hlStart: { x: number; y: number } | null = null;
+  private hlBoundMove = this.onHlMove.bind(this);
+  private hlBoundUp   = this.onHlUp.bind(this);
+
+  private blobUrls: string[] = [];
 
   ngOnInit() {
     this.docId = this.route.snapshot.paramMap.get('id') ?? '';
     this.loadDoc();
-    this.loadAssets();
   }
 
-  ngAfterViewInit() {}
-
-  ngOnDestroy() { this.stage?.destroy(); }
+  ngOnDestroy() {
+    this.blobUrls.forEach(u => URL.revokeObjectURL(u));
+    document.removeEventListener('mousemove', this.hlBoundMove);
+    document.removeEventListener('mouseup', this.hlBoundUp);
+  }
 
   back() {
-    const d = this.doc();
-    if (d?.parapheurStatut) {
-      this.router.navigate(['/signature']);
-    } else {
-      this.router.navigate(['/pdf-documents']);
-    }
+    if (this.isParapheur() || this.cameFromParapheur) this.router.navigate(['/signature']);
+    else                                               this.router.navigate(['/pdf-documents']);
   }
-
-  // ── Stage ────────────────────────────────────────────────────────────────
-
-  private initStage(width: number, height: number) {
-    this.stage?.destroy();
-    this.nodeAnnotMap.clear();
-
-    this.stage = new Konva.Stage({ container: this.containerRef.nativeElement, width, height });
-
-    this.bgLayer = new Konva.Layer({ listening: false });
-    this.annotLayer = new Konva.Layer();
-    this.stage.add(this.bgLayer);
-    this.stage.add(this.annotLayer);
-
-    this.transformer = new Konva.Transformer({
-      keepRatio: false,
-      enabledAnchors: ['top-left', 'top-right', 'bottom-left', 'bottom-right',
-                       'middle-left', 'middle-right', 'top-center', 'bottom-center'],
-      boundBoxFunc: (_, newBox) => (newBox.width < 20 || newBox.height < 20 ? _ : newBox),
-    });
-    this.annotLayer.add(this.transformer);
-
-    this.stage.on('click tap', (e) => {
-      if (e.target === this.stage || !e.target.draggable()) {
-        this.transformer.nodes([]);
-        this.selectedId.set(null);
-        this.annotLayer.batchDraw();
-      }
-    });
-  }
-
-  // ── Data ─────────────────────────────────────────────────────────────────
 
   loadDoc() {
     this.api.getPdfDocuments().subscribe((list: any[]) => {
       const d = list.find(x => x.id === this.docId);
       if (!d) return;
       this.doc.set(d);
-      this.pages.set(Array.from({ length: d.pageCount }, (_, i) => i));
+      this.isParapheur.set(d.parapheurStatut === 'EN_ATTENTE_SIGNATURE');
+      if (d.parapheurStatut != null) this.cameFromParapheur = true;
+      const count = d.pageCount ?? 1;
+      this.pages.set(Array.from({ length: count }, (_, i) => i));
       this.goToPage(0);
+      this.loadThumbs(count);
     });
   }
 
-  loadAssets() {
-    this.api.getSignatureAssets().subscribe((list: any[]) => {
-      const withUrls = list.map(a => ({ ...a, url: '' }));
-      this.assets.set(withUrls);
-      list.forEach((a, i) => {
-        this.api.getSignatureImageBlob(a.id).subscribe(url => {
-          this.assets.update(arr => arr.map((x, idx) => idx === i ? { ...x, url } : x));
-        });
+  private loadThumbs(count: number) {
+    for (let p = 0; p < count; p++) {
+      this.api.renderPageBlob(this.docId, p).subscribe(url => {
+        this.blobUrls.push(url);
+        this.thumbUrls.update(m => ({ ...m, [p]: url }));
       });
-    });
-  }
-
-  // ── Page rendering ───────────────────────────────────────────────────────
-
-  goToPage(page: number) {
-    this.currentPage.set(page);
-    const url = this.api.renderPage(this.docId, page);
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const w = Math.min(800, window.innerWidth - 320);
-      const h = img.height * (w / img.width);
-      this.initStage(w, h);
-      this.bgLayer.add(new Konva.Image({ image: img, x: 0, y: 0, width: w, height: h }));
-      this.bgLayer.batchDraw();
-      this.loadAnnotationsForPage(page);
-    };
-    img.src = url;
-  }
-
-  loadAnnotationsForPage(page: number) {
-    const pageId = `${this.docId}::${page}`;
-    this.api.getAnnotations(pageId).subscribe((list: any[]) => {
-      list.forEach(ann => this.renderAnnotation(ann));
-    });
-  }
-
-  renderAnnotation(ann: Annotation) {
-    if (!ann.signatureAssetId) return;
-    const asset = this.assets().find(a => a.id === ann.signatureAssetId);
-    if (!asset?.url) return;
-
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const w = this.stage.width();
-      const h = this.stage.height();
-      const node = this.makeImageNode(img,
-        (ann.xPercent / 100) * w, (ann.yPercent / 100) * h,
-        (ann.widthPercent / 100) * w, (ann.heightPercent / 100) * h);
-      if (ann.id) this.nodeAnnotMap.set(node.id(), ann.id);
-      node.on('dragend transformend', () => this.syncAnnotation(node));
-      this.annotLayer.add(node);
-      this.annotLayer.batchDraw();
-    };
-    img.src = asset.url;
-  }
-
-  // ── Drag & drop ──────────────────────────────────────────────────────────
-
-  onDragStart(ev: DragEvent, asset: any) {
-    this.draggedAsset = asset;
-    ev.dataTransfer?.setData('text/plain', asset.id);
-  }
-
-  onDrop(ev: DragEvent) {
-    ev.preventDefault();
-    if (!this.draggedAsset || !this.stage) return;
-
-    const rect = this.containerRef.nativeElement.getBoundingClientRect();
-    const dropX = ev.clientX - rect.left;
-    const dropY = ev.clientY - rect.top;
-
-    const asset = this.draggedAsset;
-    this.draggedAsset = null;
-    if (!asset.url) return;
-
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const stageW = this.stage.width();
-      const stageH = this.stage.height();
-      const displayW = Math.min(200, stageW * 0.25);
-      const displayH = img.height * (displayW / img.width);
-      const x = dropX - displayW / 2;
-      const y = dropY - displayH / 2;
-
-      const ann: Annotation = {
-        pageId: `${this.docId}::${this.currentPage()}`,
-        annotationType: asset.assetType,
-        signatureAssetId: asset.id,
-        xPercent: (x / stageW) * 100,
-        yPercent: (y / stageH) * 100,
-        widthPercent: (displayW / stageW) * 100,
-        heightPercent: (displayH / stageH) * 100,
-      };
-
-      this.api.createAnnotation(ann).subscribe((saved: any) => {
-        const node = this.makeImageNode(img, x, y, displayW, displayH);
-        this.nodeAnnotMap.set(node.id(), saved.id);
-        node.on('dragend transformend', () => this.syncAnnotation(node));
-        this.annotLayer.add(node);
-        this.transformer.nodes([node]);
-        this.selectedId.set(saved.id);
-        this.annotLayer.batchDraw();
-      });
-    };
-    img.src = asset.url;
-  }
-
-  syncAnnotation(node: Konva.Image) {
-    const annotId = this.nodeAnnotMap.get(node.id());
-    if (!annotId) return;
-    const stageW = this.stage.width();
-    const stageH = this.stage.height();
-    const w = node.width() * node.scaleX();
-    const h = node.height() * node.scaleY();
-    this.api.updateAnnotation(annotId, {
-      xPercent: (node.x() / stageW) * 100,
-      yPercent: (node.y() / stageH) * 100,
-      widthPercent: (w / stageW) * 100,
-      heightPercent: (h / stageH) * 100,
-    }).subscribe();
-  }
-
-  deleteSelected() {
-    const nodes = this.transformer.nodes();
-    if (!nodes.length) return;
-    const node = nodes[0] as Konva.Image;
-    const annotId = this.nodeAnnotMap.get(node.id());
-    if (annotId) {
-      this.api.deleteAnnotation(annotId).subscribe();
-      this.nodeAnnotMap.delete(node.id());
     }
-    this.transformer.nodes([]);
-    node.destroy();
-    this.annotLayer.batchDraw();
-    this.selectedId.set(null);
   }
 
-  finalize() {
-    this.finalizing.set(true);
-    this.api.finalizePdfDocument(this.docId).subscribe({
-      next: (updated: any) => { this.doc.set(updated); this.finalizing.set(false); },
-      error: () => this.finalizing.set(false),
+  goToPage(p: number) {
+    this.currentPage.set(p);
+    this.pageUrl.set(null);
+    this.api.renderPageBlob(this.docId, p).subscribe(url => {
+      this.blobUrls.push(url);
+      this.pageUrl.set(url);
     });
   }
-
-  // ── Parapheur actions ────────────────────────────────────────────────────
 
   signerDocument() {
     this.signing.set(true);
     this.api.signerDocument(this.docId).subscribe({
-      next: () => { this.signing.set(false); this.router.navigate(['/signature']); },
+      next: (signed: any) => {
+        this.signing.set(false);
+        this.doc.set(signed);
+        this.isParapheur.set(false);
+        const count = signed.pageCount ?? 1;
+        this.blobUrls.forEach(u => URL.revokeObjectURL(u));
+        this.blobUrls = [];
+        this.thumbUrls.set({});
+        this.pageUrl.set(null);
+        this.pages.set(Array.from({ length: count }, (_, i) => i));
+        this.goToPage(0);
+        this.loadThumbs(count);
+      },
       error: () => this.signing.set(false),
     });
   }
@@ -412,19 +357,93 @@ export class PdfViewerComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
 
-  // ── Helper ───────────────────────────────────────────────────────────────
+  // ── Surlignage ───────────────────────────────────────────────────────────
 
-  private makeImageNode(img: HTMLImageElement, x: number, y: number, width: number, height: number): Konva.Image {
-    const node = new Konva.Image({
-      id: `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      image: img, x, y, width, height,
-      draggable: true,
+  toggleHighlightMode() {
+    this.highlightMode.update(v => !v);
+    if (!this.highlightMode()) {
+      this.drawingHighlight.set(null);
+      this.hlStart = null;
+    }
+  }
+
+  startDrawHighlight(ev: MouseEvent) {
+    if (!this.highlightMode() || !this.pageWrapper) return;
+    const rect = this.pageWrapper.nativeElement.getBoundingClientRect();
+    this.hlStart = {
+      x: Math.max(0, Math.min(((ev.clientX - rect.left) / rect.width) * 100, 100)),
+      y: Math.max(0, Math.min(((ev.clientY - rect.top) / rect.height) * 100, 100)),
+    };
+    document.addEventListener('mousemove', this.hlBoundMove);
+    document.addEventListener('mouseup', this.hlBoundUp);
+    ev.preventDefault();
+  }
+
+  private onHlMove(ev: MouseEvent) {
+    if (!this.hlStart || !this.pageWrapper) return;
+    const rect = this.pageWrapper.nativeElement.getBoundingClientRect();
+    const cx = Math.max(0, Math.min(((ev.clientX - rect.left) / rect.width) * 100, 100));
+    const cy = Math.max(0, Math.min(((ev.clientY - rect.top) / rect.height) * 100, 100));
+    this.drawingHighlight.set({
+      x: Math.min(this.hlStart.x, cx),
+      y: Math.min(this.hlStart.y, cy),
+      w: Math.abs(cx - this.hlStart.x),
+      h: Math.abs(cy - this.hlStart.y),
     });
-    node.on('click tap', () => {
-      this.transformer.nodes([node]);
-      this.selectedId.set(this.nodeAnnotMap.get(node.id()) ?? null);
-      this.annotLayer.batchDraw();
+  }
+
+  private onHlUp() {
+    const dr = this.drawingHighlight();
+    if (dr && dr.w > 1 && dr.h > 0.5) {
+      const p = this.currentPage();
+      this.highlights.update(m => ({
+        ...m,
+        [p]: [...(m[p] ?? []), { x: dr.x, y: dr.y, w: dr.w, h: dr.h }],
+      }));
+    }
+    this.drawingHighlight.set(null);
+    this.hlStart = null;
+    document.removeEventListener('mousemove', this.hlBoundMove);
+    document.removeEventListener('mouseup', this.hlBoundUp);
+  }
+
+  removeHighlight(index: number) {
+    const p = this.currentPage();
+    this.highlights.update(m => ({
+      ...m,
+      [p]: (m[p] ?? []).filter((_, i) => i !== index),
+    }));
+  }
+
+  // ── Modal correction ─────────────────────────────────────────────────────
+
+  openCorrectionModal() {
+    this.correctionComment = '';
+    this.correctionAudio.set(null);
+    this.showCorrectionModal.set(true);
+  }
+
+  onCorrectionAudioSelected(ev: Event) {
+    const file = (ev.target as HTMLInputElement).files?.[0];
+    if (file) this.correctionAudio.set(file);
+  }
+
+  confirmCorrection() {
+    if (!this.correctionComment.trim()) return;
+    this.sendingCorrection.set(true);
+
+    const hlJson = this.totalHighlights() > 0
+      ? JSON.stringify(
+          Object.entries(this.highlights())
+            .flatMap(([page, zones]) => zones.map(z => ({ page: +page, ...z })))
+        )
+      : undefined;
+
+    this.api.envoyerCorrection(
+      this.docId, this.correctionComment, this.correctionAudio() ?? undefined, hlJson
+    ).subscribe({
+      next: () => { this.sendingCorrection.set(false); this.router.navigate(['/signature']); },
+      error: () => this.sendingCorrection.set(false),
     });
-    return node;
   }
 }

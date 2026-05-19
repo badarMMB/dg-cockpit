@@ -29,7 +29,7 @@ public class PdfDocument {
     // ── Parapheur ────────────────────────────────────────────────────────────
 
     public enum ParapheurStatut {
-        EN_ATTENTE_SIGNATURE, SIGNE, REFUSE, ARCHIVE, PUBLIE
+        EN_ATTENTE_SIGNATURE, SIGNE, REFUSE, RENVOYE, ARCHIVE, PUBLIE
     }
 
     public enum ParapheurType {

@@ -1,0 +1,44 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 1 — Build Angular frontend (Node 20)
+# ─────────────────────────────────────────────────────────────────────────────
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app
+
+# Dépendances NPM (cache Docker si package.json ne change pas)
+COPY package.json package-lock.json ./
+RUN npm ci --quiet
+
+# Sources Angular
+COPY angular.json tsconfig.json tsconfig.app.json ./
+COPY src/ ./src/
+COPY public/ ./public/
+
+# Production build — output → backend/src/main/resources/static/
+RUN npx ng build --configuration=production
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 2 — Build Spring Boot backend (Maven + JDK 21)
+# ─────────────────────────────────────────────────────────────────────────────
+FROM maven:3.9-eclipse-temurin-21-alpine AS backend-builder
+WORKDIR /build
+
+# Dépendances Maven (cache Docker si pom.xml ne change pas)
+COPY backend/pom.xml .
+RUN mvn dependency:go-offline -q
+
+# Sources Java
+COPY backend/src ./src
+
+# Injecter les fichiers Angular compilés dans les ressources statiques
+COPY --from=frontend-builder /app/backend/src/main/resources/static ./src/main/resources/static
+
+RUN mvn clean package -DskipTests -q
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 3 — Image de production (JRE 21 Alpine)
+# ─────────────────────────────────────────────────────────────────────────────
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+COPY --from=backend-builder /build/target/dg-cockpit-backend-0.0.1-SNAPSHOT.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]

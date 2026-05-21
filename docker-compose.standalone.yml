@@ -1,0 +1,68 @@
+services:
+
+  # ── Base de données PostgreSQL ──────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: dg-cockpit-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dgcockpit
+      POSTGRES_USER: ${DB_USER:-ged_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ged_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-ged_user} -d dgcockpit"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Stockage objet MinIO ────────────────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: dg-cockpit-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-minioadmin}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # ── Application DG Cockpit ──────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.standalone
+    image: dg-cockpit-app:latest
+    container_name: dg-cockpit-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dgcockpit
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-ged_user}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-ged_password}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      MINIO_URL: http://minio:9000
+      MINIO_PUBLIC_URL: http://${SERVER_HOST:-localhost}:${MINIO_PORT:-9000}
+      MINIO_ACCESS_KEY: ${MINIO_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_PASSWORD:-minioadmin}
+      MINIO_BUCKET: dgcockpit
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  minio_data:

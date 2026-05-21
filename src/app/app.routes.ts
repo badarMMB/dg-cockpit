@@ -20,6 +20,7 @@ import { BureauComponent } from './pages/bureau/bureau.component';
 import { BureauPlacementComponent } from './pages/bureau/bureau-placement.component';
 import { ClasseursListComponent } from './pages/classeurs/classeurs-list.component';
 import { ClasseurDetailComponent } from './pages/classeurs/classeur-detail.component';
+import { NotesDeServiceComponent } from './pages/notes/notes-de-service.component';
 import { authGuard } from './guards/auth.guard';
 import { roleGuard } from './guards/role.guard';
 
@@ -44,7 +45,7 @@ export const routes: Routes = [
       { path: 'signature',            component: SignatureComponent,       canActivate: [roleGuard], data: { roles: DG } },
       { path: 'signature-assets',     component: SignatureAssetsComponent, canActivate: [roleGuard], data: { roles: ALL } },
       { path: 'pdf-documents',        component: PdfDocumentsComponent,    canActivate: [roleGuard], data: { roles: DG } },
-      { path: 'pdf-viewer/:id',       component: PdfViewerComponent,       canActivate: [roleGuard], data: { roles: DG } },
+      { path: 'pdf-viewer/:id',       component: PdfViewerComponent,       canActivate: [roleGuard], data: { roles: DG_SEC_SUB } },
       { path: 'settings',             component: SettingsComponent },
       { path: 'inbox',                component: InboxListComponent,       canActivate: [roleGuard], data: { roles: DG_SEC } },
       { path: 'inbox/:id',            component: InboxDetailComponent,     canActivate: [roleGuard], data: { roles: DG_SEC } },
@@ -57,6 +58,7 @@ export const routes: Routes = [
       { path: 'bureau-placement/:id', component: BureauPlacementComponent, canActivate: [roleGuard], data: { roles: SEC } },
       { path: 'classeurs',            component: ClasseursListComponent,   canActivate: [roleGuard], data: { roles: DG_SEC } },
       { path: 'classeurs/:id',        component: ClasseurDetailComponent,  canActivate: [roleGuard], data: { roles: DG_SEC } },
+      { path: 'notes-de-service',     component: NotesDeServiceComponent,  canActivate: [roleGuard], data: { roles: DG_SEC_SUB } },
     ]
   }
 ];

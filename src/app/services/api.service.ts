@@ -171,6 +171,10 @@ export class ApiService {
     return this.http.get(`${this.base}/pdf-documents/${docId}/pages/${page}/image`, { responseType: 'blob' })
       .pipe(map(blob => URL.createObjectURL(blob)));
   }
+  renderPageWithZonesBlob(docId: string, page: number): Observable<string> {
+    return this.http.get(`${this.base}/pdf-documents/${docId}/pages/${page}/image-with-zones`, { responseType: 'blob' })
+      .pipe(map(blob => URL.createObjectURL(blob)));
+  }
   finalizePdfDocument(docId: string): Observable<any> {
     return this.http.post(`${this.base}/pdf-documents/${docId}/finalize`, {});
   }

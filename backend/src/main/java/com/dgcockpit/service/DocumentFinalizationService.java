@@ -20,12 +20,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import javax.imageio.ImageIO;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class DocumentFinalizationService {
@@ -68,6 +70,87 @@ public class DocumentFinalizationService {
             ImageIO.write(img, "png", out);
             return out.toByteArray();
         }
+    }
+
+    /**
+     * Renders page N with SIGNATURE_ZONE / STAMP_ZONE annotations burned into the image.
+     */
+    public byte[] renderPageWithZones(String documentId, int pageIndex) throws Exception {
+        PdfDocument doc = docRepo.findById(documentId)
+                .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
+
+        String bucket    = "FINALIZED".equals(doc.getStatus()) && doc.getFinalizedObjectKey() != null
+                           ? "ged-final-documents" : doc.getBucket();
+        String objectKey = "FINALIZED".equals(doc.getStatus()) && doc.getFinalizedObjectKey() != null
+                           ? doc.getFinalizedObjectKey() : doc.getObjectKey();
+
+        byte[] pdfBytes = minio.downloadBytes(bucket, objectKey);
+        BufferedImage base;
+        try (PDDocument pdf = Loader.loadPDF(pdfBytes)) {
+            PDFRenderer renderer = new PDFRenderer(pdf);
+            base = renderer.renderImageWithDPI(pageIndex, 150, ImageType.ARGB);
+        }
+
+        List<PageAnnotation> zones = annotRepo.findByPageId(documentId + "::" + pageIndex)
+                .stream()
+                .filter(a -> "SIGNATURE_ZONE".equals(a.getAnnotationType())
+                          || "STAMP_ZONE".equals(a.getAnnotationType()))
+                .collect(Collectors.toList());
+
+        if (!zones.isEmpty()) {
+            Graphics2D g = base.createGraphics();
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,      RenderingHints.VALUE_ANTIALIAS_ON);
+            g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+            for (PageAnnotation ann : zones) {
+                boolean isSig = "SIGNATURE_ZONE".equals(ann.getAnnotationType());
+                int x = (int) (ann.getXPercent()      / 100.0 * base.getWidth());
+                int y = (int) (ann.getYPercent()      / 100.0 * base.getHeight());
+                int w = (int) (ann.getWidthPercent()  / 100.0 * base.getWidth());
+                int h = (int) (ann.getHeightPercent() / 100.0 * base.getHeight());
+
+                // Semi-transparent fill
+                g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.22f));
+                g.setColor(isSig ? new Color(59, 130, 246) : new Color(34, 197, 94));
+                g.fillRect(x, y, w, h);
+
+                // Dashed border
+                g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
+                g.setColor(isSig ? new Color(37, 99, 235) : new Color(22, 163, 74));
+                g.setStroke(new BasicStroke(2.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER,
+                        10.0f, new float[]{10.0f, 5.0f}, 0.0f));
+                g.drawRect(x, y, w, h);
+
+                // Label centré
+                String label = isSig ? "Zone Signature DG" : "Zone Tampon";
+                int fontSize = Math.max(10, Math.min(18, h / 3));
+                g.setFont(new Font("SansSerif", Font.BOLD, fontSize));
+                g.setStroke(new BasicStroke(1.0f));
+                FontMetrics fm = g.getFontMetrics();
+                int textW = fm.stringWidth(label);
+                if (textW < w - 8 && h > fontSize + 4) {
+                    int tx = x + (w - textW) / 2;
+                    int ty = y + (h + fm.getAscent() - fm.getDescent()) / 2;
+                    g.setColor(Color.WHITE);
+                    g.drawString(label, tx + 1, ty + 1);
+                    g.setColor(isSig ? new Color(37, 99, 235) : new Color(22, 163, 74));
+                    g.drawString(label, tx, ty);
+                }
+            }
+            g.dispose();
+        }
+
+        // Convertir en RGB (PNG sans canal alpha)
+        BufferedImage rgb = new BufferedImage(base.getWidth(), base.getHeight(), BufferedImage.TYPE_INT_RGB);
+        Graphics2D gRgb = rgb.createGraphics();
+        gRgb.setColor(Color.WHITE);
+        gRgb.fillRect(0, 0, rgb.getWidth(), rgb.getHeight());
+        gRgb.drawImage(base, 0, 0, null);
+        gRgb.dispose();
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageIO.write(rgb, "png", out);
+        return out.toByteArray();
     }
 
     /**

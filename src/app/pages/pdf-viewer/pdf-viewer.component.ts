@@ -128,26 +128,6 @@ interface Highlight { x: number; y: number; w: number; h: number; }
                    (load)="onPageImageLoaded()"
                    [class.pointer-events-none]="highlightMode()" />
 
-              <!-- Zones signature / tampon -->
-              @if (imgW() > 0) {
-                @for (a of currentPageAnnotations(); track $index) {
-                  <div class="absolute border-2 pointer-events-none flex flex-col items-center justify-center gap-0.5 rounded-sm"
-                       [style.left.px]="a.xPercent / 100 * imgW()"
-                       [style.top.px]="a.yPercent / 100 * imgH()"
-                       [style.width.px]="a.widthPercent / 100 * imgW()"
-                       [style.height.px]="a.heightPercent / 100 * imgH()"
-                       [class]="a.annotationType === 'SIGNATURE_ZONE'
-                         ? 'border-blue-500 bg-blue-100/40'
-                         : 'border-green-500 bg-green-100/40'">
-                    <span class="text-lg leading-none">{{ a.annotationType === 'SIGNATURE_ZONE' ? '✍️' : '🔏' }}</span>
-                    <span class="text-[9px] font-bold uppercase tracking-wider"
-                          [class]="a.annotationType === 'SIGNATURE_ZONE' ? 'text-blue-700' : 'text-green-700'">
-                      {{ a.annotationType === 'SIGNATURE_ZONE' ? 'Signature' : 'Tampon' }}
-                    </span>
-                  </div>
-                }
-              }
-
               <!-- Zones surlignées existantes -->
               @for (h of currentPageHighlights(); track $index) {
                 <div class="absolute bg-yellow-300/50 border-2 border-yellow-500 group"
@@ -383,7 +363,10 @@ export class PdfViewerComponent implements OnInit, OnDestroy {
     this.pageUrl.set(null);
     this.imgW.set(0);
     this.imgH.set(0);
-    this.api.renderPageBlob(this.docId, p).subscribe(url => {
+    const fetch$ = this.isParapheur()
+      ? this.api.renderPageWithZonesBlob(this.docId, p)
+      : this.api.renderPageBlob(this.docId, p);
+    fetch$.subscribe(url => {
       this.blobUrls.push(url);
       this.pageUrl.set(url);
     });

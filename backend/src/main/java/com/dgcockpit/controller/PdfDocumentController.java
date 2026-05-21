@@ -69,6 +69,14 @@ public class PdfDocumentController {
                 .body(png);
     }
 
+    @GetMapping("/{id}/pages/{page}/image-with-zones")
+    public ResponseEntity<byte[]> renderPageWithZones(@PathVariable String id, @PathVariable int page) throws Exception {
+        byte[] png = finalizer.renderPageWithZones(id, page);
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_PNG)
+                .body(png);
+    }
+
     @PostMapping("/{id}/finalize")
     public ResponseEntity<PdfDocument> finalize(@PathVariable String id) throws Exception {
         PdfDocument doc = finalizer.finalize(id);

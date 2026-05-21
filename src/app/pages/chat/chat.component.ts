@@ -116,8 +116,13 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       this.instructionTypes.set(types);
       if (types.length > 0) this.newInstructionTypeId.set(types[0].id);
     });
-    this.api.getCollaborateurs().subscribe(list => {
-      this.availableAgents.set(list.map((c: any) => c.name));
+    this.api.getUsers().subscribe(list => {
+      this.availableAgents.set(
+        list
+          .filter((u: any) => u.role === 'SUBORDONNE')
+          .map((u: any) => u.nomComplet as string)
+          .filter(Boolean)
+      );
     });
     this.connectSse();
   }

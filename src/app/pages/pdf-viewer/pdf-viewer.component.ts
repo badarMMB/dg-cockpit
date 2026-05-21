@@ -3,13 +3,14 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
+import { AudioRecorderComponent } from '../../shared/audio-recorder/audio-recorder.component';
 
 interface Highlight { x: number; y: number; w: number; h: number; }
 
 @Component({
   selector: 'app-pdf-viewer',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, AudioRecorderComponent],
   template: `
     <div class="flex h-screen bg-gray-100 overflow-hidden">
 
@@ -43,6 +44,12 @@ interface Highlight { x: number; y: number; w: number; h: number; }
                 <div class="bg-gray-100 h-16 flex items-center justify-center text-xs text-gray-400">{{ p + 1 }}</div>
               }
               <p class="text-center text-xs text-gray-500 py-1">{{ p + 1 }}</p>
+              <!-- Badge zones signature sur vignette -->
+              @if (signatureAnnotations()[p]?.length) {
+                <span class="absolute top-1 left-1 bg-blue-500 text-white text-[9px] font-bold px-1 rounded">
+                  {{ signatureAnnotations()[p].length }}✍️
+                </span>
+              }
               <!-- Badge zones surlignées sur vignette -->
               @if (highlights()[p] && highlights()[p].length) {
                 <span class="absolute top-1 right-1 bg-yellow-400 text-yellow-900 text-[9px] font-bold px-1 rounded">
@@ -111,11 +118,35 @@ interface Highlight { x: number; y: number; w: number; h: number; }
           @if (pageUrl()) {
             <div class="relative inline-block shadow-xl"
                  #pageWrapper
+                 [style.width.px]="imgW() || null"
+                 [style.height.px]="imgH() || null"
                  [class.cursor-crosshair]="highlightMode()"
                  (mousedown)="startDrawHighlight($event)">
 
               <img [src]="pageUrl()!" class="block max-w-full select-none"
+                   #pageImg
+                   (load)="onPageImageLoaded()"
                    [class.pointer-events-none]="highlightMode()" />
+
+              <!-- Zones signature / tampon -->
+              @if (imgW() > 0) {
+                @for (a of currentPageAnnotations(); track $index) {
+                  <div class="absolute border-2 pointer-events-none flex flex-col items-center justify-center gap-0.5 rounded-sm"
+                       [style.left.px]="a.xPercent / 100 * imgW()"
+                       [style.top.px]="a.yPercent / 100 * imgH()"
+                       [style.width.px]="a.widthPercent / 100 * imgW()"
+                       [style.height.px]="a.heightPercent / 100 * imgH()"
+                       [class]="a.annotationType === 'SIGNATURE_ZONE'
+                         ? 'border-blue-500 bg-blue-100/40'
+                         : 'border-green-500 bg-green-100/40'">
+                    <span class="text-lg leading-none">{{ a.annotationType === 'SIGNATURE_ZONE' ? '✍️' : '🔏' }}</span>
+                    <span class="text-[9px] font-bold uppercase tracking-wider"
+                          [class]="a.annotationType === 'SIGNATURE_ZONE' ? 'text-blue-700' : 'text-green-700'">
+                      {{ a.annotationType === 'SIGNATURE_ZONE' ? 'Signature' : 'Tampon' }}
+                    </span>
+                  </div>
+                }
+              }
 
               <!-- Zones surlignées existantes -->
               @for (h of currentPageHighlights(); track $index) {
@@ -204,16 +235,15 @@ interface Highlight { x: number; y: number; w: number; h: number; }
           <!-- Message vocal optionnel -->
           <label class="block text-xs font-medium text-gray-600 mb-2">Message vocal (optionnel)</label>
           @if (!correctionAudio()) {
-            <label class="flex items-center gap-2 cursor-pointer w-full px-3 py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-amber-400 hover:text-amber-600 mb-4">
-              <span>🎙️</span>
-              <span>Ajouter un enregistrement audio</span>
-              <input type="file" accept="audio/*" class="hidden" (change)="onCorrectionAudioSelected($event)" />
-            </label>
+            <div class="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg mb-4 bg-gray-50">
+              <app-audio-recorder (recorded)="onCorrectionAudioRecorded($event)"></app-audio-recorder>
+              <span class="text-xs text-gray-400">Enregistrez un mémo vocal pour accompagner vos corrections</span>
+            </div>
           } @else {
             <div class="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg mb-4">
               <span class="text-amber-600">🎙️</span>
               <span class="text-xs text-amber-700 flex-1 truncate">{{ correctionAudio()!.name }}</span>
-              <button (click)="correctionAudio.set(null)" class="text-xs text-gray-400 hover:text-red-500 flex-shrink-0">✕</button>
+              <button (click)="correctionAudio.set(null)" class="text-xs text-gray-400 hover:text-red-500 flex-shrink-0">✕ Supprimer</button>
             </div>
           }
 
@@ -234,6 +264,7 @@ interface Highlight { x: number; y: number; w: number; h: number; }
 })
 export class PdfViewerComponent implements OnInit, OnDestroy {
   @ViewChild('pageWrapper') pageWrapper!: ElementRef<HTMLDivElement>;
+  @ViewChild('pageImg')    pageImg!:    ElementRef<HTMLImageElement>;
 
   api    = inject(ApiService);
   private route  = inject(ActivatedRoute);
@@ -259,6 +290,14 @@ export class PdfViewerComponent implements OnInit, OnDestroy {
   sendingCorrection   = signal(false);
 
   isParapheur = signal(false);
+
+  // ── Dimensions image courante (capturées au chargement) ──────────────────
+  imgW = signal(0);
+  imgH = signal(0);
+
+  // ── Zones signature/tampon (chargées depuis les annotations) ─────────────
+  signatureAnnotations     = signal<Record<number, any[]>>({});
+  currentPageAnnotations   = computed(() => this.signatureAnnotations()[this.currentPage()] ?? []);
 
   // ── Surlignage ───────────────────────────────────────────────────────────
   highlights      = signal<Record<number, Highlight[]>>({});
@@ -302,7 +341,24 @@ export class PdfViewerComponent implements OnInit, OnDestroy {
       this.pages.set(Array.from({ length: count }, (_, i) => i));
       this.goToPage(0);
       this.loadThumbs(count);
+      if (d.parapheurStatut === 'EN_ATTENTE_SIGNATURE') {
+        this.loadSignatureAnnotations(count);
+      }
     });
+  }
+
+  private loadSignatureAnnotations(pageCount: number) {
+    for (let p = 0; p < pageCount; p++) {
+      const pageId = `${this.docId}::${p}`;
+      this.api.getAnnotations(pageId).subscribe(annots => {
+        const zones = annots.filter((a: any) =>
+          a.annotationType === 'SIGNATURE_ZONE' || a.annotationType === 'STAMP_ZONE'
+        );
+        if (zones.length > 0) {
+          this.signatureAnnotations.update(m => ({ ...m, [p]: zones }));
+        }
+      });
+    }
   }
 
   private loadThumbs(count: number) {
@@ -314,9 +370,19 @@ export class PdfViewerComponent implements OnInit, OnDestroy {
     }
   }
 
+  onPageImageLoaded() {
+    const el = this.pageImg?.nativeElement;
+    if (el) {
+      this.imgW.set(el.offsetWidth);
+      this.imgH.set(el.offsetHeight);
+    }
+  }
+
   goToPage(p: number) {
     this.currentPage.set(p);
     this.pageUrl.set(null);
+    this.imgW.set(0);
+    this.imgH.set(0);
     this.api.renderPageBlob(this.docId, p).subscribe(url => {
       this.blobUrls.push(url);
       this.pageUrl.set(url);
@@ -423,9 +489,9 @@ export class PdfViewerComponent implements OnInit, OnDestroy {
     this.showCorrectionModal.set(true);
   }
 
-  onCorrectionAudioSelected(ev: Event) {
-    const file = (ev.target as HTMLInputElement).files?.[0];
-    if (file) this.correctionAudio.set(file);
+  onCorrectionAudioRecorded(blob: Blob) {
+    const file = new File([blob], `correction_${Date.now()}.webm`, { type: blob.type || 'audio/webm' });
+    this.correctionAudio.set(file);
   }
 
   confirmCorrection() {

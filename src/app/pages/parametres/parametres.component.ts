@@ -2,8 +2,10 @@ import { Component, signal, inject, OnInit, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
+import { AuthService } from '../../services/auth.service';
+import { SignatureAssetsComponent } from '../signature-assets/signature-assets.component';
 
-type Tab = 'INSTRUCTION_TYPES' | 'PROOF_TYPES' | 'USERS';
+type Tab = 'INSTRUCTION_TYPES' | 'PROOF_TYPES' | 'USERS' | 'SIGNATURE_ASSETS';
 
 type Categorie = 'STRATEGIQUE' | 'OPERATIONNELLE' | 'MANAGERIALE' | 'JURIDIQUE';
 type Urgence = 'URGENT' | 'NORMAL' | 'PLANIFIE';
@@ -40,32 +42,29 @@ interface AppUser {
 @Component({
   selector: 'app-parametres',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, SignatureAssetsComponent],
   template: `
     <div class="p-6 max-w-6xl mx-auto">
-      <h1 class="text-2xl font-bold text-gray-800 mb-6">Paramètres</h1>
+      <h1 class="text-2xl font-bold text-gray-800 mb-6">{{ tabs().length === 1 ? 'Mes Signatures' : 'Paramètres' }}</h1>
 
       <!-- Tabs -->
-      <div class="flex gap-2 mb-6 border-b border-gray-200">
-        <button (click)="activeTab.set('INSTRUCTION_TYPES')"
-                [class]="activeTab() === 'INSTRUCTION_TYPES'
-                  ? 'px-5 py-2.5 text-sm font-medium text-blue-700 border-b-2 border-blue-600 -mb-px'
-                  : 'px-5 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-800'">
-          Types d'Instructions
-        </button>
-        <button (click)="activeTab.set('PROOF_TYPES')"
-                [class]="activeTab() === 'PROOF_TYPES'
-                  ? 'px-5 py-2.5 text-sm font-medium text-blue-700 border-b-2 border-blue-600 -mb-px'
-                  : 'px-5 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-800'">
-          Types de Preuves
-        </button>
-        <button (click)="activeTab.set('USERS')"
-                [class]="activeTab() === 'USERS'
-                  ? 'px-5 py-2.5 text-sm font-medium text-blue-700 border-b-2 border-blue-600 -mb-px'
-                  : 'px-5 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-800'">
-          Utilisateurs
-        </button>
-      </div>
+      @if (tabs().length > 1) {
+        <div class="flex gap-2 mb-6 border-b border-gray-200 overflow-x-auto">
+          @for (tab of tabs(); track tab.id) {
+            <button (click)="activeTab.set(tab.id)"
+                    [class]="activeTab() === tab.id
+                      ? 'px-5 py-2.5 text-sm font-medium text-blue-700 border-b-2 border-blue-600 -mb-px whitespace-nowrap'
+                      : 'px-5 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 whitespace-nowrap'">
+              {{ tab.label }}
+            </button>
+          }
+        </div>
+      }
+
+      <!-- ── SIGNATURE ASSETS ────────────────────────────────────────────── -->
+      @if (activeTab() === 'SIGNATURE_ASSETS') {
+        <app-signature-assets></app-signature-assets>
+      }
 
       <!-- ── INSTRUCTION TYPES ───────────────────────────────────────────── -->
       @if (activeTab() === 'INSTRUCTION_TYPES') {
@@ -437,6 +436,20 @@ interface AppUser {
 })
 export class ParametresComponent implements OnInit {
   private api = inject(ApiService);
+  private auth = inject(AuthService);
+
+  tabs = computed(() => {
+    const role = this.auth.currentUser()?.role;
+    if (role === 'SUBORDONNE' || role === 'SECRETAIRE') {
+      return [{ id: 'SIGNATURE_ASSETS' as Tab, label: 'Mes Signatures' }];
+    }
+    return [
+      { id: 'INSTRUCTION_TYPES' as Tab, label: "Types d'Instructions" },
+      { id: 'PROOF_TYPES' as Tab, label: 'Types de Preuves' },
+      { id: 'USERS' as Tab, label: 'Utilisateurs' },
+      { id: 'SIGNATURE_ASSETS' as Tab, label: 'Signatures & Cachets' }
+    ];
+  });
 
   activeTab = signal<Tab>('INSTRUCTION_TYPES');
 
@@ -485,6 +498,9 @@ export class ParametresComponent implements OnInit {
   ];
 
   ngOnInit() {
+    if (this.tabs().length === 1) {
+      this.activeTab.set('SIGNATURE_ASSETS');
+    }
     this.loadItypes();
     this.loadPtypes();
     this.loadUsers();

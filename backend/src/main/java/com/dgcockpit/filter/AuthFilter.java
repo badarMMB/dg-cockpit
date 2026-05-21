@@ -21,7 +21,8 @@ public class AuthFilter extends OncePerRequestFilter {
 
     // Paths under /api/ that are accessible without authentication
     private static final Set<String> PUBLIC_API_PATHS = Set.of(
-        "/api/auth/login"
+        "/api/auth/login",
+        "/api/events"
     );
 
     public AuthFilter(AuthService authService) {

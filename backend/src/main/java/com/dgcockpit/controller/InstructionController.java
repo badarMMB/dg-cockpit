@@ -7,7 +7,7 @@ import com.dgcockpit.entity.InstructionType;
 import com.dgcockpit.repository.InstructionMessageRepository;
 import com.dgcockpit.repository.InstructionRepository;
 import com.dgcockpit.repository.InstructionTypeRepository;
-import org.springframework.http.ResponseEntity;
+import com.dgcockpit.sse.SseService;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -22,17 +22,25 @@ public class InstructionController {
     private final InstructionRepository instructionRepo;
     private final InstructionMessageRepository messageRepo;
     private final InstructionTypeRepository instructionTypeRepo;
+    private final SseService sseService;
 
     public InstructionController(InstructionRepository instructionRepo,
                                  InstructionMessageRepository messageRepo,
-                                 InstructionTypeRepository instructionTypeRepo) {
+                                 InstructionTypeRepository instructionTypeRepo,
+                                 SseService sseService) {
         this.instructionRepo = instructionRepo;
         this.messageRepo = messageRepo;
         this.instructionTypeRepo = instructionTypeRepo;
+        this.sseService = sseService;
     }
 
     @GetMapping
-    public List<Map<String, Object>> getAllInstructions() {
+    public List<Map<String, Object>> getAllInstructions(@RequestAttribute(value = "currentUser", required = false) com.dgcockpit.entity.AppUser currentUser) {
+        if (currentUser != null && "SUBORDONNE".equals(currentUser.getRole().name())) {
+            return instructionRepo.findByAssignee(currentUser.getNomComplet()).stream()
+                .map(this::toThreadDto)
+                .toList();
+        }
         return instructionRepo.findAllByOrderByCreatedAtDesc().stream()
             .map(this::toThreadDto)
             .toList();
@@ -51,7 +59,7 @@ public class InstructionController {
         }
         if (itype != null) {
             instruction.setInstructionType(itype);
-            instruction.setType(itype.getLabel()); // mirror for search
+            instruction.setType(itype.getLabel());
         } else {
             instruction.setType((String) body.getOrDefault("type", "Autre"));
         }
@@ -104,6 +112,9 @@ public class InstructionController {
         messageRepo.save(msg);
 
         instructionRepo.save(saved);
+        sseService.broadcast("INSTRUCTION_CREATED", Map.of(
+            "id", saved.getId(),
+            "title", saved.getTitle() != null ? saved.getTitle() : ""));
         return toThreadDto(saved);
     }
 
@@ -163,11 +174,15 @@ public class InstructionController {
         InstructionMessage msg = messageRepo.findById(msgId)
             .orElseThrow(() -> new RuntimeException("Message introuvable: " + msgId));
         msg.setStatut(statut);
+        Instruction instr = msg.getInstruction();
         if (statut == InstructionMessage.StatutMessage.VALIDATED) {
-            msg.getInstruction().setStatut(Instruction.StatutInstruction.CLOTURE);
-            instructionRepo.save(msg.getInstruction());
+            instr.setStatut(Instruction.StatutInstruction.CLOTURE);
+            instructionRepo.save(instr);
         }
-        return toMessageDto(messageRepo.save(msg));
+        Map<String, Object> result = toMessageDto(messageRepo.save(msg));
+        sseService.broadcast("INSTRUCTION_UPDATED", Map.of(
+            "id", instr.getId(), "statut", instr.getStatut().name()));
+        return result;
     }
 
     private Map<String, Object> toThreadDto(Instruction i) {

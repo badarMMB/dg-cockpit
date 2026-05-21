@@ -54,6 +54,9 @@ public class BureauDocument {
     // Rempli après soumission au parapheur
     private String pdfDocumentId;
 
+    // ID de l'instruction de correction créée lors d'un renvoi avec correction
+    private String correctionInstructionId;
+
     // Motif de renvoi par le DG
     @Column(columnDefinition = "TEXT")
     private String renvoyeMotif;
@@ -64,6 +67,17 @@ public class BureauDocument {
 
     // Clé MinIO du scan de preuve de livraison
     private String scanLivraisonKey;
+
+    // Référence administrative générée à la soumission : ex. N°045/DG/2026
+    private String reference;
+    private Integer referenceNumber;
+    private Integer referenceYear;
+
+    // Timestamps de chaque changement de statut (pour la timeline)
+    private LocalDateTime soumisAt;
+    private LocalDateTime signeAt;
+    private LocalDateTime retourneAt;
+    private LocalDateTime livreAt;
 
     private LocalDateTime createdAt = LocalDateTime.now();
     private LocalDateTime updatedAt = LocalDateTime.now();
@@ -123,8 +137,24 @@ public class BureauDocument {
     public void setStampZonesJson(String stampZonesJson) { this.stampZonesJson = stampZonesJson; }
     public String getPdfDocumentId() { return pdfDocumentId; }
     public void setPdfDocumentId(String pdfDocumentId) { this.pdfDocumentId = pdfDocumentId; }
+    public String getCorrectionInstructionId() { return correctionInstructionId; }
+    public void setCorrectionInstructionId(String v) { this.correctionInstructionId = v; }
     public String getScanLivraisonKey() { return scanLivraisonKey; }
     public void setScanLivraisonKey(String scanLivraisonKey) { this.scanLivraisonKey = scanLivraisonKey; }
+    public String getReference() { return reference; }
+    public void setReference(String reference) { this.reference = reference; }
+    public Integer getReferenceNumber() { return referenceNumber; }
+    public void setReferenceNumber(Integer referenceNumber) { this.referenceNumber = referenceNumber; }
+    public Integer getReferenceYear() { return referenceYear; }
+    public void setReferenceYear(Integer referenceYear) { this.referenceYear = referenceYear; }
+    public LocalDateTime getSoumisAt() { return soumisAt; }
+    public void setSoumisAt(LocalDateTime soumisAt) { this.soumisAt = soumisAt; }
+    public LocalDateTime getSigneAt() { return signeAt; }
+    public void setSigneAt(LocalDateTime signeAt) { this.signeAt = signeAt; }
+    public LocalDateTime getRetourneAt() { return retourneAt; }
+    public void setRetourneAt(LocalDateTime retourneAt) { this.retourneAt = retourneAt; }
+    public LocalDateTime getLivreAt() { return livreAt; }
+    public void setLivreAt(LocalDateTime livreAt) { this.livreAt = livreAt; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }

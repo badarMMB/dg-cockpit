@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, ViewChild, ElementRef, AfterViewChecked, inject, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, ViewChild, ElementRef, AfterViewChecked, inject, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
@@ -12,7 +12,7 @@ interface ChatMessage {
   text: string;
   time: string;
   isSelf: boolean;
-  type: 'normal' | 'final';
+  type: 'normal' | 'final' | 'system';
   hasAttachment: boolean;
   attachmentName?: string;
   actionType?: string;
@@ -32,7 +32,7 @@ interface Assignee {
   templateUrl: './chat.component.html',
   styleUrl: './chat.component.css'
 })
-export class ChatComponent implements OnInit, AfterViewChecked {
+export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   @ViewChild('chatContainer') chatContainer!: ElementRef;
 
   private api  = inject(ApiService);
@@ -44,12 +44,17 @@ export class ChatComponent implements OnInit, AfterViewChecked {
   messages         = signal<ChatMessage[]>([]);
   newMessage       = signal('');
   showFinalActionMenu = signal(false);
+  
+  selectedFile     = signal<File | null>(null);
+  uploadingFile    = signal(false);
+  
   private shouldScrollToBottom = false;
+  private eventSource: EventSource | null = null;
 
   // ── New instruction modal ─────────────────────────────────────────────────
   isNewInstructionModalOpen  = signal(false);
   newInstructionTitle        = signal('');
-  newInstructionTypeId       = signal('');   // selected InstructionType ID
+  newInstructionTypeId       = signal('');
   newInstructionUrgence      = signal('NORMAL');
   newInstructionEcheance     = signal('');
   newInstructionConfidential = signal(false);
@@ -59,8 +64,8 @@ export class ChatComponent implements OnInit, AfterViewChecked {
   hasAudioRecord             = signal(false);
 
   // ── Reference data ────────────────────────────────────────────────────────
-  instructionTypes  = signal<any[]>([]);   // loaded from API
-  availableAgents   = signal<string[]>([]); // loaded from Collaborateurs
+  instructionTypes  = signal<any[]>([]);
+  availableAgents   = signal<string[]>([]);
 
   // ── Workflow ──────────────────────────────────────────────────────────────
   workflowSteps = signal<any[]>([]);
@@ -68,6 +73,8 @@ export class ChatComponent implements OnInit, AfterViewChecked {
 
   currentUser = computed(() => this.auth.currentUser());
   isDG        = computed(() => this.currentUser()?.role === 'DG');
+  isSubordonne = computed(() => this.currentUser()?.role === 'SUBORDONNE');
+  isSecretaire = computed(() => this.currentUser()?.role === 'SECRETAIRE');
 
   // ── Maps ──────────────────────────────────────────────────────────────────
   readonly statutColors: Record<string, string> = {
@@ -112,6 +119,50 @@ export class ChatComponent implements OnInit, AfterViewChecked {
     this.api.getCollaborateurs().subscribe(list => {
       this.availableAgents.set(list.map((c: any) => c.name));
     });
+    this.connectSse();
+  }
+
+  ngOnDestroy() {
+    this.eventSource?.close();
+  }
+
+  private connectSse() {
+    this.eventSource = new EventSource('/api/events');
+
+    this.eventSource.addEventListener('INSTRUCTION_CREATED', () => {
+      this.loadThreads();
+    });
+
+    this.eventSource.addEventListener('INSTRUCTION_UPDATED', (event: MessageEvent) => {
+      const data = JSON.parse(event.data);
+      this.threads.update(ts => ts.map(t =>
+        t.id === data.id ? { ...t, statut: data.statut } : t
+      ));
+      if (this.activeThreadId() === data.id) {
+        this.api.getMessages(data.id).subscribe(msgs => {
+          this.messages.set(msgs.map((m: any) => this.toMessage(m)));
+          this.shouldScrollToBottom = true;
+        });
+      }
+    });
+  }
+
+  private toMessage(m: any): ChatMessage {
+    const isSub = this.isSubordonne();
+    const isSelf = isSub ? !m.isSelf : m.isSelf;
+    return {
+      id: m.id,
+      sender: m.sender,
+      text: m.text ?? '',
+      time: m.time,
+      isSelf,
+      type: m.type as 'normal' | 'final' | 'system',
+      hasAttachment: m.hasAttachment,
+      attachmentName: m.attachmentName,
+      actionType: m.actionType,
+      status: m.status as any,
+      audioUrl: m.audioUrl,
+    };
   }
 
   private loadThreads() {
@@ -126,12 +177,7 @@ export class ChatComponent implements OnInit, AfterViewChecked {
     this.activeThreadId.set(threadId);
     this.showWorkflow.set(false);
     this.api.getMessages(threadId).subscribe(msgs => {
-      this.messages.set(msgs.map((m: any) => ({
-        id: m.id, sender: m.sender, text: m.text, time: m.time,
-        isSelf: m.isSelf, type: m.type as 'normal' | 'final',
-        hasAttachment: m.hasAttachment, attachmentName: m.attachmentName,
-        actionType: m.actionType, status: m.status as any, audioUrl: m.audioUrl,
-      })));
+      this.messages.set(msgs.map((m: any) => this.toMessage(m)));
       this.shouldScrollToBottom = true;
     });
     this.api.getWorkflow(threadId).subscribe(steps => this.workflowSteps.set(steps));
@@ -229,26 +275,64 @@ export class ChatComponent implements OnInit, AfterViewChecked {
     this.showFinalActionMenu.set(false);
   }
 
-  private postMessage(type: 'normal' | 'final', actionType?: string) {
+  private postMessage(type: 'normal' | 'final', actionType?: string, attachmentName?: string) {
     const threadId = this.activeThreadId();
     if (!threadId) return;
-    const isSelf = type === 'normal';
-    const payload = {
-      sender: isSelf ? 'DG' : 'Agent',
+    const isSub = this.isSubordonne();
+    const sender = isSub ? (this.currentUser()?.nomComplet || 'Agent') : 'DG';
+    const isSelf = !isSub;
+    
+    const payload: any = {
+      sender,
       isSelf,
       text: this.newMessage(),
       type: type.toUpperCase(),
       actionType: actionType?.toUpperCase(),
     };
+    if (attachmentName) {
+      payload.attachmentName = attachmentName;
+      payload.hasAttachment = true;
+    }
+
     this.api.sendMessage(threadId, payload).subscribe(saved => {
-      this.messages.update(msgs => [...msgs, {
-        id: saved.id, sender: saved.sender, text: saved.text, time: saved.time,
-        isSelf: saved.isSelf, type: saved.type as 'normal' | 'final',
-        hasAttachment: saved.hasAttachment, attachmentName: saved.attachmentName,
-        actionType: saved.actionType, status: saved.status as any, audioUrl: saved.audioUrl,
-      }]);
+      this.messages.update(msgs => [...msgs, this.toMessage(saved)]);
       this.newMessage.set('');
       this.shouldScrollToBottom = true;
+    });
+  }
+
+  onFileSelected(ev: Event) {
+    const file = (ev.target as HTMLInputElement).files?.[0];
+    if (file) this.selectedFile.set(file);
+  }
+
+  removeSelectedFile() {
+    this.selectedFile.set(null);
+  }
+
+  sendSubordonneFinal() {
+    const file = this.selectedFile();
+    if (!this.newMessage().trim() && !file) return;
+    if (file) {
+      this.uploadingFile.set(true);
+      this.api.uploadFile(file).subscribe(res => {
+        this.uploadingFile.set(false);
+        this.postMessage('final', undefined, res.name);
+        this.removeSelectedFile();
+        this.autoSubmit();
+      });
+    } else {
+      this.postMessage('final');
+      this.autoSubmit();
+    }
+  }
+
+  private autoSubmit() {
+    const id = this.activeThreadId();
+    if (!id) return;
+    this.api.soumettre(id, { validateur: 'DG', commentaire: '' }).subscribe(step => {
+      this.workflowSteps.update(s => [...s, step]);
+      this.threads.update(t => t.map(th => th.id === id ? { ...th, statut: 'SOUMIS_VALIDATION' } : th));
     });
   }
 
@@ -274,13 +358,9 @@ export class ChatComponent implements OnInit, AfterViewChecked {
         attachmentName: res.name, audioUrl: this.api.getFileUrl(res.name),
       };
       this.api.sendMessage(threadId, payload).subscribe(saved => {
-        this.messages.update(msgs => [...msgs, {
-          id: saved.id, sender: saved.sender, text: saved.text ?? '',
-          time: saved.time, isSelf: saved.isSelf, type: saved.type as 'normal' | 'final',
-          hasAttachment: saved.hasAttachment, attachmentName: saved.attachmentName,
-          actionType: saved.actionType, status: saved.status as any,
-          audioUrl: saved.audioUrl ?? payload.audioUrl,
-        }]);
+        const msg = this.toMessage(saved);
+        if (!msg.audioUrl) msg.audioUrl = payload.audioUrl;
+        this.messages.update(msgs => [...msgs, msg]);
         this.shouldScrollToBottom = true;
       });
     });
@@ -296,11 +376,15 @@ export class ChatComponent implements OnInit, AfterViewChecked {
   toggleWorkflow() { this.showWorkflow.update(v => !v); }
 
   canSoumettre(): boolean {
+    if (this.isSubordonne()) return false;
     const s = this.activeThread()?.statut;
     return s === 'OUVERT' || s === 'EN_COURS' || s === 'EN_ATTENTE';
   }
 
-  canValider(): boolean { return this.activeThread()?.statut === 'SOUMIS_VALIDATION'; }
+  canValider(): boolean {
+    if (this.isSubordonne()) return false;
+    return this.activeThread()?.statut === 'SOUMIS_VALIDATION';
+  }
 
   soumettreValidation() {
     const id = this.activeThreadId();

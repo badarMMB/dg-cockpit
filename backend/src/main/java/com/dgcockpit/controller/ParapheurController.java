@@ -17,6 +17,7 @@ import com.dgcockpit.repository.PdfDocumentRepository;
 import com.dgcockpit.repository.UserSignatureAssetRepository;
 import com.dgcockpit.service.DocumentFinalizationService;
 import com.dgcockpit.service.MinioService;
+import com.dgcockpit.sse.SseService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -53,6 +54,7 @@ public class ParapheurController {
     private final BureauDocumentRepository bureauRepo;
     private final InstructionRepository instructionRepo;
     private final InstructionMessageRepository instructionMessageRepo;
+    private final SseService sseService;
     private final ObjectMapper objectMapper;
 
     private static final String AUDIO_BUCKET = "ged-audio-corrections";
@@ -66,6 +68,7 @@ public class ParapheurController {
                                BureauDocumentRepository bureauRepo,
                                InstructionRepository instructionRepo,
                                InstructionMessageRepository instructionMessageRepo,
+                               SseService sseService,
                                ObjectMapper objectMapper) {
         this.repo = repo;
         this.finalizer = finalizer;
@@ -76,6 +79,7 @@ public class ParapheurController {
         this.bureauRepo = bureauRepo;
         this.instructionRepo = instructionRepo;
         this.instructionMessageRepo = instructionMessageRepo;
+        this.sseService = sseService;
         this.objectMapper = objectMapper;
     }
 
@@ -147,15 +151,12 @@ public class ParapheurController {
             return ResponseEntity.badRequest().build();
         }
 
-        // Résoudre les zones SIGNATURE_ZONE / STAMP_ZONE avec les assets réels du DG
         AppUser signer = (AppUser) request.getAttribute("currentUser");
         if (signer != null) {
             resolveZones(id, signer.getId());
         }
 
-        // Bake annotations into final PDF
         doc = finalizer.finalize(id);
-
         doc.setSignedAt(LocalDateTime.now());
         doc.setUpdatedAt(LocalDateTime.now());
 
@@ -168,11 +169,31 @@ public class ParapheurController {
 
         PdfDocument saved = repo.save(doc);
 
-        // Notifier le bureau : document signé
-        bureauRepo.findByPdfDocumentId(id).ifPresent(bureau -> {
+        // Notifier le bureau + clore l'instruction de correction liée
+        final String pdfId = id;
+        bureauRepo.findByPdfDocumentId(pdfId).ifPresent(bureau -> {
             bureau.setStatut(BureauDocument.Statut.SIGNE);
+            bureau.setSigneAt(LocalDateTime.now());
             bureau.setUpdatedAt(LocalDateTime.now());
             bureauRepo.save(bureau);
+
+            if (bureau.getCorrectionInstructionId() != null) {
+                instructionRepo.findById(bureau.getCorrectionInstructionId()).ifPresent(instr -> {
+                    if (instr.getStatut() != Instruction.StatutInstruction.CLOTURE) {
+                        InstructionMessage sysMsg = new InstructionMessage();
+                        sysMsg.setInstruction(instr);
+                        sysMsg.setSender("Système");
+                        sysMsg.setSelf(false);
+                        sysMsg.setText("✅ Document signé par le DG — instruction de correction clôturée automatiquement.");
+                        sysMsg.setType(InstructionMessage.TypeMessage.SYSTEM);
+                        instructionMessageRepo.save(sysMsg);
+                        instr.setStatut(Instruction.StatutInstruction.CLOTURE);
+                        instructionRepo.save(instr);
+                        sseService.broadcast("INSTRUCTION_UPDATED", Map.of(
+                            "id", instr.getId(), "statut", "CLOTURE"));
+                    }
+                });
+            }
         });
 
         return ResponseEntity.ok(saved);
@@ -194,7 +215,6 @@ public class ParapheurController {
         return ResponseEntity.ok(repo.save(doc));
     }
 
-    // ── POST /api/parapheur/:id/renvoyer ── retour à la secrétaire pour modification
     @PostMapping("/{id}/renvoyer")
     public ResponseEntity<PdfDocument> renvoyer(@PathVariable String id,
                                                  @RequestBody Map<String, String> body) {
@@ -210,11 +230,11 @@ public class ParapheurController {
         doc.setUpdatedAt(LocalDateTime.now());
         repo.save(doc);
 
-        // Mettre à jour le BureauDocument lié
         bureauRepo.findByPdfDocumentId(id).ifPresent(bureau -> {
             bureau.setStatut(BureauDocument.Statut.RETOURNE);
+            bureau.setRetourneAt(LocalDateTime.now());
             bureau.setRenvoyeMotif(body.get("comment"));
-            bureau.setPdfDocumentId(null); // libère le lien pour permettre une nouvelle soumission
+            bureau.setPdfDocumentId(null);
             bureau.setUpdatedAt(LocalDateTime.now());
             bureauRepo.save(bureau);
         });
@@ -252,6 +272,7 @@ public class ParapheurController {
         if (bureauOpt.isPresent()) {
             BureauDocument bureau = bureauOpt.get();
             bureau.setStatut(BureauDocument.Statut.RETOURNE);
+            bureau.setRetourneAt(LocalDateTime.now());
             bureau.setRenvoyeMotif(comment);
             bureau.setPdfDocumentId(null);
             bureau.setUpdatedAt(LocalDateTime.now());
@@ -292,7 +313,13 @@ public class ParapheurController {
         instruction.setAgentDisplay("Secrétaire");
         Instruction savedInstruction = instructionRepo.save(instruction);
 
-        // 5. Créer le message initial avec le commentaire (et éventuellement l'audio)
+        // 5. Lier l'instruction au BureauDocument
+        bureauOpt.ifPresent(bureau -> {
+            bureau.setCorrectionInstructionId(savedInstruction.getId());
+            bureauRepo.save(bureau);
+        });
+
+        // 6. Créer le message initial
         InstructionMessage msg = new InstructionMessage();
         msg.setInstruction(savedInstruction);
         msg.setSender(senderName);
@@ -307,10 +334,14 @@ public class ParapheurController {
         }
         instructionMessageRepo.save(msg);
 
+        // 7. Notifier les clients SSE
+        sseService.broadcast("INSTRUCTION_CREATED", Map.of(
+            "id", savedInstruction.getId(),
+            "title", savedInstruction.getTitle()));
+
         return ResponseEntity.ok(doc);
     }
 
-    // ── GET /api/parapheur/audio/:key ── sert le fichier audio avec authentification
     @GetMapping("/audio/{key}")
     public ResponseEntity<byte[]> getAudio(@PathVariable String key) throws Exception {
         byte[] bytes = minio.downloadBytes(AUDIO_BUCKET, key);
@@ -334,7 +365,6 @@ public class ParapheurController {
                 .filter(a -> "STAMP".equals(a.getAssetType())).findFirst()
                 .map(UserSignatureAsset::getId).orElse(null);
 
-        // Parcourir toutes les pages du document
         for (int p = 0; p < 100; p++) {
             String pageId = docId + "::" + p;
             List<PageAnnotation> annots = annotRepo.findByPageId(pageId);
@@ -369,10 +399,6 @@ public class ParapheurController {
         courrierDepartRepo.save(cd);
     }
 
-    /**
-     * Brûle les surlignages (rectangles jaunes semi-transparents) dans le PDF.
-     * Les coordonnées sont en % (origine haut-gauche) ; le système PDF a Y=0 en bas.
-     */
     private byte[] burnHighlights(byte[] pdfBytes, String highlightsJson) throws Exception {
         List<Map<String, Object>> entries;
         try {
@@ -400,7 +426,6 @@ public class ParapheurController {
                 float rx = (float)(xPct / 100.0 * pw);
                 float rw = (float)(wPct / 100.0 * pw);
                 float rh = (float)(hPct / 100.0 * ph);
-                // Inverser l'axe Y : origine PDF = bas de page
                 float ry = (float)((1.0 - (yPct + hPct) / 100.0) * ph);
 
                 PDExtendedGraphicsState gs = new PDExtendedGraphicsState();
@@ -409,7 +434,7 @@ public class ParapheurController {
                 try (PDPageContentStream cs = new PDPageContentStream(
                         pdf, page, PDPageContentStream.AppendMode.APPEND, true, true)) {
                     cs.setGraphicsStateParameters(gs);
-                    cs.setNonStrokingColor(1.0f, 0.95f, 0.0f); // jaune vif
+                    cs.setNonStrokingColor(1.0f, 0.95f, 0.0f);
                     cs.addRect(rx, ry, rw, rh);
                     cs.fill();
                 }

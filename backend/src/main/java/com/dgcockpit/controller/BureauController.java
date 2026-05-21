@@ -2,13 +2,18 @@ package com.dgcockpit.controller;
 
 import com.dgcockpit.entity.AppUser;
 import com.dgcockpit.entity.BureauDocument;
+import com.dgcockpit.entity.Instruction;
+import com.dgcockpit.entity.InstructionMessage;
 import com.dgcockpit.entity.PageAnnotation;
 import com.dgcockpit.entity.PdfDocument;
 import com.dgcockpit.repository.BureauDocumentRepository;
+import com.dgcockpit.repository.InstructionMessageRepository;
+import com.dgcockpit.repository.InstructionRepository;
 import com.dgcockpit.repository.PageAnnotationRepository;
 import com.dgcockpit.repository.PdfDocumentRepository;
 import com.dgcockpit.service.DocumentFinalizationService;
 import com.dgcockpit.service.MinioService;
+import com.dgcockpit.sse.SseService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,25 +40,34 @@ public class BureauController {
     private final BureauDocumentRepository bureauRepo;
     private final PdfDocumentRepository pdfRepo;
     private final PageAnnotationRepository annotRepo;
+    private final InstructionRepository instructionRepo;
+    private final InstructionMessageRepository instructionMessageRepo;
     private final MinioService minio;
     private final DocumentFinalizationService finalizer;
+    private final SseService sseService;
     private final ObjectMapper objectMapper;
 
     public BureauController(BureauDocumentRepository bureauRepo,
                             PdfDocumentRepository pdfRepo,
                             PageAnnotationRepository annotRepo,
+                            InstructionRepository instructionRepo,
+                            InstructionMessageRepository instructionMessageRepo,
                             MinioService minio,
                             DocumentFinalizationService finalizer,
+                            SseService sseService,
                             ObjectMapper objectMapper) {
         this.bureauRepo = bureauRepo;
         this.pdfRepo = pdfRepo;
         this.annotRepo = annotRepo;
+        this.instructionRepo = instructionRepo;
+        this.instructionMessageRepo = instructionMessageRepo;
         this.minio = minio;
         this.finalizer = finalizer;
+        this.sseService = sseService;
         this.objectMapper = objectMapper;
     }
 
-    // ── POST /api/bureau/documents ── upload PDF (navigateur OU imprimante virtuelle)
+    // ── POST /api/bureau/documents ── upload PDF
     @PostMapping("/documents")
     public ResponseEntity<Map<String, Object>> upload(
             @RequestParam MultipartFile file,
@@ -84,7 +98,7 @@ public class BureauController {
         return ResponseEntity.ok(toDto(bureauRepo.save(doc)));
     }
 
-    // ── GET /api/bureau/documents ── liste des brouillons de la Secrétaire connectée
+    // ── GET /api/bureau/documents ── liste des documents de la Secrétaire connectée
     @GetMapping("/documents")
     public List<Map<String, Object>> list(HttpServletRequest request) {
         AppUser currentUser = (AppUser) request.getAttribute("currentUser");
@@ -106,7 +120,20 @@ public class BureauController {
                 .body(png);
     }
 
-    // ── PUT /api/bureau/documents/:id/pdf ── remplace le PDF source sans toucher aux métadonnées
+    // ── GET /api/bureau/documents/:id/stream ── diffuse le PDF source pour aperçu inline
+    @GetMapping("/documents/{id}/stream")
+    public ResponseEntity<byte[]> streamPdf(@PathVariable String id) throws Exception {
+        BureauDocument doc = bureauRepo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("BureauDocument introuvable: " + id));
+        byte[] bytes = minio.downloadBytes(doc.getBucket(), doc.getObjectKey());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, "application/pdf")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + doc.getOriginalFileName() + "\"")
+                .header(HttpHeaders.CACHE_CONTROL, "no-cache")
+                .body(bytes);
+    }
+
+    // ── PUT /api/bureau/documents/:id/pdf ── remplace le PDF source
     @PutMapping("/documents/{id}/pdf")
     public ResponseEntity<Map<String, Object>> replacePdf(
             @PathVariable String id,
@@ -120,10 +147,8 @@ public class BureauController {
             return ResponseEntity.status(403).build();
         }
 
-        // Supprimer l'ancien fichier
         try { minio.delete(doc.getBucket(), doc.getObjectKey()); } catch (Exception ignored) {}
 
-        // Upload du nouveau fichier
         String newKey = UUID.randomUUID() + "_" + file.getOriginalFilename();
         minio.uploadBytes(BUCKET, newKey, file.getBytes(), "application/pdf");
         int newPageCount = finalizer.getPageCount(BUCKET, newKey);
@@ -149,8 +174,7 @@ public class BureauController {
         return ResponseEntity.noContent().build();
     }
 
-    // ── POST /api/bureau/documents/:id/zones ── sauvegarder positions signature + tampon (par page)
-    // Body: { signatureZones: [{page,x,y,w,h}, ...], stampZones: [{page,x,y,w,h}, ...] }
+    // ── POST /api/bureau/documents/:id/zones ── sauvegarder positions signature + tampon
     @PostMapping("/documents/{id}/zones")
     public ResponseEntity<Map<String, Object>> saveZones(
             @PathVariable String id,
@@ -164,7 +188,6 @@ public class BureauController {
             if (sigZones != null) {
                 doc.setSignatureZonesJson(objectMapper.writeValueAsString(sigZones));
             }
-
             Object stZones = body.get("stampZones");
             if (stZones != null) {
                 doc.setStampZonesJson(objectMapper.writeValueAsString(stZones));
@@ -189,15 +212,16 @@ public class BureauController {
         if (doc.getStatut() == BureauDocument.Statut.SOUMIS) {
             return ResponseEntity.badRequest().build();
         }
-        // Réinitialiser le motif de renvoi et les surlignages en cas de re-soumission
-        if (doc.getStatut() == BureauDocument.Statut.RETOURNE) {
+
+        final boolean isResoumission = doc.getStatut() == BureauDocument.Statut.RETOURNE;
+        if (isResoumission) {
             doc.setRenvoyeMotif(null);
             doc.setHighlightsJson(null);
         }
 
         List<Map<String, Object>> sigZones = parseZones(doc.getSignatureZonesJson());
         if (sigZones.isEmpty()) {
-            return ResponseEntity.badRequest().build(); // au moins une zone signature obligatoire
+            return ResponseEntity.badRequest().build();
         }
 
         AppUser currentUser = (AppUser) request.getAttribute("currentUser");
@@ -222,7 +246,6 @@ public class BureauController {
 
         PdfDocument savedPdf = pdfRepo.save(pdf);
 
-        // Créer une annotation SIGNATURE_ZONE par entrée dans le JSON
         for (Map<String, Object> z : sigZones) {
             PageAnnotation a = new PageAnnotation();
             a.setPageId(savedPdf.getId() + "::" + toInt(z.get("page")));
@@ -235,7 +258,6 @@ public class BureauController {
             annotRepo.save(a);
         }
 
-        // Créer une annotation STAMP_ZONE par entrée dans le JSON
         for (Map<String, Object> z : parseZones(doc.getStampZonesJson())) {
             PageAnnotation a = new PageAnnotation();
             a.setPageId(savedPdf.getId() + "::" + toInt(z.get("page")));
@@ -248,19 +270,48 @@ public class BureauController {
             annotRepo.save(a);
         }
 
+        if (doc.getReference() == null) {
+            int year = LocalDateTime.now().getYear();
+            int nextNum = bureauRepo.findMaxReferenceNumberForYear(year) + 1;
+            doc.setReferenceNumber(nextNum);
+            doc.setReferenceYear(year);
+            doc.setReference(String.format("N°%03d/DG/%d", nextNum, year));
+        }
+
         doc.setStatut(BureauDocument.Statut.SOUMIS);
+        doc.setSoumisAt(LocalDateTime.now());
         doc.setPdfDocumentId(savedPdf.getId());
         doc.setUpdatedAt(LocalDateTime.now());
         bureauRepo.save(doc);
+
+        // Lors d'une re-soumission, réactiver l'instruction de correction liée
+        if (isResoumission && doc.getCorrectionInstructionId() != null) {
+            instructionRepo.findById(doc.getCorrectionInstructionId()).ifPresent(instr -> {
+                if (instr.getStatut() != Instruction.StatutInstruction.CLOTURE) {
+                    InstructionMessage sysMsg = new InstructionMessage();
+                    sysMsg.setInstruction(instr);
+                    sysMsg.setSender("Système");
+                    sysMsg.setSelf(false);
+                    sysMsg.setText("📤 Document re-soumis au parapheur — en attente de signature DG.");
+                    sysMsg.setType(InstructionMessage.TypeMessage.SYSTEM);
+                    instructionMessageRepo.save(sysMsg);
+                    instr.setStatut(Instruction.StatutInstruction.EN_COURS);
+                    instructionRepo.save(instr);
+                    sseService.broadcast("INSTRUCTION_UPDATED", Map.of(
+                        "id", instr.getId(), "statut", "EN_COURS"));
+                }
+            });
+        }
 
         Map<String, Object> result = new HashMap<>();
         result.put("bureauDocumentId", doc.getId());
         result.put("pdfDocumentId", savedPdf.getId());
         result.put("statut", "SOUMIS");
+        result.put("reference", doc.getReference());
         return ResponseEntity.ok(result);
     }
 
-    // ── DTO ───────────────────────────────────────────────────────────────────
+    // ── DTO ───────────────────────────────────────────────────────────────
 
     private Map<String, Object> toDto(BureauDocument d) {
         Map<String, Object> m = new HashMap<>();
@@ -282,6 +333,11 @@ public class BureauController {
         m.put("hasStampZone", !stZones.isEmpty());
         m.put("renvoyeMotif", d.getRenvoyeMotif());
         m.put("highlights", parseZones(d.getHighlightsJson()));
+        m.put("reference", d.getReference());
+        m.put("soumisAt",   d.getSoumisAt()   != null ? d.getSoumisAt().toString()   : null);
+        m.put("signeAt",    d.getSigneAt()    != null ? d.getSigneAt().toString()    : null);
+        m.put("retourneAt", d.getRetourneAt() != null ? d.getRetourneAt().toString() : null);
+        m.put("livreAt",    d.getLivreAt()    != null ? d.getLivreAt().toString()    : null);
         return m;
     }
 

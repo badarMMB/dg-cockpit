@@ -15,4 +15,7 @@ public interface InstructionRepository extends JpaRepository<Instruction, String
 
     @Query("SELECT i FROM Instruction i WHERE LOWER(i.title) LIKE LOWER(CONCAT('%',:q,'%')) OR LOWER(i.type) LIKE LOWER(CONCAT('%',:q,'%')) OR LOWER(i.agentDisplay) LIKE LOWER(CONCAT('%',:q,'%'))")
     List<Instruction> search(@Param("q") String q);
+
+    @Query("SELECT DISTINCT i FROM Instruction i JOIN i.assignees a WHERE a.agent = :agentName ORDER BY i.createdAt DESC")
+    List<Instruction> findByAssignee(@Param("agentName") String agentName);
 }

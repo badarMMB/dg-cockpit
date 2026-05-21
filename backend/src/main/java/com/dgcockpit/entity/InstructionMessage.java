@@ -38,7 +38,7 @@ public class InstructionMessage {
 
     private LocalDateTime sentAt = LocalDateTime.now();
 
-    public enum TypeMessage { NORMAL, FINAL }
+    public enum TypeMessage { NORMAL, FINAL, SYSTEM }
     public enum ActionType { SIGNATURE, INBOX, MEMO }
     public enum StatutMessage { PENDING, VALIDATED, REJECTED }
 

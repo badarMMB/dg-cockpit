@@ -48,7 +48,7 @@
       </div>
     </div>
 
-    <div class="p-4 border-t border-gray-200 bg-white">
+    <div class="p-4 border-t border-gray-200 bg-white" *ngIf="!isSubordonne()">
       <button (click)="openNewInstructionModal()"
               class="w-full py-2 bg-primary text-white rounded font-medium shadow-soft hover:bg-primary/90 transition-colors flex justify-center items-center gap-2">
         <span>➕</span> Nouvelle Instruction
@@ -112,9 +112,17 @@
       <!-- Messages -->
       <div #chatContainer class="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50/30 space-y-4 md:space-y-6 scroll-smooth">
         <div *ngFor="let msg of messages()" class="flex flex-col"
-             [ngClass]="msg.isSelf ? 'items-end' : 'items-start'">
+             [ngClass]="msg.type === 'system' ? 'items-center' : (msg.isSelf ? 'items-end' : 'items-start')">
 
-          <div class="text-xs text-gray-500 mb-1 px-1">{{ msg.sender }} • {{ msg.time }}</div>
+          <!-- Message système : notification automatique du workflow -->
+          <div *ngIf="msg.type === 'system'"
+               class="flex items-center gap-2 px-4 py-1.5 bg-gray-100 border border-gray-200 rounded-full text-xs text-gray-500 max-w-[90%] my-1">
+            <span>⚙️</span>
+            <span class="text-center leading-snug">{{ msg.text }}</span>
+            <span class="text-gray-400 flex-shrink-0">• {{ msg.time }}</span>
+          </div>
+
+          <div *ngIf="msg.type !== 'system'" class="text-xs text-gray-500 mb-1 px-1">{{ msg.sender }} • {{ msg.time }}</div>
 
           <!-- Message normal -->
           <div *ngIf="msg.type === 'normal'"
@@ -232,10 +240,18 @@
           </button>
         </div>
 
+        <!-- Pill preview file above textarea -->
+        <div *ngIf="selectedFile()" class="mb-2 inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full shadow-sm">
+          <span class="text-blue-600 text-sm">📎</span>
+          <span class="text-xs text-blue-700 font-medium truncate max-w-[150px]">{{ selectedFile()?.name }}</span>
+          <button (click)="removeSelectedFile()" class="text-blue-400 hover:text-red-500 text-xs font-bold leading-none">&times;</button>
+        </div>
+
         <div class="flex items-end gap-2">
-          <button class="p-2 text-gray-400 hover:text-primary transition-colors flex-shrink-0">
+          <label class="p-2 text-gray-400 hover:text-primary transition-colors flex-shrink-0 cursor-pointer">
             <span class="text-xl">📎</span>
-          </button>
+            <input type="file" class="hidden" (change)="onFileSelected($event)">
+          </label>
           <app-audio-recorder class="flex-shrink-0" (recorded)="onAudioRecorded($event)"></app-audio-recorder>
           <div class="flex-1 flex bg-white border border-gray-300 rounded-lg focus-within:border-primary focus-within:ring-1 focus-within:ring-primary items-end">
             <textarea
@@ -246,16 +262,35 @@
               class="flex-1 resize-none bg-transparent pl-3 py-2.5 focus:outline-none text-sm min-h-[42px]"
               placeholder="Votre instruction..."></textarea>
             <div class="flex items-center pr-2 gap-1.5 pb-1.5">
-              <button (click)="sendNormalMessage()"
-                      class="px-3 py-1.5 text-white bg-primary rounded hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1 text-xs font-medium"
-                      [disabled]="newMessage().trim() === ''">
-                <span>💬</span><span class="hidden sm:inline">Répondre</span>
-              </button>
-              <button (click)="toggleActionMenu()"
-                      class="px-3 py-1.5 text-primary bg-primary/10 rounded hover:bg-primary/20 transition-colors disabled:opacity-50 flex items-center gap-1 text-xs font-bold"
-                      [disabled]="newMessage().trim() === ''">
-                <span>✅</span><span class="hidden sm:inline">Clôture ▾</span>
-              </button>
+              <!-- DG / Secrétaire -->
+              <ng-container *ngIf="!isSubordonne()">
+                <button (click)="sendNormalMessage()"
+                        class="px-3 py-1.5 text-white bg-primary rounded hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1 text-xs font-medium"
+                        [disabled]="newMessage().trim() === ''">
+                  <span>💬</span><span class="hidden sm:inline">Répondre</span>
+                </button>
+                <button (click)="toggleActionMenu()"
+                        class="px-3 py-1.5 text-primary bg-primary/10 rounded hover:bg-primary/20 transition-colors disabled:opacity-50 flex items-center gap-1 text-xs font-bold"
+                        [disabled]="newMessage().trim() === ''">
+                  <span>✅</span><span class="hidden sm:inline">Clôture ▾</span>
+                </button>
+              </ng-container>
+
+              <!-- Subordonné -->
+              <ng-container *ngIf="isSubordonne()">
+                <button (click)="sendNormalMessage()"
+                        class="px-3 py-1.5 text-gray-700 bg-gray-100 border border-gray-200 rounded hover:bg-gray-200 transition-colors disabled:opacity-50 flex items-center gap-1 text-xs font-medium"
+                        [disabled]="newMessage().trim() === '' && !selectedFile()">
+                  <span>💬</span><span class="hidden sm:inline">Répondre</span>
+                </button>
+                <button (click)="sendSubordonneFinal()"
+                        class="px-3 py-1.5 text-white bg-green-600 rounded hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-1 text-xs font-bold"
+                        [disabled]="(newMessage().trim() === '' && !selectedFile()) || uploadingFile()">
+                  <span *ngIf="uploadingFile()" class="text-[10px]">⏳</span>
+                  <span *ngIf="!uploadingFile()">✅</span>
+                  <span class="hidden sm:inline">{{ uploadingFile() ? 'Envoi...' : 'Rép. Définitive' }}</span>
+                </button>
+              </ng-container>
             </div>
           </div>
         </div>

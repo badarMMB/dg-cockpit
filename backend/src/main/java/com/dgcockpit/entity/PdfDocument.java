@@ -29,7 +29,14 @@ public class PdfDocument {
     // ── Parapheur ────────────────────────────────────────────────────────────
 
     public enum ParapheurStatut {
-        EN_ATTENTE_SIGNATURE, SIGNE, REFUSE, RENVOYE, ARCHIVE, PUBLIE
+        EN_ATTENTE_SIGNATURE,
+        EN_ATTENTE_TRANSMISSION, // signé par l'étape courante — en attente de transmission via le bureau du signataire
+        EN_CORRECTION,   // renvoi reçu d'une étape suivante, décision en attente de l'acteur intermédiaire
+        SIGNE,
+        REFUSE,
+        RENVOYE,
+        ARCHIVE,
+        PUBLIE
     }
 
     public enum ParapheurType {
@@ -51,6 +58,12 @@ public class PdfDocument {
     private LocalDateTime signedAt;
 
     private String destinataire;
+
+    // ── Circuit multi-signataires ────────────────────────────────────────────
+    // ID de l'acteur dont le parapheur (ou la correction) est actif
+    private String currentSignataireUserId;
+    // Index 0-based de l'étape courante dans la table circuit_signatures
+    private int currentCircuitStep = 0;
 
     // ── Getters / Setters ────────────────────────────────────────────────────
 
@@ -103,4 +116,10 @@ public class PdfDocument {
 
     public String getDestinataire() { return destinataire; }
     public void setDestinataire(String destinataire) { this.destinataire = destinataire; }
+
+    public String getCurrentSignataireUserId() { return currentSignataireUserId; }
+    public void setCurrentSignataireUserId(String currentSignataireUserId) { this.currentSignataireUserId = currentSignataireUserId; }
+
+    public int getCurrentCircuitStep() { return currentCircuitStep; }
+    public void setCurrentCircuitStep(int currentCircuitStep) { this.currentCircuitStep = currentCircuitStep; }
 }

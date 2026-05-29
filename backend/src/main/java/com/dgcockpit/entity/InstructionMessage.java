@@ -36,6 +36,15 @@ public class InstructionMessage {
     @Enumerated(EnumType.STRING)
     private StatutMessage statut;
 
+    /**
+     * Étape du circuit lors de l'envoi de ce message.
+     * Null pour les messages échangés hors circuit (BROUILLON) ou les messages système.
+     * Permet de retracer l'historique des échanges par étape.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "workflow_step_id")
+    private WorkflowStep workflowStep;
+
     private LocalDateTime sentAt = LocalDateTime.now();
 
     public enum TypeMessage { NORMAL, FINAL, SYSTEM }
@@ -67,4 +76,7 @@ public class InstructionMessage {
     public void setStatut(StatutMessage statut) { this.statut = statut; }
     public LocalDateTime getSentAt() { return sentAt; }
     public void setSentAt(LocalDateTime sentAt) { this.sentAt = sentAt; }
+
+    public WorkflowStep getWorkflowStep() { return workflowStep; }
+    public void setWorkflowStep(WorkflowStep workflowStep) { this.workflowStep = workflowStep; }
 }

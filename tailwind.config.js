@@ -12,7 +12,7 @@ module.exports = {
         'alert': '#ba1a1a',
       },
       fontFamily: {
-        'sans': ['Inter', 'sans-serif'],
+        'sans': ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
       },
       borderRadius: {
         'sm': '4px',

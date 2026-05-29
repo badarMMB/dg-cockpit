@@ -3,6 +3,36 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
+// ── Interfaces du moteur de workflow ─────────────────────────────────────────
+
+export interface WorkflowPoste {
+  id: string;
+  code: string;
+  libelle: string;
+}
+
+export interface WorkflowStep {
+  id: string;
+  stepOrder: number;
+  stepLabel: string;
+  requiresSignature: boolean;
+  requiresAttachment: boolean;
+  actorInstructions: string | null;
+  requiredPoste: WorkflowPoste | null;
+}
+
+export interface WorkflowActeur {
+  id: string;
+  nomComplet: string;
+}
+
+export interface WorkflowEtat {
+  id: string;
+  globalStatus: 'BROUILLON' | 'EN_CIRCUIT' | 'CLOTURE_VALIDE' | 'CLOTURE_REJETE';
+  currentStep: WorkflowStep | null;
+  currentActor: WorkflowActeur | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private http = inject(HttpClient);
@@ -74,18 +104,23 @@ export class ApiService {
     return this.http.patch(`${this.base}/rendez-vous/${id}`, body);
   }
 
-  // Workflow de validation
+  // Workflow legacy (rétro-compatibilité ancien modèle)
   soumettre(instructionId: string, body: any): Observable<any> {
     return this.http.post(`${this.base}/instructions/${instructionId}/soumettre`, body);
   }
-  valider(instructionId: string, body: any): Observable<any> {
-    return this.http.post(`${this.base}/instructions/${instructionId}/valider`, body);
+
+  // Nouveau moteur de circuit (/api/workflow)
+  lancerCircuit(instructionId: string): Observable<WorkflowEtat> {
+    return this.http.post<WorkflowEtat>(`${this.base}/workflow/${instructionId}/lancer`, {});
   }
-  rejeter(instructionId: string, body: any): Observable<any> {
-    return this.http.post(`${this.base}/instructions/${instructionId}/rejeter`, body);
+  validerEtape(instructionId: string): Observable<WorkflowEtat> {
+    return this.http.post<WorkflowEtat>(`${this.base}/workflow/${instructionId}/valider`, {});
   }
-  getWorkflow(instructionId: string): Observable<any[]> {
-    return this.http.get<any[]>(`${this.base}/instructions/${instructionId}/workflow`);
+  rejeterEtape(instructionId: string, motif: string): Observable<WorkflowEtat> {
+    return this.http.post<WorkflowEtat>(`${this.base}/workflow/${instructionId}/rejeter`, { motif });
+  }
+  getEtatWorkflow(instructionId: string): Observable<WorkflowEtat> {
+    return this.http.get<WorkflowEtat>(`${this.base}/workflow/${instructionId}/etat`);
   }
 
   // Fichiers (MinIO)
@@ -96,6 +131,19 @@ export class ApiService {
   }
   getFileUrl(name: string): string {
     return `${this.base}/files/${encodeURIComponent(name)}`;
+  }
+
+  downloadFileAsBlob(name: string): Observable<Blob> {
+    return this.http.get(`${this.base}/files/${encodeURIComponent(name)}`, { responseType: 'blob' });
+  }
+
+  getFileInfo(name: string): Observable<{ pageCount: number; name: string }> {
+    return this.http.get<{ pageCount: number; name: string }>(`${this.base}/files/${encodeURIComponent(name)}/info`);
+  }
+
+  renderFilePageBlob(name: string, page: number): Observable<string> {
+    return this.http.get(`${this.base}/files/${encodeURIComponent(name)}/page/${page}`, { responseType: 'blob' })
+      .pipe(map(blob => URL.createObjectURL(blob)));
   }
 
   // Recherche globale
@@ -230,6 +278,37 @@ export class ApiService {
     return this.http.delete<void>(`${this.base}/parametres/proof-types/${id}`);
   }
 
+  // Paramètres — Postes (nouveau modèle)
+  getPostes(activeOnly = false): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/parametres/postes`, { params: { activeOnly } });
+  }
+  createPoste(body: any): Observable<any> {
+    return this.http.post(`${this.base}/parametres/postes`, body);
+  }
+  updatePoste(id: string, body: any): Observable<any> {
+    return this.http.put(`${this.base}/parametres/postes/${id}`, body);
+  }
+  togglePoste(id: string): Observable<void> {
+    return this.http.patch<void>(`${this.base}/parametres/postes/${id}/toggle`, {});
+  }
+  deletePoste(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/parametres/postes/${id}`);
+  }
+
+  // Paramètres — Étapes de circuit (WorkflowStep)
+  getWorkflowSteps(typeId: string): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/parametres/instruction-types/${typeId}/steps`);
+  }
+  createWorkflowStep(typeId: string, body: any): Observable<any> {
+    return this.http.post(`${this.base}/parametres/instruction-types/${typeId}/steps`, body);
+  }
+  updateWorkflowStep(typeId: string, stepId: string, body: any): Observable<any> {
+    return this.http.put(`${this.base}/parametres/instruction-types/${typeId}/steps/${stepId}`, body);
+  }
+  deleteWorkflowStep(typeId: string, stepId: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/parametres/instruction-types/${typeId}/steps/${stepId}`);
+  }
+
   // Users
   getUsers(): Observable<any[]> {
     return this.http.get<any[]>(`${this.base}/parametres/users`);
@@ -250,16 +329,34 @@ export class ApiService {
     return this.http.delete<void>(`${this.base}/parametres/users/${id}`);
   }
 
+  // Types de documents (Paramètres)
+  getTypeDocuments(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/type-documents`);
+  }
+  createTypeDocument(body: any): Observable<any> {
+    return this.http.post(`${this.base}/type-documents`, body);
+  }
+  updateTypeDocument(id: string, body: any): Observable<any> {
+    return this.http.put(`${this.base}/type-documents/${id}`, body);
+  }
+  toggleTypeDocument(id: string): Observable<void> {
+    return this.http.patch<void>(`${this.base}/type-documents/${id}/toggle`, {});
+  }
+  deleteTypeDocument(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/type-documents/${id}`);
+  }
+
   // Bureau Secrétaire
   getBureauDocuments(): Observable<any[]> {
     return this.http.get<any[]>(`${this.base}/bureau/documents`);
   }
-  uploadBureauDocument(file: File, type: string, titre?: string, destinataire?: string): Observable<any> {
+  uploadBureauDocument(file: File, type: string, titre?: string, destinataire?: string, typeDocumentId?: string): Observable<any> {
     const form = new FormData();
     form.append('file', file);
     form.append('type', type);
     if (titre) form.append('titre', titre);
     if (destinataire) form.append('destinataire', destinataire);
+    if (typeDocumentId) form.append('typeDocumentId', typeDocumentId);
     return this.http.post(`${this.base}/bureau/documents`, form);
   }
   getBureauPageUrl(docId: string, pageIndex: number): string {
@@ -277,8 +374,10 @@ export class ApiService {
     form.append('file', file);
     return this.http.put(`${this.base}/bureau/documents/${docId}/pdf`, form);
   }
-  soumettreAuParapheur(docId: string): Observable<any> {
-    return this.http.post(`${this.base}/bureau/documents/${docId}/soumettre`, {});
+  soumettreAuParapheur(docId: string, circuit?: string): Observable<any> {
+    const params: Record<string, string> = {};
+    if (circuit) params['circuit'] = circuit;
+    return this.http.post(`${this.base}/bureau/documents/${docId}/soumettre`, {}, { params });
   }
   deleteBureauDocument(docId: string): Observable<void> {
     return this.http.delete<void>(`${this.base}/bureau/documents/${docId}`);
@@ -310,6 +409,15 @@ export class ApiService {
   }
   renvoyerDocument(docId: string, comment: string): Observable<any> {
     return this.http.post(`${this.base}/parapheur/${docId}/renvoyer`, { comment });
+  }
+  repousserDocument(docId: string): Observable<any> {
+    return this.http.post(`${this.base}/parapheur/${docId}/repousser`, {});
+  }
+  renvoyerProprietaireDocument(docId: string, comment: string): Observable<any> {
+    return this.http.post(`${this.base}/parapheur/${docId}/renvoyer-proprietaire`, { comment });
+  }
+  getCircuitSignatures(docId: string): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/parapheur/${docId}/circuit`);
   }
   envoyerCorrection(docId: string, comment: string, audio?: File, highlights?: string): Observable<any> {
     const form = new FormData();

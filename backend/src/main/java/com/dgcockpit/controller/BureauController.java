@@ -2,15 +2,20 @@ package com.dgcockpit.controller;
 
 import com.dgcockpit.entity.AppUser;
 import com.dgcockpit.entity.BureauDocument;
+import com.dgcockpit.entity.CircuitSignature;
 import com.dgcockpit.entity.Instruction;
 import com.dgcockpit.entity.InstructionMessage;
 import com.dgcockpit.entity.PageAnnotation;
 import com.dgcockpit.entity.PdfDocument;
+import com.dgcockpit.entity.TypeDocument;
+import com.dgcockpit.repository.AppUserRepository;
 import com.dgcockpit.repository.BureauDocumentRepository;
+import com.dgcockpit.repository.CircuitSignatureRepository;
 import com.dgcockpit.repository.InstructionMessageRepository;
 import com.dgcockpit.repository.InstructionRepository;
 import com.dgcockpit.repository.PageAnnotationRepository;
 import com.dgcockpit.repository.PdfDocumentRepository;
+import com.dgcockpit.repository.TypeDocumentRepository;
 import com.dgcockpit.service.DocumentFinalizationService;
 import com.dgcockpit.service.MinioService;
 import com.dgcockpit.sse.SseService;
@@ -40,8 +45,11 @@ public class BureauController {
     private final BureauDocumentRepository bureauRepo;
     private final PdfDocumentRepository pdfRepo;
     private final PageAnnotationRepository annotRepo;
+    private final CircuitSignatureRepository circuitRepo;
+    private final AppUserRepository userRepo;
     private final InstructionRepository instructionRepo;
     private final InstructionMessageRepository instructionMessageRepo;
+    private final TypeDocumentRepository typeDocRepo;
     private final MinioService minio;
     private final DocumentFinalizationService finalizer;
     private final SseService sseService;
@@ -50,8 +58,11 @@ public class BureauController {
     public BureauController(BureauDocumentRepository bureauRepo,
                             PdfDocumentRepository pdfRepo,
                             PageAnnotationRepository annotRepo,
+                            CircuitSignatureRepository circuitRepo,
+                            AppUserRepository userRepo,
                             InstructionRepository instructionRepo,
                             InstructionMessageRepository instructionMessageRepo,
+                            TypeDocumentRepository typeDocRepo,
                             MinioService minio,
                             DocumentFinalizationService finalizer,
                             SseService sseService,
@@ -59,8 +70,11 @@ public class BureauController {
         this.bureauRepo = bureauRepo;
         this.pdfRepo = pdfRepo;
         this.annotRepo = annotRepo;
+        this.circuitRepo = circuitRepo;
+        this.userRepo = userRepo;
         this.instructionRepo = instructionRepo;
         this.instructionMessageRepo = instructionMessageRepo;
+        this.typeDocRepo = typeDocRepo;
         this.minio = minio;
         this.finalizer = finalizer;
         this.sseService = sseService;
@@ -74,10 +88,12 @@ public class BureauController {
             @RequestParam(defaultValue = "COURRIER") String type,
             @RequestParam(required = false) String titre,
             @RequestParam(required = false) String destinataire,
+            @RequestParam(required = false) String typeDocumentId,
             HttpServletRequest request) throws Exception {
 
         AppUser currentUser = (AppUser) request.getAttribute("currentUser");
-        String secretaireId = currentUser != null ? currentUser.getId() : "anonymous";
+        if (currentUser == null || !currentUser.hasBureau()) return ResponseEntity.status(403).build();
+        String proprietaireId = currentUser.getId();
 
         minio.ensureBucket(BUCKET);
         String objectKey = UUID.randomUUID() + "_" + file.getOriginalFilename();
@@ -85,25 +101,37 @@ public class BureauController {
 
         int pageCount = finalizer.getPageCount(BUCKET, objectKey);
 
+        // Résoudre le code type depuis le TypeDocument si fourni
+        String codeType = type;
+        if (typeDocumentId != null && !typeDocumentId.isBlank()) {
+            TypeDocument td = typeDocRepo.findById(typeDocumentId).orElse(null);
+            if (td != null) codeType = td.getCode();
+        }
+
         BureauDocument doc = new BureauDocument();
-        doc.setSecretaireId(secretaireId);
+        doc.setProprietaireId(proprietaireId);
         doc.setTitre(titre != null && !titre.isBlank() ? titre : file.getOriginalFilename());
-        doc.setType(type);
+        doc.setType(codeType);
         doc.setDestinataire(destinataire);
         doc.setOriginalFileName(file.getOriginalFilename());
         doc.setBucket(BUCKET);
         doc.setObjectKey(objectKey);
         doc.setPageCount(pageCount);
+        if (typeDocumentId != null && !typeDocumentId.isBlank()) {
+            doc.setTypeDocumentId(typeDocumentId);
+        }
 
         return ResponseEntity.ok(toDto(bureauRepo.save(doc)));
     }
 
-    // ── GET /api/bureau/documents ── liste des documents de la Secrétaire connectée
+    // ── GET /api/bureau/documents ── liste des documents du bureau de l'utilisateur connecté
     @GetMapping("/documents")
     public List<Map<String, Object>> list(HttpServletRequest request) {
         AppUser currentUser = (AppUser) request.getAttribute("currentUser");
-        String secretaireId = currentUser != null ? currentUser.getId() : "anonymous";
-        return bureauRepo.findBySecretaireIdOrderByCreatedAtDesc(secretaireId)
+        if (currentUser == null) return List.of();
+        // Tout utilisateur peut voir ses propres docs (transit inclus), même sans hasBureau
+        String proprietaireId = currentUser.getId();
+        return bureauRepo.findByProprietaireIdOrderByCreatedAtDesc(proprietaireId)
                 .stream().map(this::toDto).toList();
     }
 
@@ -157,6 +185,9 @@ public class BureauController {
         doc.setOriginalFileName(file.getOriginalFilename());
         doc.setPageCount(newPageCount);
         doc.setUpdatedAt(LocalDateTime.now());
+        if (doc.getStatut() == BureauDocument.Statut.RETOURNE) {
+            doc.setCorrigeDepuisRenvoi(true);
+        }
 
         return ResponseEntity.ok(toDto(bureauRepo.save(doc)));
     }
@@ -167,8 +198,8 @@ public class BureauController {
         BureauDocument doc = bureauRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("BureauDocument introuvable: " + id));
         AppUser currentUser = (AppUser) request.getAttribute("currentUser");
-        String secretaireId = currentUser != null ? currentUser.getId() : "";
-        if (!doc.getSecretaireId().equals(secretaireId)) return ResponseEntity.status(403).build();
+        String proprietaireId = currentUser != null ? currentUser.getId() : "";
+        if (!doc.getProprietaireId().equals(proprietaireId)) return ResponseEntity.status(403).build();
         try { minio.delete(doc.getBucket(), doc.getObjectKey()); } catch (Exception ignored) {}
         bureauRepo.delete(doc);
         return ResponseEntity.noContent().build();
@@ -204,10 +235,19 @@ public class BureauController {
     @PostMapping("/documents/{id}/soumettre")
     public ResponseEntity<Map<String, Object>> soumettre(
             @PathVariable String id,
+            @RequestParam(required = false) String circuit,
             HttpServletRequest request) {
+
+        AppUser currentUser = (AppUser) request.getAttribute("currentUser");
+        if (currentUser == null) return ResponseEntity.status(403).build();
 
         BureauDocument doc = bureauRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("BureauDocument introuvable: " + id));
+
+        // Les docs de transit (circuit) sont accessibles à tout utilisateur authentifié
+        if (!currentUser.hasBureau() && doc.getCircuitPdfDocumentId() == null) {
+            return ResponseEntity.status(403).build();
+        }
 
         if (doc.getStatut() == BureauDocument.Statut.SOUMIS) {
             return ResponseEntity.badRequest().build();
@@ -217,6 +257,7 @@ public class BureauController {
         if (isResoumission) {
             doc.setRenvoyeMotif(null);
             doc.setHighlightsJson(null);
+            doc.setCorrigeDepuisRenvoi(false);
         }
 
         List<Map<String, Object>> sigZones = parseZones(doc.getSignatureZonesJson());
@@ -224,10 +265,114 @@ public class BureauController {
             return ResponseEntity.badRequest().build();
         }
 
-        AppUser currentUser = (AppUser) request.getAttribute("currentUser");
-        String submittedBy = currentUser != null ? currentUser.getUsername() : "secretaire";
+        String submittedBy = currentUser.getUsername();
 
-        PdfDocument.ParapheurType parapheurType = "NOTE_SERVICE".equals(doc.getType())
+        // ── Document de transit : avancer le circuit existant sans créer un nouveau PdfDocument ──
+        if (doc.getCircuitPdfDocumentId() != null) {
+            PdfDocument pdfDoc = pdfRepo.findById(doc.getCircuitPdfDocumentId())
+                    .orElseThrow(() -> new IllegalArgumentException("PdfDocument de circuit introuvable: "
+                            + doc.getCircuitPdfDocumentId()));
+
+            if (pdfDoc.getParapheurStatut() != PdfDocument.ParapheurStatut.EN_ATTENTE_TRANSMISSION) {
+                return ResponseEntity.badRequest().build();
+            }
+
+            int nextStep = doc.getCircuitNextStep();
+            CircuitSignature nextEtape = circuitRepo.findByPdfDocumentIdAndStepOrder(
+                    doc.getCircuitPdfDocumentId(), nextStep)
+                    .orElseThrow(() -> new IllegalArgumentException("Étape circuit introuvable: step " + nextStep));
+
+            // Supprimer les anciennes annotations (déjà brûlées dans la version signée précédente)
+            for (int p = 0; p < pdfDoc.getPageCount(); p++) {
+                annotRepo.deleteAll(annotRepo.findByPageId(pdfDoc.getId() + "::" + p));
+            }
+
+            // Créer les nouvelles annotations de signature depuis les zones du bureau de transit
+            for (Map<String, Object> z : sigZones) {
+                PageAnnotation a = new PageAnnotation();
+                a.setPageId(pdfDoc.getId() + "::" + toInt(z.get("page")));
+                a.setAnnotationType("SIGNATURE_ZONE");
+                a.setXPercent(toDouble(z.get("x")));
+                a.setYPercent(toDouble(z.get("y")));
+                a.setWidthPercent(toDouble(z.get("w")));
+                a.setHeightPercent(toDouble(z.get("h")));
+                a.setCreatedBy(submittedBy);
+                annotRepo.save(a);
+            }
+            for (Map<String, Object> z : parseZones(doc.getStampZonesJson())) {
+                PageAnnotation a = new PageAnnotation();
+                a.setPageId(pdfDoc.getId() + "::" + toInt(z.get("page")));
+                a.setAnnotationType("STAMP_ZONE");
+                a.setXPercent(toDouble(z.get("x")));
+                a.setYPercent(toDouble(z.get("y")));
+                a.setWidthPercent(toDouble(z.get("w")));
+                a.setHeightPercent(toDouble(z.get("h")));
+                a.setCreatedBy(submittedBy);
+                annotRepo.save(a);
+            }
+
+            // Activer l'étape suivante du circuit
+            pdfDoc.setCurrentSignataireUserId(nextEtape.getSignaireUserId());
+            pdfDoc.setCurrentCircuitStep(nextStep);
+            pdfDoc.setParapheurStatut(PdfDocument.ParapheurStatut.EN_ATTENTE_SIGNATURE);
+            pdfDoc.setUpdatedAt(LocalDateTime.now());
+            pdfRepo.save(pdfDoc);
+
+            // Marquer le bureau de transit comme soumis
+            doc.setStatut(BureauDocument.Statut.SOUMIS);
+            doc.setSoumisAt(LocalDateTime.now());
+            doc.setUpdatedAt(LocalDateTime.now());
+            bureauRepo.save(doc);
+
+            sseService.broadcast("PARAPHEUR_UPDATED", Map.of("action", "SOUMIS", "id", pdfDoc.getId()));
+
+            Map<String, Object> transitResult = new HashMap<>();
+            transitResult.put("bureauDocumentId", doc.getId());
+            transitResult.put("pdfDocumentId", pdfDoc.getId());
+            transitResult.put("statut", "SOUMIS");
+            return ResponseEntity.ok(transitResult);
+        }
+
+        // ── Résolution du circuit de signature (document normal) ────────────
+
+        // Charger le TypeDocument lié s'il existe
+        TypeDocument typeDoc = doc.getTypeDocumentId() != null
+                ? typeDocRepo.findById(doc.getTypeDocumentId()).orElse(null)
+                : null;
+
+        // Déterminer le circuit selon le mode du TypeDocument
+        List<Map<String, Object>> circuitSteps;
+        if (typeDoc != null && typeDoc.getModeCircuit() == TypeDocument.ModeCircuit.MANAGER_SEUL) {
+            // Forcer le manager direct, ignorer le picker
+            AppUser manager = currentUser.getManager();
+            if (manager == null) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "Aucun supérieur hiérarchique défini. Contactez l'administrateur."));
+            }
+            circuitSteps = List.of(Map.of("userId", manager.getId(), "nom", manager.getNomComplet()));
+        } else if (typeDoc != null && typeDoc.getModeCircuit() == TypeDocument.ModeCircuit.PREDEFINI
+                && (circuit == null || circuit.isBlank())) {
+            // Circuit fixé par le type — résoudre les postes → utilisateurs
+            circuitSteps = resoudreCircuitPredefini(typeDoc.getCircuitJson());
+            if (circuitSteps.isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "Circuit prédéfini vide ou mal configuré pour ce type de document."));
+            }
+        } else {
+            // LIBRE, PREDEFINI_MODIFIABLE ou fallback : utiliser le circuit fourni / manager
+            circuitSteps = resoudreCircuit(circuit, currentUser);
+            if (circuitSteps.isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "Aucun supérieur hiérarchique défini. Contactez l'administrateur."));
+            }
+        }
+
+        // ActionFinale → ParapheurType
+        boolean publier = typeDoc != null
+                ? typeDoc.getActionFinale() == TypeDocument.ActionFinale.PUBLIER
+                : "NOTE_SERVICE".equals(doc.getType());
+
+        PdfDocument.ParapheurType parapheurType = publier
                 ? PdfDocument.ParapheurType.NOTE_SERVICE
                 : PdfDocument.ParapheurType.COURRIER;
 
@@ -236,7 +381,8 @@ public class BureauController {
         pdf.setOriginalFileName(doc.getOriginalFileName());
         pdf.setBucket(doc.getBucket());
         pdf.setObjectKey(doc.getObjectKey());
-        pdf.setPageCount(doc.getPageCount() != null ? doc.getPageCount() : 1);
+        Integer pageCount = doc.getPageCount();
+        pdf.setPageCount(pageCount != null ? pageCount : 1);
         pdf.setStatus("DRAFT");
         pdf.setParapheurType(parapheurType);
         pdf.setParapheurStatut(PdfDocument.ParapheurStatut.EN_ATTENTE_SIGNATURE);
@@ -269,6 +415,27 @@ public class BureauController {
             a.setCreatedBy(submittedBy);
             annotRepo.save(a);
         }
+
+        // ── Créer les étapes du circuit de signature ────────────────────────
+        // Les étapes > 0 héritent des zones du document source pour que le prochain
+        // signataire ait une zone pré-positionnée au même endroit (pratique sur doc 1 page).
+        String zonesJsonSource = doc.getSignatureZonesJson();
+        for (int i = 0; i < circuitSteps.size(); i++) {
+            Map<String, Object> step = circuitSteps.get(i);
+            CircuitSignature etape = new CircuitSignature();
+            etape.setPdfDocumentId(savedPdf.getId());
+            etape.setStepOrder(i);
+            etape.setSignaireUserId((String) step.get("userId"));
+            etape.setSignaireNom((String) step.get("nom"));
+            // Étape 0 : annotations déjà créées via PageAnnotation — pas besoin de les dupliquer.
+            // Étapes suivantes : propager les zones du document source (même position).
+            etape.setSignatureZonesJson(i == 0 ? null : zonesJsonSource);
+            circuitRepo.save(etape);
+        }
+        // Pointer le PdfDocument vers le premier signataire
+        savedPdf.setCurrentSignataireUserId((String) circuitSteps.get(0).get("userId"));
+        savedPdf.setCurrentCircuitStep(0);
+        pdfRepo.save(savedPdf);
 
         if (doc.getReference() == null) {
             int year = LocalDateTime.now().getYear();
@@ -303,6 +470,9 @@ public class BureauController {
             });
         }
 
+        sseService.broadcast("PARAPHEUR_UPDATED", Map.of(
+            "action", "SOUMIS", "id", savedPdf.getId()));
+
         Map<String, Object> result = new HashMap<>();
         result.put("bureauDocumentId", doc.getId());
         result.put("pdfDocumentId", savedPdf.getId());
@@ -332,6 +502,19 @@ public class BureauController {
         m.put("hasSignatureZone", !sigZones.isEmpty());
         m.put("hasStampZone", !stZones.isEmpty());
         m.put("renvoyeMotif", d.getRenvoyeMotif());
+        m.put("corrigeDepuisRenvoi", d.isCorrigeDepuisRenvoi());
+        m.put("circuitPdfDocumentId", d.getCircuitPdfDocumentId());
+        m.put("typeDocumentId", d.getTypeDocumentId());
+        // Exposer le mode circuit pour que le frontend adapte la modale de soumission
+        if (d.getTypeDocumentId() != null) {
+            typeDocRepo.findById(d.getTypeDocumentId()).ifPresent(td -> {
+                m.put("modeCircuit", td.getModeCircuit().name());
+                m.put("requiresSignatureZone", td.isRequiresSignatureZone());
+                m.put("requiresStampZone", td.isRequiresStampZone());
+                m.put("requiresDestinataire", td.isRequiresDestinataire());
+                m.put("typeDocCircuit", parseZones(td.getCircuitJson()));
+            });
+        }
         m.put("highlights", parseZones(d.getHighlightsJson()));
         m.put("reference", d.getReference());
         m.put("soumisAt",   d.getSoumisAt()   != null ? d.getSoumisAt().toString()   : null);
@@ -341,7 +524,6 @@ public class BureauController {
         return m;
     }
 
-    @SuppressWarnings("unchecked")
     private List<Map<String, Object>> parseZones(String json) {
         if (json == null || json.isBlank()) return new ArrayList<>();
         try {
@@ -359,5 +541,48 @@ public class BureauController {
     private int toInt(Object v) {
         if (v instanceof Number n) return n.intValue();
         return 0;
+    }
+
+    /**
+     * Résout la liste ordonnée de signataires pour le circuit.
+     * Si {@code circuitJson} est fourni et non vide, il est utilisé tel quel.
+     * Sinon, le circuit par défaut est [{manager de currentUser}].
+     * Retourne une liste vide si aucun supérieur n'est défini.
+     */
+    private List<Map<String, Object>> resoudreCircuit(String circuitJson, AppUser currentUser) {
+        if (circuitJson != null && !circuitJson.isBlank()) {
+            try {
+                List<Map<String, Object>> steps = objectMapper.readValue(
+                        circuitJson, new TypeReference<List<Map<String, Object>>>() {});
+                if (!steps.isEmpty()) return steps;
+            } catch (Exception ignored) {}
+        }
+        AppUser manager = currentUser.getManager();
+        if (manager == null) return List.of();
+        return List.of(Map.of("userId", manager.getId(), "nom", manager.getNomComplet()));
+    }
+
+    /**
+     * Résout un circuit pré-défini (liste de postes) en liste de signataires concrets.
+     * Chaque entrée JSON : {posteId, posteLibelle}. Le premier utilisateur actif du poste est retenu.
+     */
+    private List<Map<String, Object>> resoudreCircuitPredefini(String circuitJson) {
+        if (circuitJson == null || circuitJson.isBlank()) return List.of();
+        try {
+            List<Map<String, Object>> etapes = objectMapper.readValue(
+                    circuitJson, new TypeReference<List<Map<String, Object>>>() {});
+            List<Map<String, Object>> result = new ArrayList<>();
+            for (Map<String, Object> etape : etapes) {
+                String posteId = (String) etape.get("posteId");
+                if (posteId == null) continue;
+                List<AppUser> occupants = userRepo.findByPosteIdAndActifTrue(posteId);
+                if (occupants.isEmpty()) continue;
+                AppUser u = occupants.get(0);
+                result.add(Map.of("userId", u.getId(), "nom", u.getNomComplet()));
+            }
+            return result;
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 }

@@ -55,48 +55,119 @@
         <p *ngIf="isSecretaire()" class="text-xs mt-1">Soumettez un document via le bouton ci-dessus</p>
       </div>
 
-      <div class="space-y-3">
-        <div *ngFor="let doc of pending()"
-             class="bg-white border border-gray-200 rounded-xl p-4 flex items-start gap-4 hover:border-primary/30 hover:shadow-sm transition-all">
+      <div class="space-y-4">
 
-          <!-- Icon -->
-          <div class="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-            </svg>
-          </div>
+        <!-- Documents EN_CORRECTION (renvoyés par une étape suivante) -->
+        <ng-container *ngIf="pendingCorrection().length > 0">
+          <p class="text-xs font-semibold text-orange-600 uppercase tracking-wide mt-1 mb-2">
+            Correction reçue — décision requise
+          </p>
+          <div class="space-y-3">
+            <div *ngFor="let doc of pendingCorrection()"
+                 class="bg-orange-50 border border-orange-200 rounded-xl p-4 flex items-start gap-4 hover:shadow-sm transition-all">
 
-          <!-- Info -->
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-1 flex-wrap">
-              <span class="font-semibold text-gray-900 text-sm truncate">{{ doc.title }}</span>
-              <span class="px-2 py-0.5 rounded-full text-xs font-medium" [ngClass]="typeClass(doc.parapheurType)">
-                {{ typeLabel(doc.parapheurType) }}
-              </span>
+              <!-- Icon -->
+              <div class="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
+                <span class="text-xl">↩️</span>
+              </div>
+
+              <!-- Info -->
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1 flex-wrap">
+                  <span class="font-semibold text-gray-900 text-sm truncate">{{ doc.title }}</span>
+                  <span class="px-2 py-0.5 rounded-full text-xs font-medium" [ngClass]="typeClass(doc.parapheurType)">
+                    {{ typeLabel(doc.parapheurType) }}
+                  </span>
+                  <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-orange-200 text-orange-800">
+                    Correction reçue
+                  </span>
+                </div>
+                <p class="text-xs text-gray-500">
+                  Soumis par <span class="font-medium text-gray-700">{{ doc.submittedBy }}</span>
+                  · {{ formatDate(doc.submittedAt) }}
+                </p>
+                <!-- Motif du renvoi -->
+                <div *ngIf="doc.rejectionComment"
+                     class="mt-2 flex items-start gap-1.5 bg-white rounded-lg p-2.5 border border-orange-200">
+                  <span class="text-orange-500 text-xs flex-shrink-0 mt-0.5">↩</span>
+                  <p class="text-xs text-orange-700 italic">{{ doc.rejectionComment }}</p>
+                </div>
+              </div>
+
+              <!-- Actions EN_CORRECTION -->
+              <div class="flex flex-col items-end gap-2 flex-shrink-0">
+                <button (click)="repousser(doc)"
+                        class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors whitespace-nowrap">
+                  Re-pousser ▶
+                </button>
+                <button (click)="openRenvoyerProprietaireModal(doc)"
+                        class="px-3 py-1.5 text-sm border border-orange-300 text-orange-700 rounded-lg hover:bg-orange-100 transition-colors whitespace-nowrap">
+                  ↩ Renvoyer au bureau
+                </button>
+                <button (click)="openDoc(doc)"
+                        class="px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap">
+                  Consulter
+                </button>
+              </div>
+
             </div>
-            <p class="text-xs text-gray-500">
-              Soumis par <span class="font-medium text-gray-700">{{ doc.submittedBy }}</span>
-              · {{ formatDate(doc.submittedAt) }}
-            </p>
-            <p *ngIf="doc.destinataire" class="text-xs text-gray-500 mt-0.5">
-              Destinataire : {{ doc.destinataire }}
-            </p>
-            <p class="text-xs text-gray-400 mt-0.5">{{ doc.pageCount }} page{{ doc.pageCount > 1 ? 's' : '' }}</p>
           </div>
+        </ng-container>
 
-          <!-- Actions -->
-          <div class="flex items-center gap-2 flex-shrink-0">
-            <button (click)="openRejectModal(doc)"
-                    class="px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors">
-              Refuser
-            </button>
-            <button (click)="openDoc(doc)"
-                    class="px-3 py-1.5 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-1.5">
-              <span>✍️</span> Ouvrir et signer
-            </button>
+        <!-- Documents EN_ATTENTE_SIGNATURE -->
+        <ng-container *ngIf="pendingSignature().length > 0">
+          <p *ngIf="pendingCorrection().length > 0"
+             class="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-2">
+            En attente de signature
+          </p>
+          <div class="space-y-3">
+            <div *ngFor="let doc of pendingSignature()"
+                 class="bg-white border border-gray-200 rounded-xl p-4 flex items-start gap-4 hover:border-primary/30 hover:shadow-sm transition-all">
+
+              <!-- Icon -->
+              <div class="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+              </div>
+
+              <!-- Info -->
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1 flex-wrap">
+                  <span class="font-semibold text-gray-900 text-sm truncate">{{ doc.title }}</span>
+                  <span class="px-2 py-0.5 rounded-full text-xs font-medium" [ngClass]="typeClass(doc.parapheurType)">
+                    {{ typeLabel(doc.parapheurType) }}
+                  </span>
+                  <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">
+                    À signer
+                  </span>
+                </div>
+                <p class="text-xs text-gray-500">
+                  Soumis par <span class="font-medium text-gray-700">{{ doc.submittedBy }}</span>
+                  · {{ formatDate(doc.submittedAt) }}
+                </p>
+                <p *ngIf="doc.destinataire" class="text-xs text-gray-500 mt-0.5">
+                  Destinataire : {{ doc.destinataire }}
+                </p>
+                <p class="text-xs text-gray-400 mt-0.5">{{ doc.pageCount }} page{{ doc.pageCount > 1 ? 's' : '' }}</p>
+              </div>
+
+              <!-- Actions EN_ATTENTE_SIGNATURE -->
+              <div class="flex items-center gap-2 flex-shrink-0">
+                <button (click)="openRenvoyerModal(doc)"
+                        class="px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200 transition-colors">
+                  ↩ Renvoyer
+                </button>
+                <button (click)="openDoc(doc)"
+                        class="px-3 py-1.5 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-1.5">
+                  <span>✍️</span> Ouvrir et signer
+                </button>
+              </div>
+
+            </div>
           </div>
+        </ng-container>
 
-        </div>
       </div>
     </ng-container>
 
@@ -235,6 +306,63 @@
               class="flex-1 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
         <div *ngIf="submitting()" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
         {{ submitting() ? 'Envoi en cours…' : 'Soumettre' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal : Renvoyer (cascade) ──────────────────────────────────────── -->
+<div *ngIf="showRenvoyerModal()"
+     class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+     (click)="$event.target === $event.currentTarget && showRenvoyerModal.set(false)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+    <h2 class="text-base font-semibold text-gray-900 mb-1">Renvoyer pour correction</h2>
+    <p class="text-xs text-gray-500 mb-4">Le document sera renvoyé à l'étape précédente du circuit.</p>
+
+    <textarea rows="3" [ngModel]="renvoyerComment()" (ngModelChange)="renvoyerComment.set($event)"
+              placeholder="Motif du renvoi…"
+              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-300 focus:border-amber-400">
+    </textarea>
+
+    <div class="flex gap-3 mt-4">
+      <button (click)="showRenvoyerModal.set(false)"
+              class="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+        Annuler
+      </button>
+      <button (click)="confirmRenvoyer()" [disabled]="renvoyant() || !renvoyerComment().trim()"
+              class="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+        <div *ngIf="renvoyant()" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
+        {{ renvoyant() ? 'En cours…' : '↩ Confirmer le renvoi' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal : Renvoyer au propriétaire ────────────────────────────────── -->
+<div *ngIf="showRenvoyerProprietaireModal()"
+     class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+     (click)="$event.target === $event.currentTarget && showRenvoyerProprietaireModal.set(false)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+    <h2 class="text-base font-semibold text-gray-900 mb-1">Renvoyer au bureau du propriétaire</h2>
+    <p class="text-xs text-gray-500 mb-4">
+      Le document sera renvoyé directement au bureau du soumetteur initial. Toutes les étapes restantes seront annulées.
+    </p>
+
+    <textarea rows="3" [ngModel]="renvoyerProprietaireComment()" (ngModelChange)="renvoyerProprietaireComment.set($event)"
+              placeholder="Motif du renvoi au propriétaire…"
+              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400">
+    </textarea>
+
+    <div class="flex gap-3 mt-4">
+      <button (click)="showRenvoyerProprietaireModal.set(false)"
+              class="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+        Annuler
+      </button>
+      <button (click)="confirmRenvoyerProprietaire()"
+              [disabled]="renvoyantProprietaire() || !renvoyerProprietaireComment().trim()"
+              class="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+        <div *ngIf="renvoyantProprietaire()" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
+        {{ renvoyantProprietaire() ? 'En cours…' : '↩ Renvoyer au bureau' }}
       </button>
     </div>
   </div>

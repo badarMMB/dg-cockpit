@@ -90,11 +90,22 @@ interface Highlight { x: number; y: number; w: number; h: number; }
                     class="px-4 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-300">
               Refuser
             </button>
-            <button (click)="signerDocument()" [disabled]="signing()"
-                    class="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
-              @if (signing()) { <span class="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin inline-block"></span> }
-              {{ signing() ? 'Signature en cours…' : '✍️ Signer le document' }}
-            </button>
+            <div class="relative group/sign">
+              <button (click)="signerDocument()" [disabled]="!canSign()"
+                      class="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-opacity">
+                @if (signing()) { <span class="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin inline-block"></span> }
+                {{ signing() ? 'Signature en cours…' : '✍️ Signer le document' }}
+              </button>
+              @if (!canSign() && !signing()) {
+                <div class="absolute bottom-full right-0 mb-1.5 w-56 bg-gray-800 text-white text-xs rounded-lg px-3 py-2 shadow-lg pointer-events-none opacity-0 group-hover/sign:opacity-100 transition-opacity z-20 text-center leading-snug">
+                  @if (highlightMode()) {
+                    Terminez le mode surlignage avant de signer
+                  } @else {
+                    Envoyez les corrections surlignées avant de signer
+                  }
+                </div>
+              }
+            </div>
           }
 
           @if (doc()?.status === 'FINALIZED') {
@@ -287,6 +298,8 @@ export class PdfViewerComponent implements OnInit, OnDestroy {
   currentPageHighlights = computed(() => this.highlights()[this.currentPage()] ?? []);
   totalHighlights       = computed(() => Object.values(this.highlights()).reduce((s, a) => s + a.length, 0));
   highlightedPageCount  = computed(() => Object.values(this.highlights()).filter(a => a.length > 0).length);
+
+  canSign = computed(() => !this.highlightMode() && this.totalHighlights() === 0 && !this.signing());
 
   private hlStart: { x: number; y: number } | null = null;
   private hlBoundMove = this.onHlMove.bind(this);

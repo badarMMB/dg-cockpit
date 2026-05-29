@@ -9,7 +9,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --quiet
 
 # Sources Angular
-COPY angular.json tsconfig.json tsconfig.app.json ./
+COPY angular.json tsconfig.json tsconfig.app.json tailwind.config.js ./
 COPY src/ ./src/
 COPY public/ ./public/
 

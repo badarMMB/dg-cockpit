@@ -18,20 +18,17 @@ public class DashboardController {
 
     private final InstructionRepository instructionRepo;
     private final InstructionMessageRepository messageRepo;
-    private final CollaborateurRepository collaborateurRepo;
     private final CourrierArriveRepository courrierArriveRepo;
     private final CourrierDepartRepository courrierDepartRepo;
     private final RendezVousRepository rendezVousRepo;
 
     public DashboardController(InstructionRepository instructionRepo,
                                InstructionMessageRepository messageRepo,
-                               CollaborateurRepository collaborateurRepo,
                                CourrierArriveRepository courrierArriveRepo,
                                CourrierDepartRepository courrierDepartRepo,
                                RendezVousRepository rendezVousRepo) {
         this.instructionRepo = instructionRepo;
         this.messageRepo = messageRepo;
-        this.collaborateurRepo = collaborateurRepo;
         this.courrierArriveRepo = courrierArriveRepo;
         this.courrierDepartRepo = courrierDepartRepo;
         this.rendezVousRepo = rendezVousRepo;

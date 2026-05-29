@@ -21,7 +21,7 @@ interface ZoneEntry extends ZoneXY { page: number; }
           <p class="text-xs text-gray-400 mt-0.5">{{ pageCount() }} page(s)</p>
           @if (renvoyeMotif()) {
             <div class="mt-3 bg-orange-50 border border-orange-200 rounded-lg p-2">
-              <p class="text-[10px] font-semibold text-orange-700 uppercase tracking-wide mb-0.5">Renvoyé par le DG</p>
+              <p class="text-[10px] font-semibold text-orange-700 uppercase tracking-wide mb-0.5">Motif de renvoi</p>
               <p class="text-xs text-orange-600 italic">{{ renvoyeMotif() }}</p>
             </div>
           }
@@ -59,7 +59,7 @@ interface ZoneEntry extends ZoneXY { page: number; }
           <!-- Zone signature -->
           <button (click)="addZone('signature')"
                   class="w-full px-3 py-2 rounded-lg font-medium border-2 border-dashed border-blue-400 text-blue-600 hover:bg-blue-50">
-            {{ sigZoneCurrent() ? '✓ Redessiner zone signature' : '+ Zone Signature DG' }}
+            {{ sigZoneCurrent() ? '✓ Redessiner zone signature' : '+ Zone Signature' }}
           </button>
           @if (sigZoneCurrent()) {
             <button (click)="removeZoneOnPage('signature')"
@@ -139,7 +139,7 @@ interface ZoneEntry extends ZoneXY { page: number; }
                    [style.width.px]="sigZoneCurrent()!.w / 100 * imgW()"
                    [style.height.px]="sigZoneCurrent()!.h / 100 * imgH()"
                    (mousedown)="startDrag($event, 'signature')">
-                <span class="text-blue-600 text-xs font-medium select-none pointer-events-none">✍️ Signature DG</span>
+                <span class="text-blue-600 text-xs font-medium select-none pointer-events-none">✍️ Zone Signature</span>
               </div>
             }
 

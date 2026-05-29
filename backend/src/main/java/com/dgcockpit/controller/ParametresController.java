@@ -1,23 +1,26 @@
 package com.dgcockpit.controller;
 
-import com.dgcockpit.entity.AppUser;
-import com.dgcockpit.entity.InstructionType;
-import com.dgcockpit.entity.ProofType;
+import com.dgcockpit.entity.*;
 import com.dgcockpit.service.ParametresService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/parametres")
 public class ParametresController {
 
     private final ParametresService service;
+    private final ObjectMapper objectMapper;
 
-    public ParametresController(ParametresService service) {
+    public ParametresController(ParametresService service, ObjectMapper objectMapper) {
         this.service = service;
+        this.objectMapper = objectMapper;
     }
 
     // ── InstructionType ───────────────────────────────────────────────────────
@@ -49,6 +52,65 @@ public class ParametresController {
     @DeleteMapping("/instruction-types/{id}")
     public ResponseEntity<Void> deleteInstructionType(@PathVariable String id) {
         service.deleteInstructionType(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ── WorkflowStep ──────────────────────────────────────────────────────────
+
+    @GetMapping("/instruction-types/{typeId}/steps")
+    public List<Map<String, Object>> getSteps(@PathVariable String typeId) {
+        return service.getStepsForType(typeId).stream().map(this::toStepDto).toList();
+    }
+
+    @PostMapping("/instruction-types/{typeId}/steps")
+    public Map<String, Object> createStep(@PathVariable String typeId,
+                                           @RequestBody Map<String, Object> body) {
+        return toStepDto(service.createStep(typeId, body));
+    }
+
+    @PutMapping("/instruction-types/{typeId}/steps/{stepId}")
+    public Map<String, Object> updateStep(@PathVariable String typeId,
+                                           @PathVariable String stepId,
+                                           @RequestBody Map<String, Object> body) {
+        return toStepDto(service.updateStep(stepId, body));
+    }
+
+    @DeleteMapping("/instruction-types/{typeId}/steps/{stepId}")
+    public ResponseEntity<Void> deleteStep(@PathVariable String typeId,
+                                            @PathVariable String stepId) {
+        service.deleteStep(stepId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ── Poste ─────────────────────────────────────────────────────────────────
+
+    @GetMapping("/postes")
+    public List<Map<String, Object>> getPostes(
+            @RequestParam(defaultValue = "false") boolean activeOnly) {
+        var list = activeOnly ? service.getActivePostes() : service.getAllPostes();
+        return list.stream().map(this::toPosteDto).toList();
+    }
+
+    @PostMapping("/postes")
+    public Map<String, Object> createPoste(@RequestBody Map<String, Object> body) {
+        return toPosteDto(service.createPoste(body));
+    }
+
+    @PutMapping("/postes/{id}")
+    public Map<String, Object> updatePoste(@PathVariable String id,
+                                            @RequestBody Map<String, Object> body) {
+        return toPosteDto(service.updatePoste(id, body));
+    }
+
+    @PatchMapping("/postes/{id}/toggle")
+    public ResponseEntity<Void> togglePoste(@PathVariable String id) {
+        service.togglePoste(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/postes/{id}")
+    public ResponseEntity<Void> deletePoste(@PathVariable String id) {
+        service.deletePoste(id);
         return ResponseEntity.noContent().build();
     }
 
@@ -130,16 +192,61 @@ public class ParametresController {
         m.put("urgenceDefaut", t.getUrgenceDefaut().name());
         m.put("livrableAttendu", t.getLivrableAttendu().name());
         m.put("actif", t.isActif());
+        List<?> docs = List.of();
+        String docsJson = t.getDocumentsAttendus();
+        if (docsJson != null && !docsJson.isBlank()) {
+            try { docs = objectMapper.readValue(docsJson, List.class); } catch (Exception ignored) {}
+        }
+        m.put("documentsAttendus", docs);
         return m;
     }
 
+    private Map<String, Object> toStepDto(WorkflowStep s) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("id", s.getId());
+        m.put("stepOrder", s.getStepOrder());
+        m.put("stepLabel", s.getStepLabel());
+        m.put("requiresSignature", s.isRequiresSignature());
+        m.put("requiresAttachment", s.isRequiresAttachment());
+        m.put("timeoutJours", s.getTimeoutJours());
+        m.put("actorInstructions", s.getActorInstructions());
+        if (s.getRequiredPoste() != null) {
+            m.put("requiredPosteId", s.getRequiredPoste().getId());
+            m.put("requiredPosteLibelle", s.getRequiredPoste().getLibelle());
+        } else {
+            m.put("requiredPosteId", null);
+            m.put("requiredPosteLibelle", null);
+        }
+        return m;
+    }
+
+    private Map<String, Object> toPosteDto(Poste p) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("id", p.getId());
+        m.put("code", p.getCode());
+        m.put("libelle", p.getLibelle());
+        m.put("actif", p.isActif());
+        m.put("habilitations", p.getHabilitations().stream()
+            .map(Enum::name)
+            .collect(Collectors.toList()));
+        return m;
+    }
+
+    @SuppressWarnings("deprecation")
     private Map<String, Object> toUserDto(AppUser u) {
         Map<String, Object> m = new HashMap<>();
         m.put("id", u.getId());
         m.put("username", u.getUsername());
         m.put("nomComplet", u.getNomComplet());
-        m.put("role", u.getRole().name());
+        m.put("role", u.getRole() != null ? u.getRole().name() : null);
         m.put("actif", u.isActif());
+        if (u.getPoste() != null) {
+            m.put("posteId", u.getPoste().getId());
+            m.put("posteLibelle", u.getPoste().getLibelle());
+        } else {
+            m.put("posteId", null);
+            m.put("posteLibelle", null);
+        }
         return m;
     }
 

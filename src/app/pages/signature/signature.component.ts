@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -12,7 +12,7 @@ import { AuthService } from '../../services/auth.service';
   templateUrl: './signature.component.html',
   styleUrl: './signature.component.css'
 })
-export class SignatureComponent implements OnInit {
+export class SignatureComponent implements OnInit, OnDestroy {
   private api    = inject(ApiService);
   private auth   = inject(AuthService);
   private router = inject(Router);
@@ -21,6 +21,8 @@ export class SignatureComponent implements OnInit {
   pending    = signal<any[]>([]);
   historique = signal<any[]>([]);
   loading    = signal(false);
+
+  private sse: EventSource | null = null;
 
   // Submit modal
   showSubmitModal    = signal(false);
@@ -31,17 +33,41 @@ export class SignatureComponent implements OnInit {
   submitting         = signal(false);
   submitError        = signal('');
 
-  // Reject modal (quick-reject from list)
+  // Reject modal
   showRejectModal = signal(false);
   rejectDocId     = signal('');
   rejectComment   = signal('');
   rejecting       = signal(false);
 
-  currentUser   = computed(() => this.auth.currentUser());
-  isSecretaire  = computed(() => this.currentUser()?.role === 'SECRETAIRE');
-  pendingCount  = computed(() => this.pending().length);
+  // Renvoyer modal (EN_ATTENTE_SIGNATURE → renvoi en cascade)
+  showRenvoyerModal = signal(false);
+  renvoyerDocId     = signal('');
+  renvoyerComment   = signal('');
+  renvoyant         = signal(false);
 
-  ngOnInit() { this.load(); }
+  // Renvoyer au propriétaire modal (EN_CORRECTION → renvoyer directement au bureau)
+  showRenvoyerProprietaireModal = signal(false);
+  renvoyerProprietaireDocId     = signal('');
+  renvoyerProprietaireComment   = signal('');
+  renvoyantProprietaire         = signal(false);
+
+  currentUser  = computed(() => this.auth.currentUser());
+  isSecretaire = computed(() => this.currentUser()?.role === 'SECRETAIRE');
+  canSign      = computed(() => this.currentUser()?.canSign === true);
+
+  pendingSignature  = computed(() => this.pending().filter(d => d.parapheurStatut === 'EN_ATTENTE_SIGNATURE'));
+  pendingCorrection = computed(() => this.pending().filter(d => d.parapheurStatut === 'EN_CORRECTION'));
+  pendingCount      = computed(() => this.pending().length);
+
+  ngOnInit() {
+    this.load();
+    this.sse = new EventSource('/api/events');
+    this.sse.addEventListener('PARAPHEUR_UPDATED', () => this.load());
+  }
+
+  ngOnDestroy() {
+    this.sse?.close();
+  }
 
   load() {
     this.loading.set(true);
@@ -106,6 +132,55 @@ export class SignatureComponent implements OnInit {
     this.api.rejeterDocument(this.rejectDocId(), this.rejectComment()).subscribe({
       next: () => { this.showRejectModal.set(false); this.rejecting.set(false); this.load(); },
       error: () => this.rejecting.set(false),
+    });
+  }
+
+  // ── Renvoyer (EN_ATTENTE_SIGNATURE → cascade vers l'étape précédente) ────
+
+  openRenvoyerModal(doc: any) {
+    this.renvoyerDocId.set(doc.id);
+    this.renvoyerComment.set('');
+    this.showRenvoyerModal.set(true);
+  }
+
+  confirmRenvoyer() {
+    if (!this.renvoyerComment().trim()) return;
+    this.renvoyant.set(true);
+    this.api.renvoyerDocument(this.renvoyerDocId(), this.renvoyerComment()).subscribe({
+      next: () => { this.showRenvoyerModal.set(false); this.renvoyant.set(false); this.load(); },
+      error: () => this.renvoyant.set(false),
+    });
+  }
+
+  // ── Repousser (EN_CORRECTION → re-pousser vers l'étape suivante) ─────────
+
+  repousser(doc: any) {
+    this.api.repousserDocument(doc.id).subscribe({
+      next: () => this.load(),
+    });
+  }
+
+  // ── Renvoyer au propriétaire (EN_CORRECTION → renvoyer au bureau source) ──
+
+  openRenvoyerProprietaireModal(doc: any) {
+    this.renvoyerProprietaireDocId.set(doc.id);
+    this.renvoyerProprietaireComment.set('');
+    this.showRenvoyerProprietaireModal.set(true);
+  }
+
+  confirmRenvoyerProprietaire() {
+    if (!this.renvoyerProprietaireComment().trim()) return;
+    this.renvoyantProprietaire.set(true);
+    this.api.renvoyerProprietaireDocument(
+      this.renvoyerProprietaireDocId(),
+      this.renvoyerProprietaireComment()
+    ).subscribe({
+      next: () => {
+        this.showRenvoyerProprietaireModal.set(false);
+        this.renvoyantProprietaire.set(false);
+        this.load();
+      },
+      error: () => this.renvoyantProprietaire.set(false),
     });
   }
 

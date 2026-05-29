@@ -5,20 +5,26 @@ import { SearchBarComponent } from '../../components/search-bar/search-bar.compo
 import { filter } from 'rxjs/operators';
 import { signal } from '@angular/core';
 import { NotificationService } from '../../services/notification.service';
-import { AuthService } from '../../services/auth.service';
+import { AuthService, AppUser } from '../../services/auth.service';
 
-const ALL_MENU_ITEMS = [
-  { label: 'Tableau de bord',       icon: '📊', route: '/dashboard',    roles: ['DG', 'SECRETAIRE', 'SUBORDONNE', 'ADMIN_IT'], unread: 0, alert: false },
-  { label: 'Flux des Instructions', icon: '💬', route: '/chat',              roles: ['DG', 'SECRETAIRE', 'SUBORDONNE'],             unread: 0, alert: false },
+type MenuItem = {
+  label: string; icon: string; route: string; unread: number; alert: boolean;
+  roles?: string[];
+  visible?: (u: AppUser | null) => boolean;
+};
+
+const ALL_MENU_ITEMS: MenuItem[] = [
+  { label: 'Tableau de bord',       icon: '📊', route: '/dashboard',        roles: ['DG', 'SECRETAIRE', 'SUBORDONNE', 'ADMIN_IT'], unread: 0, alert: false },
+  { label: 'Flux des Instructions', icon: '💬', route: '/chat',             roles: ['DG', 'SECRETAIRE', 'SUBORDONNE'],             unread: 0, alert: false },
   { label: 'Notes de Service',      icon: '📋', route: '/notes-de-service', roles: ['DG', 'SECRETAIRE', 'SUBORDONNE'],             unread: 0, alert: false },
-  { label: 'Bureau',                icon: '🗂️', route: '/bureau',           roles: ['SECRETAIRE'],                                 unread: 0, alert: false },
-  { label: 'Parapheur',             icon: '✍️', route: '/signature',    roles: ['DG'],                                         unread: 0, alert: false },
-  { label: 'Courrier Arrivé',       icon: '📥', route: '/inbox',        roles: ['DG', 'SECRETAIRE'],                           unread: 0, alert: false },
-  { label: 'Courrier Départ',       icon: '📤', route: '/outbox',       roles: ['DG', 'SECRETAIRE'],                           unread: 0, alert: false },
-  { label: 'Agenda & Visiteurs',    icon: '📅', route: '/appointments', roles: ['DG', 'SECRETAIRE'],                           unread: 0, alert: false },
-  { label: 'Classeurs',              icon: '🗂️', route: '/classeurs',    roles: ['DG', 'SECRETAIRE'],                           unread: 0, alert: false },
-  { label: 'Mes Signatures',         icon: '🖊️', route: '/signature-assets', roles: ['DG', 'SECRETAIRE', 'SUBORDONNE', 'ADMIN_IT'], unread: 0, alert: false },
-  { label: 'Paramètres',            icon: '⚙️', route: '/parametres',   roles: ['DG', 'ADMIN_IT'],                             unread: 0, alert: false },
+  { label: 'Mon Bureau',            icon: '🗂️', route: '/bureau',           visible: u => u !== null,                              unread: 0, alert: false },
+  { label: 'Parapheur',             icon: '✍️', route: '/signature',        visible: u => u !== null,                              unread: 0, alert: false },
+  { label: 'Courrier Arrivé',       icon: '📥', route: '/inbox',            roles: ['DG', 'SECRETAIRE'],                           unread: 0, alert: false },
+  { label: 'Courrier Départ',       icon: '📤', route: '/outbox',           roles: ['DG', 'SECRETAIRE'],                           unread: 0, alert: false },
+  { label: 'Agenda & Visiteurs',    icon: '📅', route: '/appointments',     roles: ['DG', 'SECRETAIRE'],                           unread: 0, alert: false },
+  { label: 'Classeurs',             icon: '🗂️', route: '/classeurs',        roles: ['DG', 'SECRETAIRE'],                           unread: 0, alert: false },
+  { label: 'Mes Signatures',        icon: '🖊️', route: '/signature-assets', roles: ['DG', 'SECRETAIRE', 'SUBORDONNE', 'ADMIN_IT'], unread: 0, alert: false },
+  { label: 'Paramètres',            icon: '⚙️', route: '/parametres',       roles: ['DG', 'ADMIN_IT'],                             unread: 0, alert: false },
 ];
 
 @Component({
@@ -32,8 +38,11 @@ export class SidebarNavigationComponent {
   private auth = inject(AuthService);
 
   menuItems = computed(() => {
-    const role = this.auth.currentUser()?.role ?? '';
-    return ALL_MENU_ITEMS.filter(item => item.roles.includes(role));
+    const user = this.auth.currentUser();
+    const role = user?.role ?? '';
+    return ALL_MENU_ITEMS.filter(item =>
+      item.visible ? item.visible(user) : (item.roles ?? []).includes(role)
+    );
   });
 
   currentUser = computed(() => this.auth.currentUser());

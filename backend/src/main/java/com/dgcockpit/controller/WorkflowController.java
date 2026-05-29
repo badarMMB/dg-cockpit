@@ -1,132 +1,73 @@
 package com.dgcockpit.controller;
 
+import com.dgcockpit.entity.AppUser;
 import com.dgcockpit.entity.Instruction;
-import com.dgcockpit.entity.ValidationStep;
 import com.dgcockpit.repository.InstructionRepository;
-import com.dgcockpit.repository.ValidationStepRepository;
-import com.dgcockpit.service.AuditService;
-import com.dgcockpit.sse.SseService;
+import com.dgcockpit.service.WorkflowService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.Map;
 
+/**
+ * Expose les transitions du moteur de workflow.
+ * Base path : /api/workflow
+ * <p>
+ * Toutes les opérations requièrent un utilisateur authentifié (attribut {@code currentUser}
+ * positionné par {@link com.dgcockpit.filter.AuthFilter}).
+ */
 @RestController
-@RequestMapping("/api/instructions")
+@RequestMapping("/api/workflow")
 public class WorkflowController {
 
+    private final WorkflowService workflowService;
     private final InstructionRepository instructionRepo;
-    private final ValidationStepRepository stepRepo;
-    private final SseService sseService;
-    private final AuditService auditService;
 
-    public WorkflowController(InstructionRepository instructionRepo,
-                               ValidationStepRepository stepRepo,
-                               SseService sseService,
-                               AuditService auditService) {
-        this.instructionRepo = instructionRepo;
-        this.stepRepo = stepRepo;
-        this.sseService = sseService;
-        this.auditService = auditService;
+    public WorkflowController(WorkflowService workflowService,
+                               InstructionRepository instructionRepo) {
+        this.workflowService  = workflowService;
+        this.instructionRepo  = instructionRepo;
     }
 
-    @PostMapping("/{id}/soumettre")
-    public ResponseEntity<Map<String, Object>> soumettre(
-            @PathVariable String id,
-            @RequestBody Map<String, String> body) {
-
-        return instructionRepo.findById(id).map(instruction -> {
-            instruction.setStatut(Instruction.StatutInstruction.SOUMIS_VALIDATION);
-            instructionRepo.save(instruction);
-
-            ValidationStep step = new ValidationStep();
-            step.setInstruction(instruction);
-            step.setStatut(ValidationStep.Statut.SOUMIS);
-            step.setValidateur(body.getOrDefault("validateur", "DG"));
-            step.setCommentaire(body.getOrDefault("commentaire", ""));
-            stepRepo.save(step);
-
-            sseService.broadcast("STATUT_CHANGE", Map.of(
-                "instructionId", id,
-                "statut", "SOUMIS_VALIDATION"
-            ));
-            auditService.log("SOUMETTRE", "instruction", id,
-                "Soumis par " + body.getOrDefault("validateur", "DG"));
-
-            return ResponseEntity.ok(toDto(step));
-        }).orElse(ResponseEntity.notFound().build());
+    /** Lance le circuit de validation pour une instruction en BROUILLON. */
+    @PostMapping("/{id}/lancer")
+    public ResponseEntity<Map<String, Object>> lancer(@PathVariable String id,
+                                                       HttpServletRequest request) {
+        AppUser user = requireUser(request);
+        if (user == null) return ResponseEntity.status(401).build();
+        return ResponseEntity.ok(workflowService.lancerCircuit(id, user));
     }
 
+    /** Valide l'étape courante pour l'acteur connecté. */
     @PostMapping("/{id}/valider")
-    public ResponseEntity<Map<String, Object>> valider(
-            @PathVariable String id,
-            @RequestBody Map<String, String> body) {
-
-        return instructionRepo.findById(id).map(instruction -> {
-            instruction.setStatut(Instruction.StatutInstruction.CLOTURE);
-            instructionRepo.save(instruction);
-
-            ValidationStep step = new ValidationStep();
-            step.setInstruction(instruction);
-            step.setStatut(ValidationStep.Statut.VALIDE);
-            step.setValidateur(body.getOrDefault("validateur", "DG"));
-            step.setCommentaire(body.getOrDefault("commentaire", ""));
-            stepRepo.save(step);
-
-            sseService.broadcast("STATUT_CHANGE", Map.of(
-                "instructionId", id,
-                "statut", "CLOTURE"
-            ));
-            auditService.log("VALIDER", "instruction", id,
-                "Validé par " + body.getOrDefault("validateur", "DG")
-                + (body.containsKey("commentaire") ? " — " + body.get("commentaire") : ""));
-
-            return ResponseEntity.ok(toDto(step));
-        }).orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<Map<String, Object>> valider(@PathVariable String id,
+                                                        HttpServletRequest request) {
+        AppUser user = requireUser(request);
+        if (user == null) return ResponseEntity.status(401).build();
+        return ResponseEntity.ok(workflowService.validerEtapeActuelle(id, user));
     }
 
+    /** Rejette l'étape courante et clôture négativement. */
     @PostMapping("/{id}/rejeter")
-    public ResponseEntity<Map<String, Object>> rejeter(
-            @PathVariable String id,
-            @RequestBody Map<String, String> body) {
-
-        return instructionRepo.findById(id).map(instruction -> {
-            instruction.setStatut(Instruction.StatutInstruction.REFUSE);
-            instructionRepo.save(instruction);
-
-            ValidationStep step = new ValidationStep();
-            step.setInstruction(instruction);
-            step.setStatut(ValidationStep.Statut.REJETE);
-            step.setValidateur(body.getOrDefault("validateur", "DG"));
-            step.setCommentaire(body.getOrDefault("commentaire", ""));
-            stepRepo.save(step);
-
-            sseService.broadcast("STATUT_CHANGE", Map.of(
-                "instructionId", id,
-                "statut", "REFUSE"
-            ));
-            auditService.log("REJETER", "instruction", id,
-                "Rejeté par " + body.getOrDefault("validateur", "DG")
-                + (body.containsKey("commentaire") ? " — " + body.get("commentaire") : ""));
-
-            return ResponseEntity.ok(toDto(step));
-        }).orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<Map<String, Object>> rejeter(@PathVariable String id,
+                                                        @RequestBody(required = false) Map<String, String> body,
+                                                        HttpServletRequest request) {
+        AppUser user = requireUser(request);
+        if (user == null) return ResponseEntity.status(401).build();
+        String motif = body != null ? body.get("motif") : null;
+        return ResponseEntity.ok(workflowService.rejeterEtapeActuelle(id, user, motif));
     }
 
-    @GetMapping("/{id}/workflow")
-    public List<Map<String, Object>> getWorkflow(@PathVariable String id) {
-        return stepRepo.findByInstructionIdOrderByDateAsc(id)
-                .stream().map(this::toDto).toList();
+    /** Retourne l'état courant du workflow sans effectuer de transition. */
+    @GetMapping("/{id}/etat")
+    public ResponseEntity<Map<String, Object>> etat(@PathVariable String id) {
+        Instruction instruction = instructionRepo.findById(id)
+            .orElseThrow(() -> new RuntimeException("Instruction introuvable : " + id));
+        return ResponseEntity.ok(workflowService.toEtatDto(instruction));
     }
 
-    private Map<String, Object> toDto(ValidationStep s) {
-        return Map.<String, Object>of(
-            "id", s.getId(),
-            "statut", s.getStatut().name(),
-            "validateur", s.getValidateur(),
-            "commentaire", s.getCommentaire() != null ? s.getCommentaire() : "",
-            "date", s.getDate().toString()
-        );
+    private AppUser requireUser(HttpServletRequest request) {
+        return (AppUser) request.getAttribute("currentUser");
     }
 }

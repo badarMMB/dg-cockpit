@@ -2,6 +2,8 @@ package com.dgcockpit.entity;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "instruction_types")
@@ -27,9 +29,22 @@ public class InstructionType {
     @Enumerated(EnumType.STRING)
     private TypeLivrable livrableAttendu = TypeLivrable.CONFIRMATION;
 
+    @Column(columnDefinition = "TEXT")
+    private String documentsAttendus;
+
     private boolean actif = true;
 
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private final LocalDateTime createdAt = LocalDateTime.now();
+
+    /**
+     * Étapes du circuit de validation associées à ce type d'instruction.
+     * L'ensemble de ces étapes définit le workflow complet à suivre.
+     * Triées par {@link WorkflowStep#getStepOrder()} croissant.
+     */
+    @OneToMany(mappedBy = "instructionType", cascade = CascadeType.ALL,
+               fetch = FetchType.LAZY, orphanRemoval = true)
+    @OrderBy("stepOrder ASC")
+    private List<WorkflowStep> workflowSteps = new ArrayList<>();
 
     public enum Categorie { STRATEGIQUE, OPERATIONNELLE, MANAGERIALE, JURIDIQUE }
     public enum Urgence { URGENT, NORMAL, PLANIFIE }
@@ -47,7 +62,11 @@ public class InstructionType {
     public void setUrgenceDefaut(Urgence urgenceDefaut) { this.urgenceDefaut = urgenceDefaut; }
     public TypeLivrable getLivrableAttendu() { return livrableAttendu; }
     public void setLivrableAttendu(TypeLivrable livrableAttendu) { this.livrableAttendu = livrableAttendu; }
+    public String getDocumentsAttendus() { return documentsAttendus; }
+    public void setDocumentsAttendus(String documentsAttendus) { this.documentsAttendus = documentsAttendus; }
     public boolean isActif() { return actif; }
     public void setActif(boolean actif) { this.actif = actif; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public List<WorkflowStep> getWorkflowSteps() { return workflowSteps; }
+    public void setWorkflowSteps(List<WorkflowStep> workflowSteps) { this.workflowSteps = workflowSteps; }
 }

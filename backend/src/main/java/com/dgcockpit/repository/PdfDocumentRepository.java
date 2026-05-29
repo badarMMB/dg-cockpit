@@ -18,4 +18,8 @@ public interface PdfDocumentRepository extends JpaRepository<PdfDocument, String
 
     List<PdfDocument> findByParapheurStatutAndParapheurTypeOrderBySignedAtDesc(
             PdfDocument.ParapheurStatut statut, PdfDocument.ParapheurType type);
+
+    // Parapheur filtré par signataire courant (EN_ATTENTE_SIGNATURE + EN_CORRECTION)
+    List<PdfDocument> findByParapheurStatutInAndCurrentSignataireUserIdOrderBySubmittedAtDesc(
+            List<PdfDocument.ParapheurStatut> statuts, String currentSignataireUserId);
 }

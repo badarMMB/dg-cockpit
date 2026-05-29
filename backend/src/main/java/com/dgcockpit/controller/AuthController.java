@@ -48,13 +48,20 @@ public class AuthController {
         return ResponseEntity.ok(toUserDto(user));
     }
 
+    @SuppressWarnings("deprecation")
     static Map<String, Object> toUserDto(AppUser u) {
         Map<String, Object> m = new HashMap<>();
         m.put("id", u.getId());
         m.put("username", u.getUsername());
         m.put("nomComplet", u.getNomComplet());
-        m.put("role", u.getRole().name());
+        m.put("role", u.getRole() != null ? u.getRole().name() : null);
         m.put("actif", u.isActif());
+        m.put("posteId",      u.getPoste() != null ? u.getPoste().getId()      : null);
+        m.put("posteLibelle", u.getPoste() != null ? u.getPoste().getLibelle() : null);
+        m.put("hasBureau", u.hasBureau());
+        m.put("canSign",   u.hasHabilitation(com.dgcockpit.entity.Poste.Habilitation.CAN_SIGN));
+        m.put("managerId",  u.getManager() != null ? u.getManager().getId()        : null);
+        m.put("managerNom", u.getManager() != null ? u.getManager().getNomComplet() : null);
         return m;
     }
 }

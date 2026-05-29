@@ -11,7 +11,7 @@ public class BureauDocument {
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
-    private String secretaireId;
+    private String proprietaireId;
     private String titre;
 
     // COURRIER | NOTE_SERVICE | DECISION | TRANSMISSION | INVITATION | VOEUX | AUTRE
@@ -61,6 +61,10 @@ public class BureauDocument {
     @Column(columnDefinition = "TEXT")
     private String renvoyeMotif;
 
+    // Fichier corrigé uploadé après renvoi — débloque le bouton Re-soumettre
+    @Column(columnDefinition = "boolean DEFAULT false")
+    private boolean corrigeDepuisRenvoi = false;
+
     // Surlignages posés par le DG avant le renvoi — JSON [{page,x,y,w,h}, ...]
     @Column(columnDefinition = "TEXT")
     private String highlightsJson;
@@ -73,20 +77,28 @@ public class BureauDocument {
     private Integer referenceNumber;
     private Integer referenceYear;
 
+    // Circuit multi-signataires — rempli si ce document est un document de transit
+    // (créé dans le bureau d'un signataire intermédiaire après qu'il a signé)
+    private String circuitPdfDocumentId;  // ID du PdfDocument parent (circuit en cours)
+    private int circuitNextStep = 0;       // Étape suivante à activer dans ce circuit
+
+    // Référence au TypeDocument configuré dans les Paramètres (nullable pour compat ascendante)
+    private String typeDocumentId;
+
     // Timestamps de chaque changement de statut (pour la timeline)
     private LocalDateTime soumisAt;
     private LocalDateTime signeAt;
     private LocalDateTime retourneAt;
     private LocalDateTime livreAt;
 
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private final LocalDateTime createdAt = LocalDateTime.now();
     private LocalDateTime updatedAt = LocalDateTime.now();
 
     public enum Statut { BROUILLON, SOUMIS, RETOURNE, SIGNE, LIVRE }
 
     public String getId() { return id; }
-    public String getSecretaireId() { return secretaireId; }
-    public void setSecretaireId(String secretaireId) { this.secretaireId = secretaireId; }
+    public String getProprietaireId() { return proprietaireId; }
+    public void setProprietaireId(String proprietaireId) { this.proprietaireId = proprietaireId; }
     public String getTitre() { return titre; }
     public void setTitre(String titre) { this.titre = titre; }
     public String getType() { return type; }
@@ -129,6 +141,8 @@ public class BureauDocument {
     public void setStampZoneAllPages(boolean v) { this.stampZoneAllPages = v; }
     public String getRenvoyeMotif() { return renvoyeMotif; }
     public void setRenvoyeMotif(String renvoyeMotif) { this.renvoyeMotif = renvoyeMotif; }
+    public boolean isCorrigeDepuisRenvoi() { return corrigeDepuisRenvoi; }
+    public void setCorrigeDepuisRenvoi(boolean v) { this.corrigeDepuisRenvoi = v; }
     public String getHighlightsJson() { return highlightsJson; }
     public void setHighlightsJson(String highlightsJson) { this.highlightsJson = highlightsJson; }
     public String getSignatureZonesJson() { return signatureZonesJson; }
@@ -158,4 +172,11 @@ public class BureauDocument {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public String getCircuitPdfDocumentId() { return circuitPdfDocumentId; }
+    public void setCircuitPdfDocumentId(String circuitPdfDocumentId) { this.circuitPdfDocumentId = circuitPdfDocumentId; }
+    public int getCircuitNextStep() { return circuitNextStep; }
+    public void setCircuitNextStep(int circuitNextStep) { this.circuitNextStep = circuitNextStep; }
+    public String getTypeDocumentId() { return typeDocumentId; }
+    public void setTypeDocumentId(String typeDocumentId) { this.typeDocumentId = typeDocumentId; }
 }

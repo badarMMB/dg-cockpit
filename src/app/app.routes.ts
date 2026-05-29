@@ -23,6 +23,7 @@ import { ClasseurDetailComponent } from './pages/classeurs/classeur-detail.compo
 import { NotesDeServiceComponent } from './pages/notes/notes-de-service.component';
 import { authGuard } from './guards/auth.guard';
 import { roleGuard } from './guards/role.guard';
+import { bureauGuard } from './guards/bureau.guard';
 
 const DG         = ['DG'];
 const DG_SEC     = ['DG', 'SECRETAIRE'];
@@ -42,7 +43,7 @@ export const routes: Routes = [
       { path: 'dashboard',            component: DashboardComponent },
       { path: 'chat',                 component: ChatComponent,            canActivate: [roleGuard], data: { roles: DG_SEC_SUB } },
       { path: 'editor',               component: EditorComponent },
-      { path: 'signature',            component: SignatureComponent,       canActivate: [roleGuard], data: { roles: DG } },
+      { path: 'signature',            component: SignatureComponent,       canActivate: [authGuard] },
       { path: 'signature-assets',     component: SignatureAssetsComponent, canActivate: [roleGuard], data: { roles: ALL } },
       { path: 'pdf-documents',        component: PdfDocumentsComponent,    canActivate: [roleGuard], data: { roles: DG } },
       { path: 'pdf-viewer/:id',       component: PdfViewerComponent,       canActivate: [roleGuard], data: { roles: DG_SEC_SUB } },
@@ -54,8 +55,8 @@ export const routes: Routes = [
       { path: 'appointments',         component: AppointmentListComponent, canActivate: [roleGuard], data: { roles: DG_SEC } },
       { path: 'appointments/:id',     component: AppointmentDetailComponent, canActivate: [roleGuard], data: { roles: DG_SEC } },
       { path: 'parametres',           component: ParametresComponent,      canActivate: [roleGuard], data: { roles: DG_ADMIN } },
-      { path: 'bureau',               component: BureauComponent,          canActivate: [roleGuard], data: { roles: SEC } },
-      { path: 'bureau-placement/:id', component: BureauPlacementComponent, canActivate: [roleGuard], data: { roles: SEC } },
+      { path: 'bureau',               component: BureauComponent,          canActivate: [bureauGuard] },
+      { path: 'bureau-placement/:id', component: BureauPlacementComponent, canActivate: [bureauGuard] },
       { path: 'classeurs',            component: ClasseursListComponent,   canActivate: [roleGuard], data: { roles: DG_SEC } },
       { path: 'classeurs/:id',        component: ClasseurDetailComponent,  canActivate: [roleGuard], data: { roles: DG_SEC } },
       { path: 'notes-de-service',     component: NotesDeServiceComponent,  canActivate: [roleGuard], data: { roles: DG_SEC_SUB } },

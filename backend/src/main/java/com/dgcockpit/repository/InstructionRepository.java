@@ -9,13 +9,26 @@ import java.util.List;
 
 @Repository
 public interface InstructionRepository extends JpaRepository<Instruction, String> {
+
     List<Instruction> findAllByOrderByCreatedAtDesc();
-    long countByStatutIn(List<Instruction.StatutInstruction> statuts);
-    long countByStatut(Instruction.StatutInstruction statut);
+
+    // ── Nouveau modèle (globalStatus) ─────────────────────────────────────────
+
+    List<Instruction> findByGlobalStatusOrderByCreatedAtDesc(Instruction.GlobalStatus globalStatus);
+
+    long countByGlobalStatus(Instruction.GlobalStatus globalStatus);
+
+    @Query("SELECT DISTINCT i FROM Instruction i JOIN i.assignees a WHERE a.agent = :agentName ORDER BY i.createdAt DESC")
+    List<Instruction> findByAssignee(@Param("agentName") String agentName);
 
     @Query("SELECT i FROM Instruction i WHERE LOWER(i.title) LIKE LOWER(CONCAT('%',:q,'%')) OR LOWER(i.type) LIKE LOWER(CONCAT('%',:q,'%')) OR LOWER(i.agentDisplay) LIKE LOWER(CONCAT('%',:q,'%'))")
     List<Instruction> search(@Param("q") String q);
 
-    @Query("SELECT DISTINCT i FROM Instruction i JOIN i.assignees a WHERE a.agent = :agentName ORDER BY i.createdAt DESC")
-    List<Instruction> findByAssignee(@Param("agentName") String agentName);
+    // ── Ancien modèle (statut déprécié, pour le dashboard) ───────────────────
+
+    @SuppressWarnings("deprecation")
+    long countByStatutIn(List<Instruction.StatutInstruction> statuts);
+
+    @SuppressWarnings("deprecation")
+    long countByStatut(Instruction.StatutInstruction statut);
 }

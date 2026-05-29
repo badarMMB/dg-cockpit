@@ -2,6 +2,7 @@ package com.dgcockpit.controller;
 
 import com.dgcockpit.entity.AppUser;
 import com.dgcockpit.entity.BureauDocument;
+import com.dgcockpit.entity.CircuitSignature;
 import com.dgcockpit.entity.CourrierDepart;
 import com.dgcockpit.entity.Instruction;
 import com.dgcockpit.entity.InstructionMessage;
@@ -9,6 +10,7 @@ import com.dgcockpit.entity.PageAnnotation;
 import com.dgcockpit.entity.PdfDocument;
 import com.dgcockpit.entity.UserSignatureAsset;
 import com.dgcockpit.repository.BureauDocumentRepository;
+import com.dgcockpit.repository.CircuitSignatureRepository;
 import com.dgcockpit.repository.CourrierDepartRepository;
 import com.dgcockpit.repository.InstructionMessageRepository;
 import com.dgcockpit.repository.InstructionRepository;
@@ -51,6 +53,7 @@ public class ParapheurController {
     private final CourrierDepartRepository courrierDepartRepo;
     private final PageAnnotationRepository annotRepo;
     private final UserSignatureAssetRepository assetRepo;
+    private final CircuitSignatureRepository circuitRepo;
     private final BureauDocumentRepository bureauRepo;
     private final InstructionRepository instructionRepo;
     private final InstructionMessageRepository instructionMessageRepo;
@@ -65,6 +68,7 @@ public class ParapheurController {
                                CourrierDepartRepository courrierDepartRepo,
                                PageAnnotationRepository annotRepo,
                                UserSignatureAssetRepository assetRepo,
+                               CircuitSignatureRepository circuitRepo,
                                BureauDocumentRepository bureauRepo,
                                InstructionRepository instructionRepo,
                                InstructionMessageRepository instructionMessageRepo,
@@ -76,6 +80,7 @@ public class ParapheurController {
         this.courrierDepartRepo = courrierDepartRepo;
         this.annotRepo = annotRepo;
         this.assetRepo = assetRepo;
+        this.circuitRepo = circuitRepo;
         this.bureauRepo = bureauRepo;
         this.instructionRepo = instructionRepo;
         this.instructionMessageRepo = instructionMessageRepo;
@@ -84,9 +89,13 @@ public class ParapheurController {
     }
 
     @GetMapping
-    public List<PdfDocument> pending() {
-        return repo.findByParapheurStatutOrderBySubmittedAtDesc(
-                PdfDocument.ParapheurStatut.EN_ATTENTE_SIGNATURE);
+    public List<PdfDocument> pending(HttpServletRequest request) {
+        AppUser currentUser = (AppUser) request.getAttribute("currentUser");
+        if (currentUser == null) return List.of();
+        return repo.findByParapheurStatutInAndCurrentSignataireUserIdOrderBySubmittedAtDesc(
+                List.of(PdfDocument.ParapheurStatut.EN_ATTENTE_SIGNATURE,
+                        PdfDocument.ParapheurStatut.EN_CORRECTION),
+                currentUser.getId());
     }
 
     @GetMapping("/historique")
@@ -151,27 +160,81 @@ public class ParapheurController {
             return ResponseEntity.badRequest().build();
         }
 
-        AppUser signer = (AppUser) request.getAttribute("currentUser");
-        if (signer != null) {
-            resolveZones(id, signer.getId());
+        AppUser signataire = (AppUser) request.getAttribute("currentUser");
+        if (signataire != null) {
+            resolveZones(id, signataire.getId());
         }
 
         doc = finalizer.finalize(id);
         doc.setSignedAt(LocalDateTime.now());
         doc.setUpdatedAt(LocalDateTime.now());
 
+        // Marquer l'étape courante comme signée
+        circuitRepo.findByPdfDocumentIdAndStepOrder(id, doc.getCurrentCircuitStep())
+                .ifPresent(etape -> {
+                    etape.setStatut(CircuitSignature.StatutEtape.SIGNE);
+                    etape.setSignedAt(LocalDateTime.now());
+                    circuitRepo.save(etape);
+                });
+
+        // Chercher l'étape suivante EN_ATTENTE
+        Optional<CircuitSignature> suivante = circuitRepo
+                .findFirstByPdfDocumentIdAndStatutOrderByStepOrderAsc(
+                        id, CircuitSignature.StatutEtape.EN_ATTENTE);
+
+        if (suivante.isPresent()) {
+            // Circuit non terminé : le signataire doit transmettre via son bureau
+            CircuitSignature next = suivante.get();
+
+            // Faire du PDF finalisé la nouvelle source (pour que le bureau de transit l'affiche signé)
+            // DocumentFinalizationService stocke toujours dans "ged-final-documents" —
+            // on met à jour le bucket du PdfDocument pour que les étapes suivantes lisent au bon endroit.
+            if (doc.getFinalizedObjectKey() != null) {
+                doc.setObjectKey(doc.getFinalizedObjectKey());
+                doc.setBucket("ged-final-documents");
+                doc.setFinalizedObjectKey(null);
+                doc.setStatus("DRAFT");
+            }
+
+            // Créer un document de transit dans le bureau du signataire courant
+            BureauDocument transit = new BureauDocument();
+            transit.setProprietaireId(signataire != null ? signataire.getId() : null);
+            transit.setTitre(doc.getTitle());
+            transit.setOriginalFileName(doc.getOriginalFileName());
+            transit.setBucket(doc.getBucket());        // "ged-final-documents" après la maj ci-dessus
+            transit.setObjectKey(doc.getObjectKey()); // clé du PDF signé brûlé
+            transit.setPageCount(doc.getPageCount());
+            transit.setType(doc.getParapheurType() == PdfDocument.ParapheurType.NOTE_SERVICE
+                    ? "NOTE_SERVICE" : "COURRIER");
+            if (doc.getDestinataire() != null) transit.setDestinataire(doc.getDestinataire());
+            transit.setStatut(BureauDocument.Statut.BROUILLON);
+            transit.setCircuitPdfDocumentId(doc.getId());
+            transit.setCircuitNextStep(next.getStepOrder());
+            bureauRepo.save(transit);
+
+            // Mettre le PdfDocument en attente de transmission (invisible du parapheur)
+            doc.setParapheurStatut(PdfDocument.ParapheurStatut.EN_ATTENTE_TRANSMISSION);
+            doc.setCurrentSignataireUserId(null);
+            doc.setUpdatedAt(LocalDateTime.now());
+            PdfDocument saved = repo.save(doc);
+            sseService.broadcast("PARAPHEUR_UPDATED", Map.of("action", "EN_ATTENTE_TRANSMISSION", "id", id));
+            return ResponseEntity.ok(saved);
+        }
+
+        // Dernière étape : clôture du circuit
         if (doc.getParapheurType() == PdfDocument.ParapheurType.NOTE_SERVICE) {
             doc.setParapheurStatut(PdfDocument.ParapheurStatut.PUBLIE);
         } else {
             doc.setParapheurStatut(PdfDocument.ParapheurStatut.SIGNE);
             autoCreateCourrierDepart(doc);
         }
+        doc.setCurrentSignataireUserId(null);
 
         PdfDocument saved = repo.save(doc);
+        sseService.broadcast("PARAPHEUR_UPDATED", Map.of("action", "SIGNE", "id", id));
 
         // Notifier le bureau + clore l'instruction de correction liée
-        final String pdfId = id;
-        bureauRepo.findByPdfDocumentId(pdfId).ifPresent(bureau -> {
+        bureauRepo.findByPdfDocumentId(id).ifPresent(bureau -> {
             bureau.setStatut(BureauDocument.Statut.SIGNE);
             bureau.setSigneAt(LocalDateTime.now());
             bureau.setUpdatedAt(LocalDateTime.now());
@@ -184,7 +247,7 @@ public class ParapheurController {
                         sysMsg.setInstruction(instr);
                         sysMsg.setSender("Système");
                         sysMsg.setSelf(false);
-                        sysMsg.setText("✅ Document signé par le DG — instruction de correction clôturée automatiquement.");
+                        sysMsg.setText("✅ Document signé — instruction de correction clôturée automatiquement.");
                         sysMsg.setType(InstructionMessage.TypeMessage.SYSTEM);
                         instructionMessageRepo.save(sysMsg);
                         instr.setStatut(Instruction.StatutInstruction.CLOTURE);
@@ -194,6 +257,14 @@ public class ParapheurController {
                     }
                 });
             }
+        });
+
+        // Marquer les documents de transit du circuit comme signés
+        bureauRepo.findByCircuitPdfDocumentId(id).forEach(transit -> {
+            transit.setStatut(BureauDocument.Statut.SIGNE);
+            transit.setSigneAt(LocalDateTime.now());
+            transit.setUpdatedAt(LocalDateTime.now());
+            bureauRepo.save(transit);
         });
 
         return ResponseEntity.ok(saved);
@@ -212,12 +283,15 @@ public class ParapheurController {
         doc.setParapheurStatut(PdfDocument.ParapheurStatut.REFUSE);
         doc.setRejectionComment(body.get("comment"));
         doc.setUpdatedAt(LocalDateTime.now());
-        return ResponseEntity.ok(repo.save(doc));
+        PdfDocument savedRejet = repo.save(doc);
+        sseService.broadcast("PARAPHEUR_UPDATED", Map.of("action", "RETOURNE", "id", id));
+        return ResponseEntity.ok(savedRejet);
     }
 
     @PostMapping("/{id}/renvoyer")
     public ResponseEntity<PdfDocument> renvoyer(@PathVariable String id,
-                                                 @RequestBody Map<String, String> body) {
+                                                 @RequestBody Map<String, String> body,
+                                                 HttpServletRequest request) {
         PdfDocument doc = repo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Document not found: " + id));
 
@@ -225,20 +299,84 @@ public class ParapheurController {
             return ResponseEntity.badRequest().build();
         }
 
-        doc.setParapheurStatut(PdfDocument.ParapheurStatut.RENVOYE);
-        doc.setRejectionComment(body.get("comment"));
-        doc.setUpdatedAt(LocalDateTime.now());
-        repo.save(doc);
+        String commentaire = body.get("comment");
+        int stepCourant = doc.getCurrentCircuitStep();
 
-        bureauRepo.findByPdfDocumentId(id).ifPresent(bureau -> {
-            bureau.setStatut(BureauDocument.Statut.RETOURNE);
-            bureau.setRetourneAt(LocalDateTime.now());
-            bureau.setRenvoyeMotif(body.get("comment"));
-            bureau.setPdfDocumentId(null);
-            bureau.setUpdatedAt(LocalDateTime.now());
-            bureauRepo.save(bureau);
+        // Marquer l'étape courante comme RENVOYE
+        circuitRepo.findByPdfDocumentIdAndStepOrder(id, stepCourant).ifPresent(e -> {
+            e.setStatut(CircuitSignature.StatutEtape.RENVOYE);
+            circuitRepo.save(e);
         });
 
+        if (stepCourant == 0) {
+            // Première étape — renvoyer directement au bureau du propriétaire
+            renvoyerAuProprietaire(doc, commentaire, request);
+        } else {
+            // Renvoi en cascade : revenir à l'étape N-1
+            circuitRepo.findByPdfDocumentIdAndStepOrder(id, stepCourant - 1).ifPresent(prec -> {
+                prec.setStatut(CircuitSignature.StatutEtape.EN_ATTENTE);
+                circuitRepo.save(prec);
+                doc.setCurrentSignataireUserId(prec.getSignaireUserId());
+                doc.setCurrentCircuitStep(prec.getStepOrder());
+            });
+            doc.setRejectionComment(commentaire);
+            doc.setParapheurStatut(PdfDocument.ParapheurStatut.EN_CORRECTION);
+            doc.setUpdatedAt(LocalDateTime.now());
+            repo.save(doc);
+            sseService.broadcast("PARAPHEUR_UPDATED", Map.of("action", "EN_CORRECTION", "id", id));
+        }
+        return ResponseEntity.ok(doc);
+    }
+
+    // Re-pousser vers l'étape suivante depuis EN_CORRECTION (l'intermédiaire re-valide)
+    @PostMapping("/{id}/repousser")
+    public ResponseEntity<PdfDocument> repousser(@PathVariable String id) {
+        PdfDocument doc = repo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Document not found: " + id));
+
+        if (doc.getParapheurStatut() != PdfDocument.ParapheurStatut.EN_CORRECTION) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        circuitRepo.findFirstByPdfDocumentIdAndStatutOrderByStepOrderAsc(
+                id, CircuitSignature.StatutEtape.RENVOYE).ifPresent(next -> {
+            next.setStatut(CircuitSignature.StatutEtape.EN_ATTENTE);
+            circuitRepo.save(next);
+            doc.setCurrentSignataireUserId(next.getSignaireUserId());
+            doc.setCurrentCircuitStep(next.getStepOrder());
+            doc.setParapheurStatut(PdfDocument.ParapheurStatut.EN_ATTENTE_SIGNATURE);
+            doc.setUpdatedAt(LocalDateTime.now());
+            repo.save(doc);
+            sseService.broadcast("PARAPHEUR_UPDATED", Map.of("action", "REPOUSSE", "id", id));
+        });
+        return ResponseEntity.ok(doc);
+    }
+
+    // Consulter les étapes du circuit d'un document
+    @GetMapping("/{id}/circuit")
+    public List<CircuitSignature> getCircuit(@PathVariable String id) {
+        return circuitRepo.findByPdfDocumentIdOrderByStepOrderAsc(id);
+    }
+
+    // Cascade complète vers le bureau du propriétaire depuis EN_CORRECTION
+    @PostMapping("/{id}/renvoyer-proprietaire")
+    public ResponseEntity<PdfDocument> renvoyerProprietaire(@PathVariable String id,
+                                                             @RequestBody Map<String, String> body,
+                                                             HttpServletRequest request) {
+        PdfDocument doc = repo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Document not found: " + id));
+
+        if (doc.getParapheurStatut() != PdfDocument.ParapheurStatut.EN_CORRECTION) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        // Annuler toutes les étapes EN_ATTENTE et RENVOYE restantes
+        circuitRepo.findByPdfDocumentIdOrderByStepOrderAsc(id).stream()
+                .filter(e -> e.getStatut() == CircuitSignature.StatutEtape.EN_ATTENTE
+                          || e.getStatut() == CircuitSignature.StatutEtape.RENVOYE)
+                .forEach(e -> { e.setStatut(CircuitSignature.StatutEtape.ANNULE); circuitRepo.save(e); });
+
+        renvoyerAuProprietaire(doc, body.get("comment"), request);
         return ResponseEntity.ok(doc);
     }
 
@@ -338,6 +476,7 @@ public class ParapheurController {
         sseService.broadcast("INSTRUCTION_CREATED", Map.of(
             "id", savedInstruction.getId(),
             "title", savedInstruction.getTitle()));
+        sseService.broadcast("PARAPHEUR_UPDATED", Map.of("action", "RETOURNE", "id", id));
 
         return ResponseEntity.ok(doc);
     }
@@ -354,6 +493,47 @@ public class ParapheurController {
                 .header(HttpHeaders.CONTENT_TYPE, ct)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + key + "\"")
                 .body(bytes);
+    }
+
+    /** Renvoie le document au bureau du propriétaire original et réinitialise le circuit. */
+    private void renvoyerAuProprietaire(PdfDocument doc, String commentaire,
+                                         HttpServletRequest request) {
+        doc.setParapheurStatut(PdfDocument.ParapheurStatut.RENVOYE);
+        doc.setRejectionComment(commentaire);
+        doc.setCurrentSignataireUserId(null);
+        doc.setUpdatedAt(LocalDateTime.now());
+        repo.save(doc);
+
+        bureauRepo.findByPdfDocumentId(doc.getId()).ifPresent(bureau -> {
+            bureau.setStatut(BureauDocument.Statut.RETOURNE);
+            bureau.setRetourneAt(LocalDateTime.now());
+            bureau.setRenvoyeMotif(commentaire);
+            bureau.setPdfDocumentId(null);
+            bureau.setUpdatedAt(LocalDateTime.now());
+            bureauRepo.save(bureau);
+        });
+
+        sseService.broadcast("PARAPHEUR_UPDATED", Map.of("action", "RETOURNE", "id", doc.getId()));
+    }
+
+    /** Crée les PageAnnotations SIGNATURE_ZONE depuis un JSON de zones pour une étape de circuit. */
+    private void creerAnnotationsDepuisZones(String zonesJson, String pdfDocId, String createdBy) {
+        if (zonesJson == null || zonesJson.isBlank()) return;
+        try {
+            List<Map<String, Object>> zones = objectMapper.readValue(zonesJson,
+                    new TypeReference<List<Map<String, Object>>>() {});
+            for (Map<String, Object> z : zones) {
+                PageAnnotation a = new PageAnnotation();
+                a.setPageId(pdfDocId + "::" + ((Number) z.get("page")).intValue());
+                a.setAnnotationType("SIGNATURE_ZONE");
+                a.setXPercent(((Number) z.get("x")).doubleValue());
+                a.setYPercent(((Number) z.get("y")).doubleValue());
+                a.setWidthPercent(((Number) z.get("w")).doubleValue());
+                a.setHeightPercent(((Number) z.get("h")).doubleValue());
+                a.setCreatedBy(createdBy);
+                annotRepo.save(a);
+            }
+        } catch (Exception ignored) {}
     }
 
     private void resolveZones(String docId, String signerUserId) {

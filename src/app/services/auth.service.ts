@@ -8,8 +8,21 @@ export interface AppUser {
   id: string;
   username: string;
   nomComplet: string;
-  role: 'DG' | 'SECRETAIRE' | 'SUBORDONNE' | 'ADMIN_IT';
+  /** Rôle legacy — null pour les utilisateurs migrés vers le nouveau modèle Poste */
+  role: 'DG' | 'SECRETAIRE' | 'SUBORDONNE' | 'ADMIN_IT' | null;
   actif: boolean;
+  /** Identifiant du Poste (nouveau modèle) — null si non encore migré */
+  posteId: string | null;
+  /** Libellé du Poste affiché dans l'UI */
+  posteLibelle: string | null;
+  /** Accès au bureau d'envoi de documents (rôle secondaire SECRETAIRE ou poste SECRETAIRE) */
+  hasBureau: boolean;
+  /** Peut signer (habilitation CAN_SIGN sur le poste) */
+  canSign: boolean;
+  /** ID du supérieur hiérarchique direct */
+  managerId: string | null;
+  /** Nom complet du supérieur hiérarchique direct */
+  managerNom: string | null;
 }
 
 const TOKEN_KEY = 'dg_token';

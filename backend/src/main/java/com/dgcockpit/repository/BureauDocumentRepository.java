@@ -8,8 +8,9 @@ import java.util.List;
 import java.util.Optional;
 
 public interface BureauDocumentRepository extends JpaRepository<BureauDocument, String> {
-    List<BureauDocument> findBySecretaireIdOrderByCreatedAtDesc(String secretaireId);
+    List<BureauDocument> findByProprietaireIdOrderByCreatedAtDesc(String proprietaireId);
     Optional<BureauDocument> findByPdfDocumentId(String pdfDocumentId);
+    List<BureauDocument> findByCircuitPdfDocumentId(String circuitPdfDocumentId);
 
     @Query("SELECT COALESCE(MAX(b.referenceNumber), 0) FROM BureauDocument b WHERE b.referenceYear = :year")
     int findMaxReferenceNumberForYear(@Param("year") int year);

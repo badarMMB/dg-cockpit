@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, inject, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, inject, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -18,6 +18,30 @@ interface BureauDoc {
   hasSignatureZone: boolean;
   hasStampZone: boolean;
   renvoyeMotif: string | null;
+  corrigeDepuisRenvoi: boolean;
+  circuitPdfDocumentId: string | null;
+  typeDocumentId: string | null;
+  modeCircuit: 'MANAGER_SEUL' | 'LIBRE' | 'PREDEFINI' | 'PREDEFINI_MODIFIABLE' | null;
+  typeDocCircuit: { posteId: string; posteLibelle: string }[] | null;
+}
+
+interface TypeDoc {
+  id: string;
+  code: string;
+  libelle: string;
+  modeCircuit: 'MANAGER_SEUL' | 'LIBRE' | 'PREDEFINI' | 'PREDEFINI_MODIFIABLE';
+  actionFinale: 'ARCHIVER' | 'PUBLIER';
+  circuit: { posteId: string; posteLibelle: string }[];
+  initiateurPostes: string[];
+  requiresSignatureZone: boolean;
+  requiresStampZone: boolean;
+  requiresDestinataire: boolean;
+  actif: boolean;
+}
+
+interface EtapeCircuit {
+  userId: string;
+  nom: string;
 }
 
 @Component({
@@ -26,10 +50,14 @@ interface BureauDoc {
   imports: [CommonModule, FormsModule],
   templateUrl: './bureau.component.html',
 })
-export class BureauComponent implements OnInit {
-  private api = inject(ApiService);
-  private auth   = inject(AuthService);
+export class BureauComponent implements OnInit, OnDestroy {
+  private api  = inject(ApiService);
+  private auth = inject(AuthService);
   private router = inject(Router);
+
+  private sse: EventSource | null = null;
+
+  currentUser = this.auth.currentUser;
 
   docs      = signal<BureauDoc[]>([]);
   loading   = signal(false);
@@ -43,18 +71,46 @@ export class BureauComponent implements OnInit {
   });
 
   // Upload modal
-  showUploadModal  = signal(false);
+  showUploadModal    = signal(false);
   uploadFile: File | null = null;
-  uploadTitre      = '';
-  uploadType       = 'COURRIER';
+  uploadTitre        = '';
+  uploadType         = 'COURRIER';
   uploadDestinataire = '';
+  uploadTypeDocumentId = '';
+
+  // Liste des types de documents disponibles
+  typeDocuments = signal<TypeDoc[]>([]);
+  // TypeDocument sélectionné pour l'upload en cours
+  uploadTypeDoc = computed(() =>
+    this.typeDocuments().find(t => t.id === this.uploadTypeDocumentId) ?? null
+  );
 
   // Confirm delete
   deletingId = signal<string | null>(null);
 
-  // Confirm soumettre
-  soumettreId = signal<string | null>(null);
-  submitting  = signal(false);
+  // Modale soumettre avec sélection de circuit
+  soumettreId        = signal<string | null>(null);
+  submitting         = signal(false);
+  circuitSelectionne = signal<EtapeCircuit[]>([]);
+
+  soumettreDoc = computed(() => {
+    const id = this.soumettreId();
+    return id ? (this.docs().find(d => d.id === id) ?? null) : null;
+  });
+
+  // Sélecteur d'utilisateurs pour ajouter une étape au circuit
+  utilisateurs      = signal<{ id: string; nomComplet: string; posteId?: string }[]>([]);
+  showUserPicker    = signal(false);
+  userPickerFilter  = signal('');
+
+  utilisateursFiltres = computed(() => {
+    const filtre     = this.userPickerFilter().toLowerCase();
+    const dejaChoisis = new Set(this.circuitSelectionne().map(e => e.userId));
+    const moiId       = this.currentUser()?.id;
+    return this.utilisateurs()
+      .filter(u => !dejaChoisis.has(u.id) && u.id !== moiId)
+      .filter(u => !filtre || u.nomComplet.toLowerCase().includes(filtre));
+  });
 
   readonly docTypes = [
     { value: 'COURRIER',      label: 'Courrier officiel' },
@@ -76,8 +132,8 @@ export class BureauComponent implements OnInit {
   readonly statutLabel: Record<string, string> = {
     BROUILLON: 'Brouillon',
     SOUMIS:    'Soumis au parapheur',
-    RETOURNE:  'Renvoyé par le DG',
-    SIGNE:     'Signé par le DG',
+    RETOURNE:  'Renvoyé pour correction',
+    SIGNE:     'Signé',
     LIVRE:     'Livré & Classé',
   };
 
@@ -93,6 +149,18 @@ export class BureauComponent implements OnInit {
   ngOnInit() {
     this.load();
     this.api.getClasseurs().subscribe(data => this.livraisonClasseurs.set(data));
+    this.api.getUsers().subscribe((users: any[]) =>
+      this.utilisateurs.set(users.map(u => ({ id: u.id, nomComplet: u.nomComplet, posteId: u.posteId ?? undefined })))
+    );
+    this.api.getTypeDocuments().subscribe((types: TypeDoc[]) =>
+      this.typeDocuments.set(types.filter(t => t.actif))
+    );
+    this.sse = new EventSource('/api/events');
+    this.sse.addEventListener('PARAPHEUR_UPDATED', () => this.load());
+  }
+
+  ngOnDestroy() {
+    this.sse?.close();
   }
 
   load() {
@@ -110,6 +178,7 @@ export class BureauComponent implements OnInit {
     this.uploadTitre = '';
     this.uploadType = 'COURRIER';
     this.uploadDestinataire = '';
+    this.uploadTypeDocumentId = '';
     this.showUploadModal.set(true);
   }
 
@@ -123,11 +192,14 @@ export class BureauComponent implements OnInit {
   doUpload() {
     if (!this.uploadFile) return;
     this.uploading.set(true);
+    const td = this.uploadTypeDoc();
+    const type = td ? td.code : this.uploadType;
     this.api.uploadBureauDocument(
       this.uploadFile,
-      this.uploadType,
+      type,
       this.uploadTitre || undefined,
-      this.uploadDestinataire || undefined
+      this.uploadDestinataire || undefined,
+      this.uploadTypeDocumentId || undefined
     ).subscribe({
       next: doc => {
         this.docs.update(list => [doc, ...list]);
@@ -151,14 +223,105 @@ export class BureauComponent implements OnInit {
       alert('Veuillez d\'abord placer la zone de signature avant de soumettre.');
       return;
     }
+    this.showUserPicker.set(false);
+    this.userPickerFilter.set('');
+
+    if (doc.circuitPdfDocumentId) {
+      // Document de transit : transmission directe à l'étape suivante
+      this.circuitSelectionne.set([]);
+      this.soumettreId.set(doc.id);
+      return;
+    }
+
+    const mode = doc.modeCircuit ?? 'LIBRE';
+
+    if (mode === 'MANAGER_SEUL') {
+      // Circuit automatique — pas de picker, manager direct uniquement
+      const user = this.currentUser();
+      const circuit: EtapeCircuit[] = user?.managerId && user?.managerNom
+        ? [{ userId: user.managerId, nom: user.managerNom }]
+        : [];
+      this.circuitSelectionne.set(circuit);
+      this.soumettreId.set(doc.id);
+      return;
+    }
+
+    if (mode === 'PREDEFINI') {
+      // Circuit fixé — résolu côté backend, afficher en lecture seule
+      this.circuitSelectionne.set([]);
+      this.soumettreId.set(doc.id);
+      return;
+    }
+
+    if (mode === 'PREDEFINI_MODIFIABLE' && doc.typeDocCircuit?.length) {
+      // Pré-remplir avec le circuit type (résolution poste → utilisateur), modifiable
+      const filledCircuit: EtapeCircuit[] = [];
+      for (const step of doc.typeDocCircuit) {
+        const occupant = this.utilisateurs().find(u => u.posteId === step.posteId);
+        if (occupant) filledCircuit.push({ userId: occupant.id, nom: occupant.nomComplet });
+      }
+      this.circuitSelectionne.set(filledCircuit);
+      this.soumettreId.set(doc.id);
+      return;
+    }
+
+    // LIBRE ou fallback : manager par défaut
+    const user = this.currentUser();
+    const circuit: EtapeCircuit[] = [];
+    if (user?.managerId && user?.managerNom) {
+      circuit.push({ userId: user.managerId, nom: user.managerNom });
+    }
+    this.circuitSelectionne.set(circuit);
     this.soumettreId.set(doc.id);
+  }
+
+  toggleUserPicker() {
+    this.showUserPicker.update(v => !v);
+    this.userPickerFilter.set('');
+  }
+
+  ajouterSignataire(user: { id: string; nomComplet: string }) {
+    this.circuitSelectionne.update(c => [...c, { userId: user.id, nom: user.nomComplet }]);
+    this.showUserPicker.set(false);
+    this.userPickerFilter.set('');
+  }
+
+  supprimerEtape(index: number) {
+    const circuit = this.circuitSelectionne();
+    if (circuit.length <= 1) return; // garder au moins une étape
+    this.circuitSelectionne.set(circuit.filter((_, i) => i !== index));
+  }
+
+  monterEtape(index: number) {
+    if (index === 0) return;
+    const circuit = [...this.circuitSelectionne()];
+    [circuit[index - 1], circuit[index]] = [circuit[index], circuit[index - 1]];
+    this.circuitSelectionne.set(circuit);
+  }
+
+  descendreEtape(index: number) {
+    const circuit = this.circuitSelectionne();
+    if (index >= circuit.length - 1) return;
+    const updated = [...circuit];
+    [updated[index], updated[index + 1]] = [updated[index + 1], updated[index]];
+    this.circuitSelectionne.set(updated);
   }
 
   doSoumettre() {
     const id = this.soumettreId();
     if (!id) return;
+    const doc = this.soumettreDoc();
+    const isTransit  = !!doc?.circuitPdfDocumentId;
+    const isPredefini = doc?.modeCircuit === 'PREDEFINI';
+    const circuit = this.circuitSelectionne();
+    if (!isTransit && !isPredefini && circuit.length === 0) {
+      alert('Aucun supérieur hiérarchique défini. Impossible de soumettre.');
+      return;
+    }
     this.submitting.set(true);
-    this.api.soumettreAuParapheur(id).subscribe({
+    // Pour PREDEFINI : pas de circuit côté frontend — le backend résout via TypeDocument.circuitJson
+    const circuitParam = (isTransit || isPredefini) ? undefined : JSON.stringify(circuit);
+    this.api.soumettreAuParapheur(id, circuitParam).subscribe({
       next: () => {
         this.docs.update(list => list.map(d =>
           d.id === id ? { ...d, statut: 'SOUMIS' as const, renvoyeMotif: null } : d

@@ -7,34 +7,85 @@ import { ToastService } from '../../services/toast.service';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 pointer-events-none">
+    <div class="fixed bottom-5 right-5 z-[9999] flex flex-col gap-3 pointer-events-none">
       @for (t of toast.toasts(); track t.id) {
-        <div class="flex items-start gap-3 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium
-                    max-w-sm w-full pointer-events-auto animate-slide-up"
+        <div class="relative flex items-start gap-3 px-4 py-3.5 rounded-2xl shadow-xl border
+                    max-w-sm w-full pointer-events-auto overflow-hidden
+                    backdrop-blur-md animate-slide-up"
              [ngClass]="{
-               'bg-emerald-50 border-emerald-200 text-emerald-800': t.type === 'success',
-               'bg-red-50   border-red-200   text-red-800':         t.type === 'error',
-               'bg-blue-50  border-blue-200  text-blue-800':        t.type === 'info',
-               'bg-amber-50 border-amber-200 text-amber-800':       t.type === 'warning'
+               'bg-emerald-50/90 border-emerald-200/60 text-emerald-900': t.type === 'success',
+               'bg-red-50/90    border-red-200/60    text-red-900':       t.type === 'error',
+               'bg-blue-50/90   border-blue-200/60   text-blue-900':      t.type === 'info',
+               'bg-amber-50/90  border-amber-200/60  text-amber-900':     t.type === 'warning'
              }">
-          <span class="text-base flex-shrink-0 mt-px">
-            {{ t.type === 'success' ? '✓' : t.type === 'error' ? '✕' : t.type === 'warning' ? '⚠' : 'ℹ' }}
-          </span>
-          <span class="flex-1 leading-snug">{{ t.message }}</span>
+
+          <!-- Icône SVG -->
+          <div class="flex-shrink-0 mt-0.5 w-5 h-5">
+            @if (t.type === 'success') {
+              <svg viewBox="0 0 20 20" fill="currentColor" class="text-emerald-500 w-5 h-5">
+                <path fill-rule="evenodd" clip-rule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"/>
+              </svg>
+            }
+            @if (t.type === 'error') {
+              <svg viewBox="0 0 20 20" fill="currentColor" class="text-red-500 w-5 h-5">
+                <path fill-rule="evenodd" clip-rule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"/>
+              </svg>
+            }
+            @if (t.type === 'info') {
+              <svg viewBox="0 0 20 20" fill="currentColor" class="text-blue-500 w-5 h-5">
+                <path fill-rule="evenodd" clip-rule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"/>
+              </svg>
+            }
+            @if (t.type === 'warning') {
+              <svg viewBox="0 0 20 20" fill="currentColor" class="text-amber-500 w-5 h-5">
+                <path fill-rule="evenodd" clip-rule="evenodd"
+                      d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"/>
+              </svg>
+            }
+          </div>
+
+          <!-- Message -->
+          <span class="flex-1 text-sm leading-snug font-medium">{{ t.message }}</span>
+
+          <!-- Bouton fermer -->
           <button (click)="toast.dismiss(t.id)"
-                  class="flex-shrink-0 opacity-50 hover:opacity-100 transition-opacity text-base leading-none">
-            &times;
+                  class="flex-shrink-0 -mt-0.5 -mr-1 p-1 rounded-full opacity-40 hover:opacity-100 transition-opacity">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 14 14" fill="currentColor">
+              <path d="M4.293 4.293a1 1 0 011.414 0L7 5.586l1.293-1.293a1 1 0 111.414 1.414L8.414 7l1.293 1.293a1 1 0 01-1.414 1.414L7 8.414l-1.293 1.293a1 1 0 01-1.414-1.414L5.586 7 4.293 5.707a1 1 0 010-1.414z"/>
+            </svg>
           </button>
+
+          <!-- Barre de progression -->
+          <div class="absolute bottom-0 left-0 right-0 h-[3px] overflow-hidden">
+            <div class="h-full animate-toast-progress"
+                 [ngClass]="{
+                   'bg-emerald-400': t.type === 'success',
+                   'bg-red-400':     t.type === 'error',
+                   'bg-blue-400':    t.type === 'info',
+                   'bg-amber-400':   t.type === 'warning'
+                 }"></div>
+          </div>
         </div>
       }
     </div>
   `,
   styles: [`
     @keyframes slide-up {
-      from { opacity: 0; transform: translateY(12px); }
-      to   { opacity: 1; transform: translateY(0); }
+      from { opacity: 0; transform: translateY(16px) scale(0.96); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
     }
-    .animate-slide-up { animation: slide-up 0.2s ease-out; }
+    .animate-slide-up { animation: slide-up 0.22s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+    @keyframes toast-progress {
+      from { width: 100%; }
+      to   { width: 0%; }
+    }
+    .animate-toast-progress {
+      animation: toast-progress 3.5s linear forwards;
+    }
   `]
 })
 export class ToastComponent {

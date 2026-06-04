@@ -1,3 +1,56 @@
+<!-- ── Éditeur Collabora plein écran (révision/signature au Parapheur) ──── -->
+@if (editingParapheurDoc()) {
+  <div class="fixed inset-0 z-50 flex flex-col bg-white">
+
+    <!-- Barre de titre + actions -->
+    <div class="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-white shadow-sm shrink-0 gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <span class="text-lg shrink-0">✍️</span>
+        <span class="font-semibold text-gray-800 text-sm truncate">{{ editingParapheurDoc()!.title }}</span>
+        <span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium shrink-0">
+          À signer
+        </span>
+      </div>
+
+      <div class="flex items-center gap-2 shrink-0">
+        <!-- Erreur signature -->
+        @if (signError()) {
+          <span class="text-xs text-red-600">{{ signError() }}</span>
+        }
+
+        <!-- Bouton Signer -->
+        <button (click)="signerDocumentCollabora(editingParapheurDoc())"
+                [disabled]="signing()"
+                class="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm">
+          @if (signing()) {
+            <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            <span>Signature en cours…</span>
+          } @else {
+            <span>✅ Signer le document</span>
+          }
+        </button>
+
+        <button (click)="fermerEditionParapheur()"
+                [disabled]="signing()"
+                class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40">
+          ← Retour
+        </button>
+      </div>
+    </div>
+
+    <!-- iframe Collabora -->
+    <div class="flex-1 overflow-hidden">
+      <app-collabora-editor
+        #collaboraEditor
+        [bureauDocumentId]="editingParapheurDoc()!.bureauDocumentId"
+        context="PARAPHEUR"
+        (documentClosed)="fermerEditionParapheur()"
+>
+      </app-collabora-editor>
+    </div>
+  </div>
+}
+
 <div class="h-full flex flex-col bg-gray-50">
 
   <!-- ── Header ───────────────────────────────────────────────────────── -->
@@ -6,8 +59,7 @@
       <h1 class="text-xl font-semibold text-gray-900">Parapheur</h1>
       <p class="text-sm text-gray-500">Documents en attente de signature électronique</p>
     </div>
-    <button *ngIf="isSecretaire()" (click)="openSubmitModal()"
-            class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
+    <button *ngIf="isSecretaire()" (click)="openSubmitModal()" class="btn-primary">
       <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
       </svg>
@@ -96,16 +148,21 @@
 
               <!-- Actions EN_CORRECTION -->
               <div class="flex flex-col items-end gap-2 flex-shrink-0">
+                @if (doc.bureauDocumentId) {
+                  <button (click)="ouvrirEditionParapheur(doc)"
+                          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-sm whitespace-nowrap">
+                    ✏️ Éditer le .docx
+                  </button>
+                }
                 <button (click)="repousser(doc)"
-                        class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors whitespace-nowrap">
+                        class="btn-primary btn-sm whitespace-nowrap bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-400">
                   Re-pousser ▶
                 </button>
                 <button (click)="openRenvoyerProprietaireModal(doc)"
-                        class="px-3 py-1.5 text-sm border border-orange-300 text-orange-700 rounded-lg hover:bg-orange-100 transition-colors whitespace-nowrap">
+                        class="btn btn-sm border border-orange-300 text-orange-700 hover:bg-orange-50 focus:ring-orange-300 whitespace-nowrap">
                   ↩ Renvoyer au bureau
                 </button>
-                <button (click)="openDoc(doc)"
-                        class="px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap">
+                <button (click)="openDoc(doc)" class="btn-ghost btn-sm whitespace-nowrap">
                   Consulter
                 </button>
               </div>
@@ -153,15 +210,26 @@
               </div>
 
               <!-- Actions EN_ATTENTE_SIGNATURE -->
-              <div class="flex items-center gap-2 flex-shrink-0">
-                <button (click)="openRenvoyerModal(doc)"
-                        class="px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200 transition-colors">
-                  ↩ Renvoyer
-                </button>
-                <button (click)="openDoc(doc)"
-                        class="px-3 py-1.5 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-1.5">
-                  <span>✍️</span> Ouvrir et signer
-                </button>
+              <div class="flex flex-col items-end gap-2 flex-shrink-0">
+                <!-- Éditer dans Collabora (visible si le document a un bureauDocumentId) -->
+                @if (doc.bureauDocumentId) {
+                  <button (click)="ouvrirEditionParapheur(doc)"
+                          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-sm whitespace-nowrap">
+                    ✏️ Éditer le .docx
+                  </button>
+                }
+                <div class="flex items-center gap-2">
+                  <button (click)="openRenvoyerModal(doc)"
+                          class="btn btn-sm border border-gray-200 text-gray-600 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200 focus:ring-amber-300">
+                    ↩ Renvoyer
+                  </button>
+                  <button (click)="openDoc(doc)" class="btn-primary btn-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                    </svg>
+                    Ouvrir et signer
+                  </button>
+                </div>
               </div>
 
             </div>
@@ -220,8 +288,7 @@
           </div>
 
           <!-- Open button (history) -->
-          <button (click)="openDoc(doc)"
-                  class="flex-shrink-0 px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
+          <button (click)="openDoc(doc)" class="flex-shrink-0 btn-ghost btn-sm">
             Consulter
           </button>
 
@@ -298,12 +365,9 @@
     </div>
 
     <div class="flex gap-3 mt-6">
-      <button (click)="showSubmitModal.set(false)"
-              class="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">
-        Annuler
-      </button>
+      <button (click)="showSubmitModal.set(false)" class="flex-1 btn-secondary">Annuler</button>
       <button (click)="submitDocument()" [disabled]="submitting() || !submitFile() || !submitTitle()"
-              class="flex-1 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+              class="flex-1 btn-primary">
         <div *ngIf="submitting()" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
         {{ submitting() ? 'Envoi en cours…' : 'Soumettre' }}
       </button>
@@ -325,12 +389,9 @@
     </textarea>
 
     <div class="flex gap-3 mt-4">
-      <button (click)="showRenvoyerModal.set(false)"
-              class="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">
-        Annuler
-      </button>
+      <button (click)="showRenvoyerModal.set(false)" class="flex-1 btn-secondary">Annuler</button>
       <button (click)="confirmRenvoyer()" [disabled]="renvoyant() || !renvoyerComment().trim()"
-              class="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+              class="flex-1 btn-warning">
         <div *ngIf="renvoyant()" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
         {{ renvoyant() ? 'En cours…' : '↩ Confirmer le renvoi' }}
       </button>
@@ -354,13 +415,10 @@
     </textarea>
 
     <div class="flex gap-3 mt-4">
-      <button (click)="showRenvoyerProprietaireModal.set(false)"
-              class="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">
-        Annuler
-      </button>
+      <button (click)="showRenvoyerProprietaireModal.set(false)" class="flex-1 btn-secondary">Annuler</button>
       <button (click)="confirmRenvoyerProprietaire()"
               [disabled]="renvoyantProprietaire() || !renvoyerProprietaireComment().trim()"
-              class="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+              class="flex-1 btn-orange">
         <div *ngIf="renvoyantProprietaire()" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
         {{ renvoyantProprietaire() ? 'En cours…' : '↩ Renvoyer au bureau' }}
       </button>
@@ -382,12 +440,9 @@
     </textarea>
 
     <div class="flex gap-3 mt-4">
-      <button (click)="showRejectModal.set(false)"
-              class="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">
-        Annuler
-      </button>
+      <button (click)="showRejectModal.set(false)" class="flex-1 btn-secondary">Annuler</button>
       <button (click)="confirmReject()" [disabled]="rejecting() || !rejectComment().trim()"
-              class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+              class="flex-1 btn-danger">
         <div *ngIf="rejecting()" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
         {{ rejecting() ? 'En cours…' : 'Confirmer le refus' }}
       </button>

@@ -1,11 +1,13 @@
 package com.dgcockpit.controller;
 
 import com.dgcockpit.entity.AppUser;
+import com.dgcockpit.entity.Poste;
 import com.dgcockpit.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -58,6 +60,9 @@ public class AuthController {
         m.put("actif", u.isActif());
         m.put("posteId",      u.getPoste() != null ? u.getPoste().getId()      : null);
         m.put("posteLibelle", u.getPoste() != null ? u.getPoste().getLibelle() : null);
+        m.put("habilitations", u.getPoste() != null && u.getPoste().getHabilitations() != null
+            ? u.getPoste().getHabilitations().stream().map(Poste.Habilitation::name).sorted().toList()
+            : List.of());
         m.put("hasBureau", u.hasBureau());
         m.put("canSign",   u.hasHabilitation(com.dgcockpit.entity.Poste.Habilitation.CAN_SIGN));
         m.put("managerId",  u.getManager() != null ? u.getManager().getId()        : null);

@@ -31,6 +31,7 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.graphics.state.PDExtendedGraphicsState;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -59,6 +60,16 @@ public class ParapheurController {
     private final InstructionMessageRepository instructionMessageRepo;
     private final SseService sseService;
     private final ObjectMapper objectMapper;
+    private final com.dgcockpit.service.AuthorizationService authorizationService;
+    private final com.dgcockpit.service.WopiTokenService wopiTokenService;
+    private final com.dgcockpit.service.DocxSignatureService docxSignatureService;
+    private final com.dgcockpit.service.CollaboraConvertService collaboraConvertService;
+
+    @org.springframework.beans.factory.annotation.Value("${collabora.public-url:http://localhost:9980}")
+    private String collaboraPublicUrl;
+
+    @org.springframework.beans.factory.annotation.Value("${collabora.wopi.host:http://localhost:8080}")
+    private String wopiHost;
 
     private static final String AUDIO_BUCKET = "ged-audio-corrections";
 
@@ -73,7 +84,11 @@ public class ParapheurController {
                                InstructionRepository instructionRepo,
                                InstructionMessageRepository instructionMessageRepo,
                                SseService sseService,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               com.dgcockpit.service.AuthorizationService authorizationService,
+                               com.dgcockpit.service.WopiTokenService wopiTokenService,
+                               com.dgcockpit.service.DocxSignatureService docxSignatureService,
+                               com.dgcockpit.service.CollaboraConvertService collaboraConvertService) {
         this.repo = repo;
         this.finalizer = finalizer;
         this.minio = minio;
@@ -86,6 +101,10 @@ public class ParapheurController {
         this.instructionMessageRepo = instructionMessageRepo;
         this.sseService = sseService;
         this.objectMapper = objectMapper;
+        this.authorizationService = authorizationService;
+        this.wopiTokenService = wopiTokenService;
+        this.docxSignatureService = docxSignatureService;
+        this.collaboraConvertService = collaboraConvertService;
     }
 
     @GetMapping
@@ -151,6 +170,7 @@ public class ParapheurController {
     }
 
     @PostMapping("/{id}/signer")
+    @PreAuthorize("hasAuthority('CAN_SIGN')")
     public ResponseEntity<PdfDocument> signer(@PathVariable String id,
                                                HttpServletRequest request) throws Exception {
         PdfDocument doc = repo.findById(id)
@@ -163,6 +183,27 @@ public class ParapheurController {
         AppUser signataire = (AppUser) request.getAttribute("currentUser");
         if (signataire != null) {
             resolveZones(id, signataire.getId());
+        }
+
+        // Filet de sécurité : si le PdfDocument pointe encore vers un .docx (données
+        // antérieures au flux hybride), le convertir en PDF avant le brûlage PDFBox.
+        if (doc.getOriginalFileName() != null
+                && doc.getOriginalFileName().toLowerCase().endsWith(".docx")) {
+            try {
+                byte[] docxBytes = minio.downloadBytes(doc.getBucket(), doc.getObjectKey());
+                byte[] pdfBytes  = collaboraConvertService.docxToPdf(docxBytes, doc.getOriginalFileName());
+                String pdfKey = java.util.UUID.randomUUID() + "_"
+                    + doc.getOriginalFileName().replaceAll("\\.docx$", ".pdf");
+                minio.uploadBytes("ged-documents", pdfKey, pdfBytes, "application/pdf");
+                int pages = finalizer.getPageCount("ged-documents", pdfKey);
+                doc.setBucket("ged-documents");
+                doc.setObjectKey(pdfKey);
+                doc.setPageCount(pages);
+                doc.setUpdatedAt(java.time.LocalDateTime.now());
+                doc = repo.save(doc);
+            } catch (Exception e) {
+                return ResponseEntity.status(500).build();
+            }
         }
 
         doc = finalizer.finalize(id);
@@ -217,6 +258,18 @@ public class ParapheurController {
             doc.setCurrentSignataireUserId(null);
             doc.setUpdatedAt(LocalDateTime.now());
             PdfDocument saved = repo.save(doc);
+
+            // Message système dans l'instruction liée (étape du circuit signée)
+            final int stepSigne = saved.getCurrentCircuitStep();
+            final AppUser sigFinal = signataire;
+            bureauRepo.findByPdfDocumentId(id).ifPresent(srcBureau -> {
+                if (srcBureau.getSourceInstructionId() != null) {
+                    String nom = sigFinal != null ? sigFinal.getNomComplet() : "Signataire";
+                    ajouterMessageSysteme(srcBureau.getSourceInstructionId(),
+                        "✍️ Étape " + (stepSigne + 1) + " signée par " + nom);
+                }
+            });
+
             sseService.broadcast("PARAPHEUR_UPDATED", Map.of("action", "EN_ATTENTE_TRANSMISSION", "id", id));
             return ResponseEntity.ok(saved);
         }
@@ -233,22 +286,28 @@ public class ParapheurController {
         PdfDocument saved = repo.save(doc);
         sseService.broadcast("PARAPHEUR_UPDATED", Map.of("action", "SIGNE", "id", id));
 
-        // Notifier le bureau + clore l'instruction de correction liée
+        // Invalider tous les tokens WOPI du bureau source (plus d'édition possible)
+        bureauRepo.findByPdfDocumentId(id).ifPresent(bureau ->
+            wopiTokenService.invalidateForDocument(bureau.getId()));
+
+        // Notifier le bureau + clôturer l'instruction liée (si DOCUMENTAIRE)
+        final PdfDocument docFinal = doc;
         bureauRepo.findByPdfDocumentId(id).ifPresent(bureau -> {
             bureau.setStatut(BureauDocument.Statut.SIGNE);
             bureau.setSigneAt(LocalDateTime.now());
             bureau.setUpdatedAt(LocalDateTime.now());
             bureauRepo.save(bureau);
 
-            if (bureau.getCorrectionInstructionId() != null) {
-                instructionRepo.findById(bureau.getCorrectionInstructionId()).ifPresent(instr -> {
+            if (bureau.getSourceInstructionId() != null) {
+                instructionRepo.findById(bureau.getSourceInstructionId()).ifPresent(instr -> {
                     if (instr.getStatut() != Instruction.StatutInstruction.CLOTURE) {
                         InstructionMessage sysMsg = new InstructionMessage();
                         sysMsg.setInstruction(instr);
                         sysMsg.setSender("Système");
                         sysMsg.setSelf(false);
-                        sysMsg.setText("✅ Document signé — instruction de correction clôturée automatiquement.");
-                        sysMsg.setType(InstructionMessage.TypeMessage.SYSTEM);
+                        sysMsg.setSystemMessage(true);
+                        sysMsg.setText("✅ Document \"" + docFinal.getTitle()
+                            + "\" finalisé → instruction clôturée automatiquement.");
                         instructionMessageRepo.save(sysMsg);
                         instr.setStatut(Instruction.StatutInstruction.CLOTURE);
                         instructionRepo.save(instr);
@@ -323,6 +382,19 @@ public class ParapheurController {
             doc.setParapheurStatut(PdfDocument.ParapheurStatut.EN_CORRECTION);
             doc.setUpdatedAt(LocalDateTime.now());
             repo.save(doc);
+
+            // Injecter le commentaire dans le fil de l'instruction liée
+            AppUser signeur = (AppUser) request.getAttribute("currentUser");
+            String signerNom = signeur != null ? signeur.getNomComplet() : "Signataire";
+            bureauRepo.findByPdfDocumentId(id).ifPresent(bureau -> {
+                String srcId = bureau.getSourceInstructionId();
+                if (srcId != null && !srcId.isBlank()) {
+                    ajouterMessageSysteme(srcId,
+                        "↩️ Renvoyé pour correction par " + signerNom
+                        + (commentaire != null && !commentaire.isBlank() ? " : " + commentaire : ""));
+                }
+            });
+
             sseService.broadcast("PARAPHEUR_UPDATED", Map.of("action", "EN_CORRECTION", "id", id));
         }
         return ResponseEntity.ok(doc);
@@ -443,41 +515,75 @@ public class ParapheurController {
             audioName = audio.getOriginalFilename();
         }
 
-        // 4. Créer l'Instruction
-        Instruction instruction = new Instruction();
-        instruction.setTitle("Correction/modification demandée sur \"" + doc.getTitle() + "\"");
-        instruction.setType("Correction");
-        instruction.setUrgence("URGENT");
-        instruction.setAgentDisplay("Secrétaire");
-        Instruction savedInstruction = instructionRepo.save(instruction);
+        // 4. Reporter dans l'instruction liée OU créer une instruction LIBRE (rétrocompat)
+        String linkedInstructionId = bureauOpt
+                .map(BureauDocument::getSourceInstructionId)
+                .filter(s -> s != null && !s.isBlank())
+                .orElse(null);
 
-        // 5. Lier l'instruction au BureauDocument
-        bureauOpt.ifPresent(bureau -> {
-            bureau.setCorrectionInstructionId(savedInstruction.getId());
-            bureauRepo.save(bureau);
-        });
+        if (linkedInstructionId != null) {
+            // Instruction DOCUMENTAIRE existante → ajouter les messages dans le fil
+            final String audioUrlFinal = audioUrl;
+            final String audioNameFinal = audioName;
+            instructionRepo.findById(linkedInstructionId).ifPresent(instr -> {
+                if (instr.getStatut() != Instruction.StatutInstruction.CLOTURE) {
+                    InstructionMessage sysMsg = new InstructionMessage();
+                    sysMsg.setInstruction(instr);
+                    sysMsg.setSender("Système");
+                    sysMsg.setSelf(false);
+                    sysMsg.setSystemMessage(true);
+                    sysMsg.setText("↩️ Renvoyé pour correction : " + comment);
+                    if (highlights != null && !highlights.isBlank()) sysMsg.setHighlightsJson(highlights);
+                    instructionMessageRepo.save(sysMsg);
 
-        // 6. Créer le message initial
-        InstructionMessage msg = new InstructionMessage();
-        msg.setInstruction(savedInstruction);
-        msg.setSender(senderName);
-        msg.setSelf(true);
-        msg.setText(comment);
-        if (audioUrl != null) {
-            msg.setAudioUrl(audioUrl);
-            msg.setAttachmentName(audioName);
+                    if (audioUrlFinal != null) {
+                        InstructionMessage audioMsg = new InstructionMessage();
+                        audioMsg.setInstruction(instr);
+                        audioMsg.setSender(senderName);
+                        audioMsg.setSelf(false);
+                        audioMsg.setAudioUrl(audioUrlFinal);
+                        audioMsg.setAttachmentName(audioNameFinal);
+                        instructionMessageRepo.save(audioMsg);
+                    }
+
+                    instr.setStatut(Instruction.StatutInstruction.EN_COURS);
+                    instructionRepo.save(instr);
+                    sseService.broadcast("INSTRUCTION_UPDATED", Map.of(
+                        "id", linkedInstructionId, "statut", "EN_COURS"));
+                }
+            });
+        } else {
+            // Pas d'instruction liée → créer une nouvelle instruction LIBRE (rétrocompat)
+            Instruction instruction = new Instruction();
+            instruction.setTitle("Correction/modification demandée sur \"" + doc.getTitle() + "\"");
+            instruction.setType("Correction");
+            instruction.setUrgence("URGENT");
+            instruction.setAgentDisplay("Secrétaire");
+            if (currentUser != null) instruction.setCreatedById(currentUser.getId());
+            Instruction savedInstruction = instructionRepo.save(instruction);
+
+            bureauOpt.ifPresent(bureau -> {
+                bureau.setSourceInstructionId(savedInstruction.getId());
+                bureauRepo.save(bureau);
+            });
+
+            InstructionMessage msg = new InstructionMessage();
+            msg.setInstruction(savedInstruction);
+            msg.setSender(senderName);
+            msg.setSelf(true);
+            msg.setText(comment);
+            if (audioUrl != null) {
+                msg.setAudioUrl(audioUrl);
+                msg.setAttachmentName(audioName);
+            }
+            if (highlights != null && !highlights.isBlank()) msg.setHighlightsJson(highlights);
+            instructionMessageRepo.save(msg);
+
+            sseService.broadcast("INSTRUCTION_CREATED", Map.of(
+                "id", savedInstruction.getId(), "title", savedInstruction.getTitle()));
         }
-        if (highlights != null && !highlights.isBlank()) {
-            msg.setHighlightsJson(highlights);
-        }
-        instructionMessageRepo.save(msg);
 
-        // 7. Notifier les clients SSE
-        sseService.broadcast("INSTRUCTION_CREATED", Map.of(
-            "id", savedInstruction.getId(),
-            "title", savedInstruction.getTitle()));
         sseService.broadcast("PARAPHEUR_UPDATED", Map.of("action", "RETOURNE", "id", id));
-
         return ResponseEntity.ok(doc);
     }
 
@@ -511,9 +617,71 @@ public class ParapheurController {
             bureau.setPdfDocumentId(null);
             bureau.setUpdatedAt(LocalDateTime.now());
             bureauRepo.save(bureau);
+
+            if (bureau.getSourceInstructionId() != null) {
+                ajouterMessageSysteme(bureau.getSourceInstructionId(),
+                    "↩️ Renvoyé pour correction : " + commentaire);
+            }
         });
 
         sseService.broadcast("PARAPHEUR_UPDATED", Map.of("action", "RETOURNE", "id", doc.getId()));
+    }
+
+    // ── GET /api/parapheur/{pdfDocId}/source-docx ── retrouve le .docx source d'un PdfDocument
+    // Permet au pdf-viewer d'ouvrir Collabora (édition DG) à partir de l'id du PdfDocument signé.
+    @GetMapping("/{pdfDocId}/source-docx")
+    public ResponseEntity<Map<String, Object>> sourceDocx(@PathVariable String pdfDocId) {
+        BureauDocument bureau = bureauRepo.findByPdfDocumentId(pdfDocId).orElse(null);
+        boolean isDocx = bureau != null && bureau.getOriginalFileName() != null
+            && bureau.getOriginalFileName().toLowerCase().endsWith(".docx");
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("bureauDocumentId", bureau != null ? bureau.getId() : null);
+        body.put("isDocx", isDocx);
+        return ResponseEntity.ok(body);
+    }
+
+    // ── GET /api/parapheur/{id}/wopi-session ── amorce une session Collabora au Parapheur
+    // id = bureauDocument.id (le document source .docx en attente de signature)
+    @GetMapping("/{id}/wopi-session")
+    public ResponseEntity<Map<String, Object>> openWopiSession(
+            @PathVariable String id,
+            HttpServletRequest request) {
+
+        AppUser current = (AppUser) request.getAttribute("currentUser");
+        com.dgcockpit.entity.BureauDocument doc = bureauRepo.findById(id)
+            .orElseThrow(() -> new com.dgcockpit.exception.AccesRefuseException("Document introuvable"));
+
+        boolean canWrite = authorizationService.canEditParapheurDocument(current, doc);
+        com.dgcockpit.entity.WopiToken token = wopiTokenService.issue(current.getId(), doc.getId(), canWrite);
+
+        String wopiSrc = wopiHost + "/api/wopi/files/" + doc.getId();
+        String collaboraUrl = collaboraPublicUrl
+            + "/browser/dist/cool.html"
+            + "?WOPISrc=" + java.net.URLEncoder.encode(wopiSrc, java.nio.charset.StandardCharsets.UTF_8)
+            + "&closebutton=true&revisionhistory=false";
+
+        return ResponseEntity.ok(Map.of(
+            "collaboraUrl",    collaboraUrl,
+            "accessToken",     token.getToken(),
+            "accessTokenTtl",  token.getExpiresAt().toEpochMilli(),
+            "canWrite",        canWrite
+        ));
+    }
+
+    private void ajouterMessageSysteme(String instructionId, String texte) {
+        instructionRepo.findById(instructionId).ifPresent(instr -> {
+            if (instr.getStatut() != Instruction.StatutInstruction.CLOTURE) {
+                InstructionMessage msg = new InstructionMessage();
+                msg.setInstruction(instr);
+                msg.setSender("Système");
+                msg.setSelf(false);
+                msg.setSystemMessage(true);
+                msg.setText(texte);
+                instructionMessageRepo.save(msg);
+                sseService.broadcast("INSTRUCTION_UPDATED", Map.of(
+                    "id", instructionId, "statut", instr.getStatut().name()));
+            }
+        });
     }
 
     /** Crée les PageAnnotations SIGNATURE_ZONE depuis un JSON de zones pour une étape de circuit. */

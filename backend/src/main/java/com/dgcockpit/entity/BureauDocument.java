@@ -51,11 +51,18 @@ public class BureauDocument {
     @Column(columnDefinition = "TEXT")
     private String stampZonesJson;
 
+    // PDF régénéré à chaque enregistrement Collabora — support du placement de zones + signature PDFBox
+    private String signaturePdfKey;
+
     // Rempli après soumission au parapheur
     private String pdfDocumentId;
 
-    // ID de l'instruction de correction créée lors d'un renvoi avec correction
-    private String correctionInstructionId;
+    /**
+     * ID de l'instruction liée à ce document (instruction DOCUMENTAIRE).
+     * Permet de reporter les événements du circuit dans le fil de l'instruction.
+     * Remplace correctionInstructionId (ancien modèle).
+     */
+    private String sourceInstructionId;
 
     // Motif de renvoi par le DG
     @Column(columnDefinition = "TEXT")
@@ -149,10 +156,12 @@ public class BureauDocument {
     public void setSignatureZonesJson(String signatureZonesJson) { this.signatureZonesJson = signatureZonesJson; }
     public String getStampZonesJson() { return stampZonesJson; }
     public void setStampZonesJson(String stampZonesJson) { this.stampZonesJson = stampZonesJson; }
+    public String getSignaturePdfKey() { return signaturePdfKey; }
+    public void setSignaturePdfKey(String signaturePdfKey) { this.signaturePdfKey = signaturePdfKey; }
     public String getPdfDocumentId() { return pdfDocumentId; }
     public void setPdfDocumentId(String pdfDocumentId) { this.pdfDocumentId = pdfDocumentId; }
-    public String getCorrectionInstructionId() { return correctionInstructionId; }
-    public void setCorrectionInstructionId(String v) { this.correctionInstructionId = v; }
+    public String getSourceInstructionId() { return sourceInstructionId; }
+    public void setSourceInstructionId(String v) { this.sourceInstructionId = v; }
     public String getScanLivraisonKey() { return scanLivraisonKey; }
     public void setScanLivraisonKey(String scanLivraisonKey) { this.scanLivraisonKey = scanLivraisonKey; }
     public String getReference() { return reference; }

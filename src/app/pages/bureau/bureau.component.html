@@ -1,3 +1,36 @@
+<!-- ── Éditeur Collabora plein écran ─────────────────────────────────────── -->
+@if (editingDoc()) {
+  <div class="fixed inset-0 z-50 flex flex-col bg-white">
+    <!-- En-tête éditeur -->
+    <div class="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-white shadow-sm shrink-0">
+      <div class="flex items-center gap-3">
+        <span class="text-lg">📝</span>
+        <span class="font-semibold text-gray-800 text-sm">{{ editingDoc()!.titre }}</span>
+        @if (editingDoc()!.statut === 'RETOURNE') {
+          <span class="px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-medium">
+            Renvoyé pour correction
+          </span>
+        }
+      </div>
+      <div class="flex items-center gap-2">
+        <button (click)="fermerEdition()"
+                class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          ← Retour au Bureau
+        </button>
+      </div>
+    </div>
+    <!-- iframe Collabora -->
+    <div class="flex-1 overflow-hidden">
+      <app-collabora-editor
+        [bureauDocumentId]="editingDoc()!.id"
+        context="BUREAU"
+        (documentClosed)="fermerEdition()"
+>
+      </app-collabora-editor>
+    </div>
+  </div>
+}
+
 <div class="h-full flex flex-col bg-gray-50">
 
   <!-- ── Header ─────────────────────────────────────────────────────────────── -->
@@ -160,25 +193,52 @@
                     <div class="flex items-center gap-2 flex-wrap justify-end">
 
                       @if (doc.statut === 'BROUILLON' || doc.statut === 'RETOURNE') {
-                        <button (click)="openPlacement(doc)"
-                                class="px-3 py-1.5 rounded-lg text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors whitespace-nowrap">
-                          {{ doc.statut === 'RETOURNE' ? '✏️ Corriger document' : (doc.hasSignatureZone ? '✏️ Modifier zones' : '📐 Placer zones') }}
+
+                        <!-- Bouton Collabora (toujours visible) -->
+                        <button (click)="ouvrirEdition(doc)"
+                                class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-sm whitespace-nowrap">
+                          ✏️ {{ doc.statut === 'RETOURNE' ? 'Corriger dans Collabora' : 'Éditer dans Collabora' }}
                         </button>
+
+                        <!-- Placement de zones pixel (PDF natif ou PDF régénéré depuis le .docx) -->
+                        <div class="relative group/zones">
+                          <button (click)="openPlacement(doc)"
+                                  [disabled]="!peutPlacerZones(doc)"
+                                  class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap"
+                                  [ngClass]="peutPlacerZones(doc)
+                                    ? 'text-indigo-700 bg-indigo-50 hover:bg-indigo-100'
+                                    : 'text-gray-400 bg-gray-100 cursor-not-allowed opacity-50'">
+                            {{ doc.hasSignatureZone ? '✏️ Modifier zones' : '📐 Placer zones' }}
+                          </button>
+                          @if (!peutPlacerZones(doc)) {
+                            <div class="absolute bottom-full right-0 mb-1.5 w-56 bg-gray-800 text-white text-[10px] rounded-lg px-2.5 py-1.5 shadow-lg pointer-events-none opacity-0 group-hover/zones:opacity-100 transition-opacity z-20 text-center leading-snug">
+                              Ouvrez et enregistrez d'abord le document dans Collabora
+                            </div>
+                          }
+                        </div>
+
+                        <!-- Bouton Soumettre -->
                         <div class="relative group/resoumettre">
                           <button (click)="confirmSoumettre(doc)"
-                                  [disabled]="!doc.hasSignatureZone || (doc.statut === 'RETOURNE' && !doc.corrigeDepuisRenvoi)"
+                                  [disabled]="!peutSoumettre(doc)"
                                   class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap"
-                                  [ngClass]="(doc.hasSignatureZone && (doc.statut !== 'RETOURNE' || doc.corrigeDepuisRenvoi))
+                                  [ngClass]="peutSoumettre(doc)
                                     ? 'text-blue-700 bg-blue-50 hover:bg-blue-100'
                                     : 'text-gray-400 bg-gray-100 cursor-not-allowed opacity-50'">
                             {{ doc.statut === 'RETOURNE' ? '📨 Re-soumettre' : '📨 Soumettre' }}
                           </button>
+                          @if (!doc.hasSignatureZone) {
+                            <div class="absolute bottom-full right-0 mb-1.5 w-52 bg-gray-800 text-white text-[10px] rounded-lg px-2.5 py-1.5 shadow-lg pointer-events-none opacity-0 group-hover/resoumettre:opacity-100 transition-opacity z-20 text-center leading-snug">
+                              Placez d'abord la zone de signature (📐 Placer zones)
+                            </div>
+                          }
                           @if (doc.statut === 'RETOURNE' && !doc.corrigeDepuisRenvoi) {
                             <div class="absolute bottom-full right-0 mb-1.5 w-52 bg-gray-800 text-white text-[10px] rounded-lg px-2.5 py-1.5 shadow-lg pointer-events-none opacity-0 group-hover/resoumettre:opacity-100 transition-opacity z-20 text-center leading-snug">
                               Corrigez d'abord le document via "Corriger document"
                             </div>
                           }
                         </div>
+
                         <button (click)="confirmDelete(doc.id)"
                                 class="px-3 py-1.5 rounded-lg text-xs font-medium text-red-500 bg-red-50 hover:bg-red-100 transition-colors whitespace-nowrap">
                           Supprimer
@@ -229,11 +289,32 @@
                 class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors">&times;</button>
       </div>
       <div class="px-6 py-5 space-y-4">
-        <div>
-          <label class="block text-xs font-semibold text-gray-700 mb-1.5">Fichier PDF <span class="text-red-500">*</span></label>
-          <input type="file" accept=".pdf" (change)="onFileSelected($event)"
-                 class="block w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer border border-gray-200 rounded-xl px-3 py-2" />
-        </div>
+        <!-- Zone fichier : template .docx si disponible, sinon upload manuel -->
+        @if (uploadTypeDoc()?.templateDocxPath) {
+          <!-- Mode template : pas de fichier à sélectionner -->
+          <div class="flex items-start gap-3 bg-indigo-50 border border-indigo-200 rounded-xl p-3.5">
+            <span class="text-2xl mt-0.5">📋</span>
+            <div>
+              <p class="text-xs font-semibold text-indigo-800">Modèle .docx disponible</p>
+              <p class="text-[11px] text-indigo-600 mt-0.5">
+                Un document Word pré-rempli sera créé depuis le modèle de
+                <span class="font-medium">{{ uploadTypeDoc()!.libelle }}</span>.
+                Vous pourrez l'éditer directement dans Collabora.
+              </p>
+            </div>
+          </div>
+        } @else {
+          <!-- Mode upload manuel (PDF ou .docx) -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-700 mb-1.5">
+              Fichier PDF ou Word
+              <span class="text-red-500">*</span>
+              <span class="text-gray-400 font-normal ml-1">(.pdf, .docx)</span>
+            </label>
+            <input type="file" accept=".pdf,.docx" (change)="onFileSelected($event)"
+                   class="block w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer border border-gray-200 rounded-xl px-3 py-2" />
+          </div>
+        }
         <div>
           <label class="block text-xs font-semibold text-gray-700 mb-1.5">Titre du document</label>
           <input [(ngModel)]="uploadTitre" placeholder="Ex : Lettre de convocation N°12"
@@ -243,7 +324,7 @@
         <div>
           <label class="block text-xs font-semibold text-gray-700 mb-1.5">Type de document</label>
           @if (typeDocuments().length > 0) {
-            <select [(ngModel)]="uploadTypeDocumentId"
+            <select [ngModel]="uploadTypeDocumentId()" (ngModelChange)="uploadTypeDocumentId.set($event)"
                     class="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 bg-white transition-all">
               <option value="">— Sélectionner un type</option>
               @for (t of typeDocuments(); track t.id) {
@@ -284,15 +365,58 @@
           <input [(ngModel)]="uploadDestinataire" placeholder="Ex : Ministère des Finances"
                  class="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all" />
         </div>
+
+        <!-- Section Instruction : visible si des instructions DOCUMENTAIRE en attente existent -->
+        @if (loadingInstructionsPending() || instructionsPendingForTypeDoc().length > 0) {
+          <div class="border border-indigo-200 rounded-xl p-4 bg-indigo-50/60">
+            <p class="text-xs font-semibold text-indigo-700 mb-3">📋 Instruction liée</p>
+            @if (loadingInstructionsPending()) {
+              <p class="text-sm text-gray-400 italic">Chargement…</p>
+            } @else if (instructionsPendingForTypeDoc().length > 0) {
+              <select [ngModel]="uploadInstructionId()"
+                      (ngModelChange)="uploadInstructionId.set($event); uploadInstructionMode.set($event ? 'EXISTANTE' : 'AUCUNE')"
+                      class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 mb-1">
+                <option value="">— Aucune (création automatique)</option>
+                @for (instr of instructionsPendingForTypeDoc(); track instr.id) {
+                  <option [value]="instr.id">{{ instr.title }}</option>
+                }
+              </select>
+              <p class="text-xs text-gray-400">Laissez vide : une instruction sera créée automatiquement.</p>
+            } @else {
+              <p class="text-sm text-gray-500 italic">Aucune instruction en attente — une nouvelle sera créée automatiquement.</p>
+            }
+          </div>
+        }
       </div>
       <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
         <button (click)="showUploadModal.set(false)"
-                class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">Annuler</button>
-        <button (click)="doUpload()" [disabled]="!uploadFile || uploading()"
-                class="px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium disabled:opacity-40 hover:bg-indigo-700 transition-colors flex items-center gap-2">
-          @if (uploading()) { <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> }
-          {{ uploading() ? 'Envoi…' : 'Uploader' }}
+                class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+          Annuler
         </button>
+
+        @if (uploadTypeDoc()?.templateDocxPath) {
+          <!-- Mode template .docx -->
+          <button (click)="creerDepuisModele()"
+                  [disabled]="creatingFromTemplate()
+                    || (uploadInstructionMode() === 'EXISTANTE' && !uploadInstructionId())"
+                  class="px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium disabled:opacity-40 hover:bg-indigo-700 transition-colors flex items-center gap-2">
+            @if (creatingFromTemplate()) {
+              <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            }
+            {{ creatingFromTemplate() ? 'Création…' : '📋 Créer et ouvrir dans Collabora' }}
+          </button>
+        } @else {
+          <!-- Mode upload manuel -->
+          <button (click)="doUpload()"
+                  [disabled]="!uploadFile || uploading()
+                    || (uploadInstructionMode() === 'EXISTANTE' && !uploadInstructionId())"
+                  class="px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium disabled:opacity-40 hover:bg-indigo-700 transition-colors flex items-center gap-2">
+            @if (uploading()) {
+              <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            }
+            {{ uploading() ? 'Envoi…' : 'Uploader' }}
+          </button>
+        }
       </div>
     </div>
   </div>

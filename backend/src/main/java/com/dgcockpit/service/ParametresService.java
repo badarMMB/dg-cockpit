@@ -14,25 +14,19 @@ import java.util.stream.Collectors;
 public class ParametresService {
 
     private final InstructionTypeRepository instructionTypeRepo;
-    private final ProofTypeRepository proofTypeRepo;
     private final AppUserRepository userRepo;
     private final PosteRepository posteRepo;
-    private final WorkflowStepRepository workflowStepRepo;
     private final AuthService authService;
     private final ObjectMapper objectMapper;
 
     public ParametresService(InstructionTypeRepository instructionTypeRepo,
-                             ProofTypeRepository proofTypeRepo,
                              AppUserRepository userRepo,
                              PosteRepository posteRepo,
-                             WorkflowStepRepository workflowStepRepo,
                              AuthService authService,
                              ObjectMapper objectMapper) {
         this.instructionTypeRepo = instructionTypeRepo;
-        this.proofTypeRepo       = proofTypeRepo;
         this.userRepo            = userRepo;
         this.posteRepo           = posteRepo;
-        this.workflowStepRepo    = workflowStepRepo;
         this.authService         = authService;
         this.objectMapper        = objectMapper;
     }
@@ -80,110 +74,16 @@ public class ParametresService {
             t.setCategorie(InstructionType.Categorie.valueOf((String) body.get("categorie")));
         if (body.containsKey("urgenceDefaut"))
             t.setUrgenceDefaut(InstructionType.Urgence.valueOf((String) body.get("urgenceDefaut")));
-        if (body.containsKey("livrableAttendu"))
-            t.setLivrableAttendu(InstructionType.TypeLivrable.valueOf((String) body.get("livrableAttendu")));
+        if (body.containsKey("typeInstruction")) {
+            String ti = (String) body.get("typeInstruction");
+            t.setTypeInstruction(ti != null
+                ? InstructionType.TypeInstruction.valueOf(ti)
+                : InstructionType.TypeInstruction.LIBRE);
+        }
+        if (body.containsKey("typeDocumentAttenduId"))
+            t.setTypeDocumentAttenduId((String) body.get("typeDocumentAttenduId"));
         if (body.containsKey("actif"))
             t.setActif(Boolean.TRUE.equals(body.get("actif")));
-        if (body.containsKey("documentsAttendus")) {
-            Object val = body.get("documentsAttendus");
-            try {
-                t.setDocumentsAttendus(val == null ? null : objectMapper.writeValueAsString(val));
-            } catch (Exception e) {
-                t.setDocumentsAttendus("[]");
-            }
-        }
-    }
-
-    // ── WorkflowStep ──────────────────────────────────────────────────────────
-
-    public List<WorkflowStep> getStepsForType(String instructionTypeId) {
-        return workflowStepRepo.findByInstructionTypeIdOrderByStepOrderAsc(instructionTypeId);
-    }
-
-    public WorkflowStep createStep(String instructionTypeId, Map<String, Object> body) {
-        InstructionType type = instructionTypeRepo.findById(instructionTypeId)
-            .orElseThrow(() -> new RuntimeException("InstructionType introuvable: " + instructionTypeId));
-        WorkflowStep step = new WorkflowStep();
-        step.setInstructionType(type);
-        applyStepFields(step, body);
-        return workflowStepRepo.save(step);
-    }
-
-    public WorkflowStep updateStep(String stepId, Map<String, Object> body) {
-        WorkflowStep step = workflowStepRepo.findById(stepId)
-            .orElseThrow(() -> new RuntimeException("WorkflowStep introuvable: " + stepId));
-        applyStepFields(step, body);
-        return workflowStepRepo.save(step);
-    }
-
-    public void deleteStep(String stepId) {
-        workflowStepRepo.deleteById(stepId);
-    }
-
-    private void applyStepFields(WorkflowStep step, Map<String, Object> body) {
-        if (body.containsKey("stepOrder"))
-            step.setStepOrder(((Number) body.get("stepOrder")).intValue());
-        if (body.containsKey("stepLabel"))
-            step.setStepLabel((String) body.get("stepLabel"));
-        if (body.containsKey("requiresSignature"))
-            step.setRequiresSignature(Boolean.TRUE.equals(body.get("requiresSignature")));
-        if (body.containsKey("requiresAttachment"))
-            step.setRequiresAttachment(Boolean.TRUE.equals(body.get("requiresAttachment")));
-        if (body.containsKey("timeoutJours")) {
-            Object v = body.get("timeoutJours");
-            step.setTimeoutJours(v == null ? null : ((Number) v).intValue());
-        }
-        if (body.containsKey("actorInstructions"))
-            step.setActorInstructions((String) body.get("actorInstructions"));
-        if (body.containsKey("requiredPosteId")) {
-            String posteId = (String) body.get("requiredPosteId");
-            step.setRequiredPoste(posteId != null ? posteRepo.findById(posteId).orElse(null) : null);
-        }
-    }
-
-    // ── ProofType ─────────────────────────────────────────────────────────────
-
-    public List<ProofType> getAllProofTypes() {
-        return proofTypeRepo.findAllByOrderByLabelAsc();
-    }
-
-    public List<ProofType> getActiveProofTypes() {
-        return proofTypeRepo.findByActifTrueOrderByLabelAsc();
-    }
-
-    public ProofType createProofType(Map<String, Object> body) {
-        ProofType p = new ProofType();
-        applyProofTypeFields(p, body);
-        return proofTypeRepo.save(p);
-    }
-
-    public ProofType updateProofType(String id, Map<String, Object> body) {
-        ProofType p = proofTypeRepo.findById(id)
-            .orElseThrow(() -> new RuntimeException("ProofType introuvable: " + id));
-        applyProofTypeFields(p, body);
-        return proofTypeRepo.save(p);
-    }
-
-    public void toggleProofType(String id) {
-        ProofType p = proofTypeRepo.findById(id)
-            .orElseThrow(() -> new RuntimeException("ProofType introuvable: " + id));
-        p.setActif(!p.isActif());
-        proofTypeRepo.save(p);
-    }
-
-    public void deleteProofType(String id) {
-        proofTypeRepo.deleteById(id);
-    }
-
-    private void applyProofTypeFields(ProofType p, Map<String, Object> body) {
-        if (body.containsKey("label"))
-            p.setLabel((String) body.get("label"));
-        if (body.containsKey("acceptedFormats"))
-            p.setAcceptedFormats((String) body.get("acceptedFormats"));
-        if (body.containsKey("description"))
-            p.setDescription((String) body.get("description"));
-        if (body.containsKey("actif"))
-            p.setActif(Boolean.TRUE.equals(body.get("actif")));
     }
 
     // ── Poste ─────────────────────────────────────────────────────────────────
@@ -258,6 +158,9 @@ public class ParametresService {
         if (body.containsKey("posteId") && body.get("posteId") != null) {
             posteRepo.findById((String) body.get("posteId")).ifPresent(u::setPoste);
         }
+        if (body.containsKey("managerId") && body.get("managerId") != null) {
+            userRepo.findById((String) body.get("managerId")).ifPresent(u::setManager);
+        }
         return userRepo.save(u);
     }
 
@@ -274,6 +177,10 @@ public class ParametresService {
         if (body.containsKey("posteId")) {
             String posteId = (String) body.get("posteId");
             u.setPoste(posteId != null ? posteRepo.findById(posteId).orElse(null) : null);
+        }
+        if (body.containsKey("managerId")) {
+            String managerId = (String) body.get("managerId");
+            u.setManager(managerId != null ? userRepo.findById(managerId).orElse(null) : null);
         }
         return userRepo.save(u);
     }

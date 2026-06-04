@@ -33,7 +33,8 @@ public class FileController {
     public ResponseEntity<Map<String, String>> upload(@RequestParam("file") MultipartFile file) throws Exception {
         String name = minioService.upload(file);
         sseService.broadcast("FILE_UPLOADED", Map.of("name", name));
-        return ResponseEntity.ok(Map.of("name", name));
+        String url = minioService.presignedUrl(name);
+        return ResponseEntity.ok(Map.of("name", name, "url", url));
     }
 
     @GetMapping("/{objectName}")

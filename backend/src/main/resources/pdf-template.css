@@ -1,0 +1,54 @@
+/* CSS unifiee preview navigateur (iframe srcdoc) + generation PDF (openhtmltopdf).
+   - @page : reserve au PDF (openhtmltopdf print media)
+   - @media screen : reserve a la preview iframe (le rendu PDF l'ignore) */
+
+@page { size: A4; margin: 2.5cm; }
+
+html, body { height: 100%; }
+body {
+  font-family: "DejaVu Sans", Arial, Helvetica, sans-serif;
+  font-size: 12pt;
+  background: white;
+  color: #111;
+}
+
+/* Reset commun preview + PDF */
+p, h1, h2, h3, h4, h5, h6, li { display: block; margin: 0 0 0.5em 0; }
+/* white-space:normal : les \n litteraux du HTML (issus du .docx via Mammoth)
+   sont traites comme des espaces — empeche les coupures de mots en milieu de mot. */
+p { white-space: normal; word-wrap: break-word; overflow-wrap: break-word; }
+ul, ol { margin: 0 0 0.5em 1.25em; }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 4px 8px; border: 1px solid #ddd; }
+
+/* Classes Quill (injectees par POI alignment extractor) */
+.ql-align-center { text-align: center; }
+.ql-align-right { text-align: right; }
+.ql-align-justify { text-align: justify; }
+
+/* Images : bornees pour ne pas exploser la page */
+img { max-width: 100%; max-height: 5cm; height: auto; width: auto; display: block; }
+
+/* Sauts de page */
+.page-break { break-after: page; page-break-after: always; }
+table, tr, td, th { page-break-inside: avoid; }
+
+/* Wrapper visuel A4 : preview navigateur UNIQUEMENT.
+   openhtmltopdf utilise print media et ignore @media screen
+   => pas de double marge dans le PDF si quelqu'un envoie l'HTML wrappe a /generate. */
+@media screen {
+  html, body {
+    background: #e5e7eb;
+    margin: 0;
+    padding: 0;
+  }
+  .a4-page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 2.5cm;
+    box-sizing: border-box;
+    background: white;
+    margin: 1.5rem auto;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+}

@@ -1,29 +1,72 @@
-import { Component, signal, inject, OnInit, computed } from '@angular/core';
+import { ChangeDetectorRef, Component, signal, inject, OnInit, computed, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { DomSanitizer, SafeHtml, SafeResourceUrl } from '@angular/platform-browser';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
+import { ToastService } from '../../services/toast.service';
 import { SignatureAssetsComponent } from '../signature-assets/signature-assets.component';
 
-type Tab = 'INSTRUCTION_TYPES' | 'PROOF_TYPES' | 'POSTES' | 'USERS' | 'SIGNATURE_ASSETS' | 'TYPE_DOCUMENTS';
+/** CSS print injecté à paged.js. Sert d'unique source de vérité visuelle —
+ *  sera réutilisé tel quel côté backend (Puppeteer) en Phase 2+ pour générer
+ *  un PDF strictement identique à cet aperçu. */
+const PREVIEW_PRINT_CSS = `
+@page {
+  size: A4;
+  margin: 2.5cm 2cm;
+}
+body {
+  font-family: Calibri, 'Segoe UI', Arial, sans-serif;
+  font-size: 11pt;
+  line-height: 1.5;
+  color: #111;
+}
+p { margin: 0 0 0.5em; }
+p:empty::before { content: '\\00a0'; }
+h1 { font-size: 1.7em; font-weight: 700; margin: 1em 0 0.5em; }
+h2 { font-size: 1.4em; font-weight: 700; margin: 0.9em 0 0.4em; }
+h3 { font-size: 1.2em; font-weight: 700; margin: 0.8em 0 0.3em; }
+h4 { font-size: 1.05em; font-weight: 700; margin: 0.7em 0 0.3em; }
+h5, h6 { font-size: 1em; font-weight: 700; margin: 0.6em 0 0.25em; }
+ul, ol { margin: 0 0 0.5em 1.5em; padding-left: 1em; }
+ul { list-style: disc; }
+ol { list-style: decimal; }
+li { margin: 0.15em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.5em 0; }
+th, td { border: 1px solid #ccc; padding: 0.4em 0.6em; vertical-align: top; }
+th { background: #f3f4f6; font-weight: 600; }
+img {
+  max-width: 100%;
+  max-height: 5cm;
+  width: auto;
+  height: auto;
+}
+a { color: #00236f; text-decoration: underline; }
+strong, b { font-weight: 700; }
+em, i { font-style: italic; }
+.ql-align-center  { text-align: center; }
+.ql-align-right   { text-align: right; }
+.ql-align-justify { text-align: justify; }
+`;
+
+type Tab = 'INSTRUCTION_TYPES' | 'POSTES' | 'USERS' | 'SIGNATURE_ASSETS' | 'TYPE_DOCUMENTS';
 
 type Categorie = 'STRATEGIQUE' | 'OPERATIONNELLE' | 'MANAGERIALE' | 'JURIDIQUE';
 type Urgence = 'URGENT' | 'NORMAL' | 'PLANIFIE';
-type Livrable = 'CONFIRMATION' | 'PREUVE' | 'DOCUMENT';
 type UserRole = 'DG' | 'SECRETAIRE' | 'SUBORDONNE' | 'ADMIN_IT';
 
 interface InstructionType {
   id: string; code: string; label: string;
-  categorie: Categorie; urgenceDefaut: Urgence; livrableAttendu: Livrable;
-  documentsAttendus: string[]; actif: boolean;
-}
-interface ProofType {
-  id: string; label: string; acceptedFormats: string; description: string; actif: boolean;
+  categorie: Categorie; urgenceDefaut: Urgence;
+  typeInstruction: 'LIBRE' | 'DOCUMENTAIRE';
+  typeDocumentAttenduId: string | null;
+  actif: boolean;
 }
 interface AppUser {
   id: string; username: string; nomComplet: string;
   role: UserRole | null; actif: boolean;
   posteId: string | null; posteLibelle: string | null;
+  managerId: string | null; managerNomComplet: string | null;
 }
 interface Poste {
   id: string; code: string; libelle: string; actif: boolean;
@@ -37,13 +80,10 @@ interface TypeDocParam {
   requiresSignatureZone: boolean;
   requiresStampZone: boolean;
   requiresDestinataire: boolean;
+  templateHtml: string;
+  templateDocxPath: string | null;
+  templatePdfPath: string | null;
   actif: boolean;
-}
-interface EtapeCircuit {
-  id: string; stepOrder: number; stepLabel: string;
-  requiresSignature: boolean; requiresAttachment: boolean;
-  actorInstructions: string | null;
-  requiredPoste: { id: string; code: string; libelle: string } | null;
 }
 
 @Component({
@@ -104,8 +144,7 @@ interface EtapeCircuit {
                     <th class="px-4 py-3">Code</th>
                     <th class="px-4 py-3">Catégorie</th>
                     <th class="px-4 py-3">Urgence</th>
-                    <th class="px-4 py-3">Livrable</th>
-                    <th class="px-4 py-3">Docs attendus</th>
+                    <th class="px-4 py-3">Nature</th>
                     <th class="px-4 py-3">Statut</th>
                     <th class="px-4 py-3 text-right">Actions</th>
                   </tr>
@@ -122,18 +161,11 @@ interface EtapeCircuit {
                         <span [class]="urgenceBadge(t.urgenceDefaut)">{{ urgenceLabel(t.urgenceDefaut) }}</span>
                       </td>
                       <td class="px-4 py-3">
-                        <span [class]="livrablebadge(t.livrableAttendu)">{{ livrableLabel(t.livrableAttendu) }}</span>
-                      </td>
-                      <td class="px-4 py-3">
-                        @if (t.documentsAttendus.length) {
-                          <div class="flex flex-wrap gap-1 max-w-[180px]">
-                            @for (doc of t.documentsAttendus; track doc) {
-                              <span class="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[10px] border border-indigo-100 truncate max-w-[160px]" [title]="doc">{{ doc }}</span>
-                            }
-                          </div>
-                        } @else {
-                          <span class="text-gray-300 text-xs">—</span>
-                        }
+                        <span [class]="t.typeInstruction === 'DOCUMENTAIRE'
+                          ? 'px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700'
+                          : 'px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600'">
+                          {{ t.typeInstruction === 'DOCUMENTAIRE' ? 'Documentaire' : 'Libre' }}
+                        </span>
                       </td>
                       <td class="px-4 py-3">
                         <span [class]="t.actif ? 'text-green-600 text-xs' : 'text-gray-400 text-xs'">
@@ -142,8 +174,6 @@ interface EtapeCircuit {
                       </td>
                       <td class="px-4 py-3 text-right">
                         <div class="flex justify-end gap-2 flex-wrap">
-                          <button (click)="openStepsModal(t)"
-                                  class="text-xs text-indigo-600 hover:underline font-medium">⚙️ Circuit</button>
                           <button (click)="openItypeModal(t)"
                                   class="text-xs text-blue-600 hover:underline">Modifier</button>
                           <button (click)="toggleItype(t)"
@@ -244,58 +274,6 @@ interface EtapeCircuit {
         </div>
       }
 
-      <!-- ── PROOF TYPES ─────────────────────────────────────────────────── -->
-      @if (activeTab() === 'PROOF_TYPES') {
-        <div>
-          <div class="flex justify-end mb-4">
-            <button (click)="openPtypeModal()"
-                    class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
-              + Nouveau type de preuve
-            </button>
-          </div>
-          @if (loadingPtypes()) {
-            <p class="text-gray-400 text-sm py-8 text-center">Chargement…</p>
-          } @else {
-            <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <table class="w-full text-sm">
-                <thead>
-                  <tr class="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    <th class="px-4 py-3">Label</th>
-                    <th class="px-4 py-3">Formats acceptés</th>
-                    <th class="px-4 py-3">Description</th>
-                    <th class="px-4 py-3">Statut</th>
-                    <th class="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100">
-                  @for (p of proofTypes(); track p.id) {
-                    <tr [class]="p.actif ? '' : 'opacity-50'">
-                      <td class="px-4 py-3 font-medium text-gray-800">{{ p.label }}</td>
-                      <td class="px-4 py-3 text-gray-500 font-mono text-xs">{{ p.acceptedFormats }}</td>
-                      <td class="px-4 py-3 text-gray-600 text-xs max-w-xs truncate">{{ p.description }}</td>
-                      <td class="px-4 py-3">
-                        <span [class]="p.actif ? 'text-green-600 text-xs' : 'text-gray-400 text-xs'">
-                          {{ p.actif ? 'Actif' : 'Inactif' }}
-                        </span>
-                      </td>
-                      <td class="px-4 py-3 text-right flex justify-end gap-2">
-                        <button (click)="openPtypeModal(p)" class="text-xs text-blue-600 hover:underline">Modifier</button>
-                        <button (click)="togglePtype(p)" class="text-xs text-gray-500 hover:underline">
-                          {{ p.actif ? 'Désactiver' : 'Activer' }}
-                        </button>
-                        <button (click)="deletePtype(p)" class="text-xs text-red-500 hover:underline">Supprimer</button>
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-              @if (proofTypes().length === 0) {
-                <p class="text-center text-gray-400 text-sm py-8">Aucun type de preuve enregistré.</p>
-              }
-            </div>
-          }
-        </div>
-      }
 
       <!-- ── POSTES & RÔLES ──────────────────────────────────────────────── -->
       @if (activeTab() === 'POSTES') {
@@ -373,6 +351,7 @@ interface EtapeCircuit {
                     <th class="px-4 py-3">Identifiant</th>
                     <th class="px-4 py-3">Rôle legacy</th>
                     <th class="px-4 py-3">Poste</th>
+                    <th class="px-4 py-3">Manager</th>
                     <th class="px-4 py-3">Statut</th>
                     <th class="px-4 py-3 text-right">Actions</th>
                   </tr>
@@ -392,6 +371,13 @@ interface EtapeCircuit {
                       <td class="px-4 py-3">
                         @if (u.posteLibelle) {
                           <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700">{{ u.posteLibelle }}</span>
+                        } @else {
+                          <span class="text-gray-300 text-xs">—</span>
+                        }
+                      </td>
+                      <td class="px-4 py-3">
+                        @if (u.managerNomComplet) {
+                          <span class="text-xs text-gray-600">{{ u.managerNomComplet }}</span>
                         } @else {
                           <span class="text-gray-300 text-xs">—</span>
                         }
@@ -463,33 +449,31 @@ interface EtapeCircuit {
                 </select>
               </div>
               <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Livrable attendu</label>
-                <select [(ngModel)]="itypeForm['livrableAttendu']"
-                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                  <option value="CONFIRMATION">Confirmation simple</option>
-                  <option value="PREUVE">Preuve (photo/PV/scan)</option>
-                  <option value="DOCUMENT">Document à signer</option>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Nature</label>
+                <select [(ngModel)]="itypeForm['typeInstruction']"
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                  <option value="LIBRE">Libre (chat sans document attendu)</option>
+                  <option value="DOCUMENTAIRE">Documentaire (livrable document)</option>
                 </select>
               </div>
             </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-600 mb-2">Documents attendus <span class="font-normal text-gray-400">(ce que le subordonné doit fournir)</span></label>
-              <div class="space-y-1.5 mb-2">
-                @for (doc of itypeDocuments(); track doc; let i = $index) {
-                  <div class="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg">
-                    <span class="flex-1 text-sm text-gray-700">{{ doc }}</span>
-                    <button (click)="removeItypeDocument(i)" class="text-gray-300 hover:text-red-500 text-lg leading-none">&times;</button>
-                  </div>
-                }
+            @if (itypeForm['typeInstruction'] === 'DOCUMENTAIRE') {
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">
+                  Type de document attendu
+                  <span class="font-normal text-gray-400">(le livrable attendu pour ce type d'instruction)</span>
+                </label>
+                <select [(ngModel)]="itypeForm['typeDocumentAttenduId']"
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400">
+                  <option value="">— Sélectionner un type de document</option>
+                  @for (td of typeDocuments(); track td.id) {
+                    @if (td.actif) {
+                      <option [value]="td.id">{{ td.libelle }} ({{ td.code }})</option>
+                    }
+                  }
+                </select>
               </div>
-              <div class="flex gap-2">
-                <input [(ngModel)]="newDocumentInput" placeholder="Ex: Rapport mensuel signé"
-                       (keydown.enter)="addItypeDocument()"
-                       class="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400" />
-                <button (click)="addItypeDocument()"
-                        class="px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-medium hover:bg-blue-100">+ Ajouter</button>
-              </div>
-            </div>
+            }
           </div>
           <div class="flex justify-end gap-3 mt-6">
             <button (click)="showItypeModal.set(false)"
@@ -497,137 +481,6 @@ interface EtapeCircuit {
             <button (click)="saveItype()" [disabled]="savingItype()"
                     class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50">
               {{ savingItype() ? 'Enregistrement…' : 'Enregistrer' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    }
-
-    <!-- ── Modal Étapes de Circuit ──────────────────────────────────────── -->
-    @if (showStepsModal()) {
-      <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-
-          <div class="px-6 py-4 border-b border-gray-200 bg-indigo-50 flex items-center justify-between flex-shrink-0">
-            <div>
-              <h2 class="text-base font-semibold text-indigo-900">⚙️ Circuit — {{ activeItypeForSteps?.label }}</h2>
-              <p class="text-xs text-indigo-600 mt-0.5">Définissez les étapes du circuit de validation pour ce type d'instruction.</p>
-            </div>
-            <button (click)="closeStepsModal()" class="text-gray-400 hover:text-gray-700 text-xl leading-none">&times;</button>
-          </div>
-
-          <div class="flex-1 overflow-y-auto p-6 space-y-4">
-
-            <!-- Liste des étapes -->
-            @if (loadingSteps()) {
-              <p class="text-gray-400 text-sm text-center py-4">Chargement des étapes…</p>
-            } @else if (etapesCircuit().length === 0) {
-              <div class="text-center py-6 text-gray-400">
-                <p class="text-sm">Aucune étape définie.</p>
-                <p class="text-xs mt-1">Ajoutez une première étape ci-dessous.</p>
-              </div>
-            } @else {
-              <div class="space-y-2">
-                @for (etape of etapesCircuit(); track etape.id) {
-                  <div class="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                    <span class="w-7 h-7 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
-                      {{ etape.stepOrder }}
-                    </span>
-                    <div class="flex-1 min-w-0">
-                      <p class="text-sm font-medium text-gray-800">{{ etape.stepLabel }}</p>
-                      <div class="flex items-center gap-2 mt-0.5 flex-wrap">
-                        @if (etape.requiredPoste) {
-                          <span class="text-xs text-indigo-600">👤 {{ etape.requiredPoste.libelle }}</span>
-                        }
-                        @if (etape.requiresSignature) {
-                          <span class="text-xs text-purple-600">✍️ Signature</span>
-                        }
-                        @if (etape.requiresAttachment) {
-                          <span class="text-xs text-blue-600">📎 Pièce jointe</span>
-                        }
-                        @if (etape.actorInstructions) {
-                          <span class="text-xs text-gray-500 truncate max-w-[200px]" [title]="etape.actorInstructions">
-                            💬 {{ etape.actorInstructions }}
-                          </span>
-                        }
-                      </div>
-                    </div>
-                    <div class="flex gap-2 flex-shrink-0">
-                      <button (click)="openStepForm(etape)" class="text-xs text-blue-600 hover:underline">Modifier</button>
-                      <button (click)="deleteStep(etape)" class="text-xs text-red-500 hover:underline">Supprimer</button>
-                    </div>
-                  </div>
-                }
-              </div>
-            }
-
-            <!-- Séparateur -->
-            <div class="border-t border-dashed border-gray-200 pt-4">
-              <h3 class="text-sm font-semibold text-gray-700 mb-3">
-                {{ editingStep ? 'Modifier l\'étape' : 'Ajouter une étape' }}
-              </h3>
-
-              <!-- Formulaire d'étape -->
-              <div class="space-y-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="block text-xs font-medium text-gray-600 mb-1">Libellé de l'étape *</label>
-                    <input [(ngModel)]="stepForm['stepLabel']" placeholder="Ex: Visa du Chef de Service"
-                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400" />
-                  </div>
-                  <div>
-                    <label class="block text-xs font-medium text-gray-600 mb-1">Ordre</label>
-                    <input type="number" [(ngModel)]="stepForm['stepOrder']" min="1"
-                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400" />
-                  </div>
-                </div>
-                <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Poste requis <span class="font-normal text-gray-400">(optionnel)</span></label>
-                  <select [(ngModel)]="stepForm['requiredPosteId']"
-                          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-indigo-400">
-                    <option value="">— Aucun poste requis (ouvert à tous)</option>
-                    @for (p of postes(); track p.id) {
-                      @if (p.actif) {
-                        <option [value]="p.id">{{ p.libelle }} ({{ p.code }})</option>
-                      }
-                    }
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Instructions pour l'intervenant <span class="font-normal text-gray-400">(optionnel)</span></label>
-                  <textarea [(ngModel)]="stepForm['actorInstructions']" rows="2"
-                            placeholder="Ex: Vérifier la conformité du dossier avant visa"
-                            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-indigo-400"></textarea>
-                </div>
-                <div class="flex items-center gap-4">
-                  <label class="flex items-center gap-2 cursor-pointer select-none text-sm text-gray-700">
-                    <input type="checkbox" [(ngModel)]="stepForm['requiresSignature']"
-                           class="w-4 h-4 accent-indigo-600" />
-                    ✍️ Requiert une signature
-                  </label>
-                  <label class="flex items-center gap-2 cursor-pointer select-none text-sm text-gray-700">
-                    <input type="checkbox" [(ngModel)]="stepForm['requiresAttachment']"
-                           class="w-4 h-4 accent-indigo-600" />
-                    📎 Requiert une pièce jointe
-                  </label>
-                </div>
-                <div class="flex justify-end gap-2 pt-1">
-                  @if (editingStep) {
-                    <button (click)="annulerEditionStep()" class="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800">Annuler</button>
-                  }
-                  <button (click)="saveStep()" [disabled]="savingStep() || !stepForm['stepLabel']"
-                          class="px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium disabled:opacity-50 hover:bg-indigo-700">
-                    {{ savingStep() ? 'Enregistrement…' : (editingStep ? 'Mettre à jour' : '+ Ajouter l\'étape') }}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="px-6 py-4 border-t border-gray-200 flex justify-end bg-gray-50 flex-shrink-0">
-            <button (click)="closeStepsModal()"
-                    class="px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-100 text-sm">
-              Fermer
             </button>
           </div>
         </div>
@@ -695,13 +548,25 @@ interface EtapeCircuit {
               </select>
             </div>
             <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1">Poste assigné <span class="font-normal text-gray-400">(nouveau modèle — optionnel)</span></label>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Poste assigné <span class="font-normal text-gray-400">(optionnel)</span></label>
               <select [(ngModel)]="userForm['posteId']"
                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
                 <option value="">— Aucun poste</option>
                 @for (p of postes(); track p.id) {
                   @if (p.actif) {
                     <option [value]="p.id">{{ p.libelle }} ({{ p.code }})</option>
+                  }
+                }
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Manager direct <span class="font-normal text-gray-400">(supérieur hiérarchique)</span></label>
+              <select [(ngModel)]="userForm['managerId']"
+                      class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                <option value="">— Aucun manager</option>
+                @for (u of users(); track u.id) {
+                  @if (u.actif && u.id !== editingUser?.id) {
+                    <option [value]="u.id">{{ u.nomComplet }}{{ u.posteLibelle ? ' · ' + u.posteLibelle : '' }}</option>
                   }
                 }
               </select>
@@ -869,6 +734,34 @@ interface EtapeCircuit {
               </label>
             </div>
 
+            <!-- Gabarit .docx : chargement direct (Collabora) -->
+            <div class="mt-4 pt-4 border-t border-gray-200">
+              <label class="text-sm font-medium text-gray-700 block mb-2">Gabarit Word (.docx)</label>
+              @if (templateFileName()) {
+                <div class="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                  <span>✅</span>
+                  <span class="flex-1 truncate">{{ templateFileName() }}</span>
+                  @if (editingTdoc?.id) {
+                    <button type="button" (click)="previewTemplate()"
+                            [disabled]="previewingTemplate()"
+                            class="text-blue-600 hover:text-blue-800 text-xs font-medium disabled:opacity-50">
+                      {{ previewingTemplate() ? '…' : '👁 Aperçu' }}
+                    </button>
+                  }
+                  <button type="button" (click)="tdocForm['templateDocxPath'] = null; tdocForm['templatePdfPath'] = null; templateFileName.set(null)"
+                          class="text-gray-400 hover:text-red-500 font-bold leading-none">×</button>
+                </div>
+              } @else {
+                <button type="button" (click)="templateInput.click()"
+                        [disabled]="uploadingTemplate()"
+                        class="btn-secondary btn-sm">
+                  @if (uploadingTemplate()) { Chargement… } @else { 📎 Charger un gabarit (.docx) }
+                </button>
+              }
+              <input #templateInput type="file" accept=".docx" hidden
+                     (change)="onTemplateUpload($event)" />
+            </div>
+
           </div>
           <div class="flex justify-end gap-3 mt-6">
             <button (click)="showTdocModal.set(false)"
@@ -882,61 +775,122 @@ interface EtapeCircuit {
       </div>
     }
 
-    <!-- ── Modal Proof Type ──────────────────────────────────────────────── -->
-    @if (showPtypeModal()) {
-      <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
-          <h2 class="text-lg font-semibold mb-4">
-            {{ editingPtype ? 'Modifier le type de preuve' : 'Nouveau type de preuve' }}
-          </h2>
-          <div class="space-y-4">
-            <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1">Libellé</label>
-              <input [(ngModel)]="ptypeForm['label']" placeholder="Ex: Procès-verbal (PV)"
-                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+    <!-- Modal aperçu gabarit .docx converti en PDF -->
+    @if (showTemplatePreview()) {
+      <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[70] p-4"
+           (click)="closeTemplatePreview()">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col"
+             style="height: 88vh"
+             (click)="$event.stopPropagation()">
+          <div class="flex items-center justify-between px-5 py-3 border-b border-gray-200 shrink-0">
+            <span class="text-sm font-semibold text-gray-800">Aperçu du gabarit — {{ tdocForm['libelle'] || tdocForm['code'] }}</span>
+            <button (click)="closeTemplatePreview()" class="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+          </div>
+          @if (templatePreviewUrl()) {
+            <iframe [src]="templatePreviewUrl()"
+                    class="flex-1 w-full rounded-b-xl"
+                    style="border:none">
+            </iframe>
+          } @else {
+            <div class="flex-1 flex flex-col items-center justify-center gap-3 text-gray-500">
+              <svg class="animate-spin w-8 h-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+              </svg>
+              <span class="text-sm">Conversion en cours…</span>
             </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1">Formats acceptés</label>
-              <input [(ngModel)]="ptypeForm['acceptedFormats']" placeholder="Ex: PDF, JPG, PNG"
-                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1">Description</label>
-              <textarea [(ngModel)]="ptypeForm['description']" rows="2"
-                        placeholder="Description courte du type de preuve"
-                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"></textarea>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Modal Aperçu A4 : HTML autonome (CSS embarquée) servi par /api/pdf/preview
+         et rendu dans une iframe srcdoc. Même contrat HTML+CSS que /api/pdf/generate. -->
+    @if (showTdocPreview()) {
+      <div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4"
+           (click)="closeTdocPreview()">
+        <div class="bg-gray-200 rounded-lg shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+             (click)="$event.stopPropagation()">
+          <div class="flex items-center justify-between px-5 py-3 bg-white border-b border-gray-200">
+            <h3 class="text-base font-semibold text-gray-800">
+              Aperçu A4 — {{ tdocForm['libelle'] || tdocForm['code'] || 'sans titre' }}
+            </h3>
+            <button (click)="closeTdocPreview()" class="btn-icon" title="Fermer">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+          <div class="flex-1 overflow-auto p-6 bg-gray-200 relative">
+            @if (previewing()) {
+              <div class="absolute inset-0 flex items-center justify-center bg-gray-200/80 z-10">
+                <span class="text-sm text-gray-700 italic">Génération de l'aperçu…</span>
+              </div>
+            }
+            <div class="w-full bg-white" #previewTarget>
+              @if (previewHtml()) {
+                <iframe #previewIframe
+                        [srcdoc]="previewHtml()"
+                        (load)="onPreviewIframeLoad(previewIframe)"
+                        class="w-full border-0 bg-white block"
+                        style="min-height: 400px;"></iframe>
+              }
             </div>
           </div>
-          <div class="flex justify-end gap-3 mt-6">
-            <button (click)="showPtypeModal.set(false)"
-                    class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Annuler</button>
-            <button (click)="savePtype()" [disabled]="savingPtype()"
-                    class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50">
-              {{ savingPtype() ? 'Enregistrement…' : 'Enregistrer' }}
+          <div class="flex justify-end gap-3 px-5 py-3 bg-white border-t border-gray-200">
+            <button (click)="closeTdocPreview()" class="btn-secondary btn-sm">
+              Fermer l'aperçu
+            </button>
+            <button (click)="downloadTdocPdf()"
+                    [disabled]="!processedTemplateHtml() || downloadingPdf()"
+                    class="btn-primary btn-sm disabled:opacity-50"
+                    title="Générer et télécharger le PDF final">
+              {{ downloadingPdf() ? 'Génération…' : 'Télécharger PDF' }}
             </button>
           </div>
         </div>
       </div>
     }
+
   `
 })
 export class ParametresComponent implements OnInit {
   private api = inject(ApiService);
   private auth = inject(AuthService);
+  private toast = inject(ToastService);
+  private cdr = inject(ChangeDetectorRef);
+  private sanitizer = inject(DomSanitizer);
+
+  uploadingTemplate = signal(false);
+  templateFileName = signal<string | null>(null);
+  previewingTemplate = signal(false);
+  showTemplatePreview = signal(false);
+  templatePreviewUrl = signal<SafeResourceUrl | null>(null);
+  private _templatePreviewObjectUrl: string | null = null;
+  showTdocPreview = signal(false);
+  previewing = signal(false);
+  previewHtml = signal<SafeHtml | null>(null);
+  processedTemplateHtml = signal<string>('');  // fragment HTML avec images en data: URI (preview + download)
+  downloadingPdf = signal(false);
+  @ViewChild('previewTarget') previewTarget?: ElementRef<HTMLDivElement>;
+  @ViewChild('previewIframe') previewIframeRef?: ElementRef<HTMLIFrameElement>;
+  private resizeObserver?: ResizeObserver;
+  private static readonly A4_WIDTH_PX = 793; // 210mm @ 96 DPI
 
   tabs = computed(() => {
-    const role = this.auth.currentUser()?.role;
-    if (role === 'SUBORDONNE' || role === 'SECRETAIRE') {
-      return [{ id: 'SIGNATURE_ASSETS' as Tab, label: 'Mes Signatures' }];
+    const tabs: { id: Tab; label: string }[] = [];
+    if (this.auth.hasPermission('CAN_MANAGE_TYPES')) {
+      tabs.push(
+        { id: 'INSTRUCTION_TYPES', label: "Types d'Instructions" },
+        { id: 'TYPE_DOCUMENTS', label: 'Types de Documents' },
+        { id: 'POSTES', label: 'Postes & Roles' },
+      );
     }
-    return [
-      { id: 'INSTRUCTION_TYPES' as Tab, label: "Types d'Instructions" },
-      { id: 'TYPE_DOCUMENTS' as Tab, label: 'Types de Documents' },
-      { id: 'PROOF_TYPES' as Tab, label: 'Types de Preuves' },
-      { id: 'POSTES' as Tab, label: 'Postes & Rôles' },
-      { id: 'USERS' as Tab, label: 'Utilisateurs' },
-      { id: 'SIGNATURE_ASSETS' as Tab, label: 'Signatures & Cachets' }
-    ];
+    if (this.auth.hasPermission('CAN_MANAGE_USERS')) {
+      tabs.push({ id: 'USERS', label: 'Utilisateurs' });
+    }
+    tabs.push({ id: 'SIGNATURE_ASSETS', label: 'Signatures & Cachets' });
+    return tabs;
   });
 
   activeTab = signal<Tab>('INSTRUCTION_TYPES');
@@ -947,9 +901,7 @@ export class ParametresComponent implements OnInit {
   showItypeModal   = signal(false);
   savingItype      = signal(false);
   editingItype: InstructionType | null = null;
-  itypeForm: Record<string, string> = {};
-  itypeDocuments   = signal<string[]>([]);
-  newDocumentInput = '';
+  itypeForm: Record<string, any> = {};
   catFilter        = signal<Categorie[]>([]);
 
   filteredItypes = computed(() => {
@@ -957,15 +909,6 @@ export class ParametresComponent implements OnInit {
     const all    = this.instructionTypes();
     return filter.length === 0 ? all : all.filter(t => filter.includes(t.categorie));
   });
-
-  // ── Étapes de circuit ────────────────────────────────────────────────────
-  showStepsModal       = signal(false);
-  etapesCircuit        = signal<EtapeCircuit[]>([]);
-  loadingSteps         = signal(false);
-  savingStep           = signal(false);
-  editingStep: EtapeCircuit | null = null;
-  activeItypeForSteps: InstructionType | null = null;
-  stepForm: Record<string, any> = {};
 
   // ── Postes ───────────────────────────────────────────────────────────────
   postes        = signal<Poste[]>([]);
@@ -998,13 +941,6 @@ export class ParametresComponent implements OnInit {
   tdocCircuit     = signal<{ posteId: string; posteLibelle: string }[]>([]);
   tdocInitiateurs = signal<string[]>([]);
 
-  // ── Proof Types ──────────────────────────────────────────────────────────
-  proofTypes    = signal<ProofType[]>([]);
-  loadingPtypes = signal(false);
-  showPtypeModal = signal(false);
-  savingPtype   = signal(false);
-  editingPtype: ProofType | null = null;
-  ptypeForm: Record<string, string> = {};
 
   categories = [
     { value: 'STRATEGIQUE' as Categorie,    label: 'Stratégique',    activeClass: 'bg-purple-100 text-purple-700' },
@@ -1016,11 +952,11 @@ export class ParametresComponent implements OnInit {
   // ── Lifecycle ────────────────────────────────────────────────────────────
 
   ngOnInit() {
-    if (this.tabs().length === 1) {
-      this.activeTab.set('SIGNATURE_ASSETS');
+    const firstTab = this.tabs()[0]?.id;
+    if (firstTab && !this.tabs().some(tab => tab.id === this.activeTab())) {
+      this.activeTab.set(firstTab);
     }
     this.loadItypes();
-    this.loadPtypes();
     this.loadPostes();
     this.loadUsers();
     this.loadTdocs();
@@ -1043,32 +979,23 @@ export class ParametresComponent implements OnInit {
   openItypeModal(t?: InstructionType) {
     this.editingItype = t ?? null;
     this.itypeForm = {
-      code:            t?.code            ?? '',
-      label:           t?.label           ?? '',
-      categorie:       t?.categorie       ?? 'OPERATIONNELLE',
-      urgenceDefaut:   t?.urgenceDefaut   ?? 'NORMAL',
-      livrableAttendu: t?.livrableAttendu ?? 'CONFIRMATION',
+      code:                  t?.code                  ?? '',
+      label:                 t?.label                 ?? '',
+      categorie:             t?.categorie             ?? 'OPERATIONNELLE',
+      urgenceDefaut:         t?.urgenceDefaut         ?? 'NORMAL',
+      typeInstruction:       t?.typeInstruction       ?? 'LIBRE',
+      typeDocumentAttenduId: t?.typeDocumentAttenduId ?? '',
     };
-    this.itypeDocuments.set(t?.documentsAttendus ? [...t.documentsAttendus] : []);
-    this.newDocumentInput = '';
     this.showItypeModal.set(true);
-  }
-
-  addItypeDocument() {
-    const val = this.newDocumentInput.trim();
-    if (!val) return;
-    this.itypeDocuments.update(docs => [...docs, val]);
-    this.newDocumentInput = '';
-  }
-
-  removeItypeDocument(index: number) {
-    this.itypeDocuments.update(docs => docs.filter((_, i) => i !== index));
   }
 
   saveItype() {
     if (!this.itypeForm['label'] || !this.itypeForm['code']) return;
     this.savingItype.set(true);
-    const payload = { ...this.itypeForm, documentsAttendus: this.itypeDocuments() };
+    const payload = {
+      ...this.itypeForm,
+      typeDocumentAttenduId: this.itypeForm['typeDocumentAttenduId'] || null,
+    };
     const obs = this.editingItype
       ? this.api.updateInstructionType(this.editingItype.id, payload)
       : this.api.createInstructionType(payload);
@@ -1096,108 +1023,6 @@ export class ParametresComponent implements OnInit {
     if (!confirm(`Supprimer définitivement "${t.label}" ?`)) return;
     this.api.deleteInstructionType(t.id).subscribe(() => {
       this.instructionTypes.update(list => list.filter(x => x.id !== t.id));
-    });
-  }
-
-  // ── Étapes de circuit ────────────────────────────────────────────────────
-
-  openStepsModal(t: InstructionType) {
-    this.activeItypeForSteps = t;
-    this.editingStep = null;
-    this.resetStepForm();
-    this.etapesCircuit.set([]);
-    this.showStepsModal.set(true);
-    this.loadingSteps.set(true);
-    this.api.getWorkflowSteps(t.id).subscribe({
-      next: steps => {
-        this.etapesCircuit.set(
-          [...steps].sort((a: EtapeCircuit, b: EtapeCircuit) => a.stepOrder - b.stepOrder)
-        );
-        this.resetStepForm();
-        this.loadingSteps.set(false);
-      },
-      error: () => this.loadingSteps.set(false)
-    });
-  }
-
-  closeStepsModal() {
-    this.showStepsModal.set(false);
-    this.activeItypeForSteps = null;
-    this.editingStep = null;
-  }
-
-  openStepForm(etape: EtapeCircuit) {
-    this.editingStep = etape;
-    this.stepForm = {
-      stepLabel:          etape.stepLabel,
-      stepOrder:          etape.stepOrder,
-      requiredPosteId:    etape.requiredPoste?.id ?? '',
-      actorInstructions:  etape.actorInstructions ?? '',
-      requiresSignature:  etape.requiresSignature,
-      requiresAttachment: etape.requiresAttachment,
-    };
-  }
-
-  annulerEditionStep() {
-    this.editingStep = null;
-    this.resetStepForm();
-  }
-
-  private resetStepForm() {
-    const etapes = this.etapesCircuit();
-    const nextOrder = etapes.length > 0
-      ? Math.max(...etapes.map(s => s.stepOrder)) + 1
-      : 1;
-    this.stepForm = {
-      stepLabel:          '',
-      stepOrder:          nextOrder,
-      requiredPosteId:    '',
-      actorInstructions:  '',
-      requiresSignature:  false,
-      requiresAttachment: false,
-    };
-  }
-
-  saveStep() {
-    const typeId = this.activeItypeForSteps?.id;
-    if (!typeId || !this.stepForm['stepLabel']) return;
-    this.savingStep.set(true);
-    const payload = {
-      stepLabel:          this.stepForm['stepLabel'],
-      stepOrder:          Number(this.stepForm['stepOrder']),
-      requiredPosteId:    this.stepForm['requiredPosteId'] || null,
-      actorInstructions:  this.stepForm['actorInstructions'] || null,
-      requiresSignature:  Boolean(this.stepForm['requiresSignature']),
-      requiresAttachment: Boolean(this.stepForm['requiresAttachment']),
-    };
-    const obs = this.editingStep
-      ? this.api.updateWorkflowStep(typeId, this.editingStep.id, payload)
-      : this.api.createWorkflowStep(typeId, payload);
-    obs.subscribe({
-      next: saved => {
-        if (this.editingStep) {
-          this.etapesCircuit.update(list =>
-            list.map(s => s.id === saved.id ? saved : s)
-                .sort((a, b) => a.stepOrder - b.stepOrder)
-          );
-        } else {
-          this.etapesCircuit.update(list =>
-            [...list, saved].sort((a, b) => a.stepOrder - b.stepOrder)
-          );
-        }
-        this.editingStep = null;
-        this.resetStepForm();
-        this.savingStep.set(false);
-      },
-      error: () => this.savingStep.set(false)
-    });
-  }
-
-  deleteStep(etape: EtapeCircuit) {
-    const typeId = this.activeItypeForSteps?.id;
-    if (!typeId || !confirm(`Supprimer l'étape "${etape.stepLabel}" ?`)) return;
-    this.api.deleteWorkflowStep(typeId, etape.id).subscribe(() => {
-      this.etapesCircuit.update(list => list.filter(s => s.id !== etape.id));
     });
   }
 
@@ -1250,59 +1075,6 @@ export class ParametresComponent implements OnInit {
     });
   }
 
-  // ── Proof Types ───────────────────────────────────────────────────────────
-
-  loadPtypes() {
-    this.loadingPtypes.set(true);
-    this.api.getProofTypes().subscribe({
-      next: list => { this.proofTypes.set(list); this.loadingPtypes.set(false); },
-      error: ()   => this.loadingPtypes.set(false)
-    });
-  }
-
-  openPtypeModal(p?: ProofType) {
-    this.editingPtype = p ?? null;
-    this.ptypeForm = {
-      label:           p?.label           ?? '',
-      acceptedFormats: p?.acceptedFormats ?? '',
-      description:     p?.description     ?? '',
-    };
-    this.showPtypeModal.set(true);
-  }
-
-  savePtype() {
-    if (!this.ptypeForm['label']) return;
-    this.savingPtype.set(true);
-    const obs = this.editingPtype
-      ? this.api.updateProofType(this.editingPtype.id, this.ptypeForm)
-      : this.api.createProofType(this.ptypeForm);
-    obs.subscribe({
-      next: saved => {
-        if (this.editingPtype) {
-          this.proofTypes.update(list => list.map(x => x.id === saved.id ? saved : x));
-        } else {
-          this.proofTypes.update(list => [...list, saved]);
-        }
-        this.savingPtype.set(false);
-        this.showPtypeModal.set(false);
-      },
-      error: () => this.savingPtype.set(false)
-    });
-  }
-
-  togglePtype(p: ProofType) {
-    this.api.toggleProofType(p.id).subscribe(() => {
-      this.proofTypes.update(list => list.map(x => x.id === p.id ? { ...x, actif: !x.actif } : x));
-    });
-  }
-
-  deletePtype(p: ProofType) {
-    if (!confirm(`Supprimer définitivement "${p.label}" ?`)) return;
-    this.api.deleteProofType(p.id).subscribe(() => {
-      this.proofTypes.update(list => list.filter(x => x.id !== p.id));
-    });
-  }
-
   // ── Users ─────────────────────────────────────────────────────────────────
 
   loadUsers() {
@@ -1320,6 +1092,7 @@ export class ParametresComponent implements OnInit {
       username:   u?.username   ?? '',
       role:       u?.role       ?? '',
       posteId:    u?.posteId    ?? '',
+      managerId:  u?.managerId  ?? '',
       password:   '',
     };
     this.showUserModal.set(true);
@@ -1330,8 +1103,9 @@ export class ParametresComponent implements OnInit {
     if (!this.editingUser && !this.userForm['password']) return;
     this.savingUser.set(true);
     const payload: any = { ...this.userForm };
-    payload.role    = payload.role    || null;
-    payload.posteId = payload.posteId || null;
+    payload.role      = payload.role      || null;
+    payload.posteId   = payload.posteId   || null;
+    payload.managerId = payload.managerId || null;
     const obs = this.editingUser
       ? this.api.updateUser(this.editingUser.id, payload)
       : this.api.createUser(payload);
@@ -1390,19 +1164,183 @@ export class ParametresComponent implements OnInit {
   openTdocModal(t?: TypeDocParam) {
     this.editingTdoc = t ?? null;
     if (t) {
-      this.tdocForm = { code: t.code, libelle: t.libelle, modeCircuit: t.modeCircuit, actionFinale: t.actionFinale };
+      this.tdocForm = {
+        code: t.code, libelle: t.libelle, modeCircuit: t.modeCircuit, actionFinale: t.actionFinale,
+        requiresSignatureZone: t.requiresSignatureZone,
+        requiresStampZone: t.requiresStampZone,
+        requiresDestinataire: t.requiresDestinataire,
+        templateHtml: t.templateHtml ?? '',
+        templateDocxPath: t.templateDocxPath ?? null,
+        templatePdfPath: t.templatePdfPath ?? null,
+      };
+      this.templateFileName.set(t.templateDocxPath ? t.templateDocxPath.split('/').pop() ?? t.templateDocxPath : null);
       this.tdocCircuit.set(t.circuit ? [...t.circuit] : []);
       this.tdocInitiateurs.set(t.initiateurPostes ? [...t.initiateurPostes] : []);
-      this.tdocForm['requiresSignatureZone'] = t.requiresSignatureZone;
-      this.tdocForm['requiresStampZone'] = t.requiresStampZone;
-      this.tdocForm['requiresDestinataire'] = t.requiresDestinataire;
     } else {
-      this.tdocForm = { code: '', libelle: '', modeCircuit: 'LIBRE', actionFinale: 'ARCHIVER',
-        requiresSignatureZone: true, requiresStampZone: false, requiresDestinataire: false };
+      this.tdocForm = {
+        code: '', libelle: '', modeCircuit: 'LIBRE', actionFinale: 'ARCHIVER',
+        requiresSignatureZone: true, requiresStampZone: false, requiresDestinataire: false,
+        templateHtml: '', templateDocxPath: null, templatePdfPath: null,
+      };
+      this.templateFileName.set(null);
       this.tdocCircuit.set([]);
       this.tdocInitiateurs.set([]);
     }
     this.showTdocModal.set(true);
+  }
+
+  previewTemplate() {
+    if (!this.editingTdoc?.id) return;
+    this.previewingTemplate.set(true);
+    this.templatePreviewUrl.set(null);
+    this.showTemplatePreview.set(true);
+    this.api.getTemplatePreviewBlob(this.editingTdoc.id).subscribe({
+      next: blob => {
+        if (this._templatePreviewObjectUrl) URL.revokeObjectURL(this._templatePreviewObjectUrl);
+        this._templatePreviewObjectUrl = URL.createObjectURL(blob);
+        this.templatePreviewUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(this._templatePreviewObjectUrl));
+      },
+      error: () => { this.toast.error('Aperçu indisponible'); this.closeTemplatePreview(); },
+      complete: () => this.previewingTemplate.set(false),
+    });
+  }
+
+  closeTemplatePreview() {
+    this.showTemplatePreview.set(false);
+    if (this._templatePreviewObjectUrl) { URL.revokeObjectURL(this._templatePreviewObjectUrl); this._templatePreviewObjectUrl = null; }
+    this.templatePreviewUrl.set(null);
+  }
+
+  onTemplateUpload(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    this.uploadingTemplate.set(true);
+    this.api.uploadTemplate(file).subscribe({
+      next: r => {
+        this.tdocForm['templateDocxPath'] = r.docxPath;
+        this.tdocForm['templatePdfPath']  = r.pdfPath;
+        this.templateFileName.set(r.fileName);
+        this.toast.success('Gabarit chargé');
+      },
+      error: e => this.toast.error(e?.error?.error ?? 'Chargement du gabarit échoué'),
+      complete: () => {
+        this.uploadingTemplate.set(false);
+        input.value = '';
+      },
+    });
+  }
+
+  async openTdocPreview() {
+    this.showTdocPreview.set(true);
+    this.previewing.set(true);
+    this.previewHtml.set(null);
+    // Laisser Angular rendre la modal
+    await new Promise<void>(r => setTimeout(r));
+    try {
+      const raw = this.tdocForm['templateHtml'] || '<p>(aucun contenu)</p>';
+      // Convertir toute <img> non-data: en data: URI inline. Plus aucune URL externe
+      // n'est passée au backend → pas de SSRF possible par openhtmltopdf.
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(raw, 'text/html');
+      const imgs = Array.from(doc.querySelectorAll('img')) as HTMLImageElement[];
+      for (const img of imgs) {
+        const src = img.getAttribute('src') || '';
+        if (!src || src.startsWith('data:')) continue;
+        try {
+          const resp = await fetch(src, { credentials: 'same-origin' });
+          const blob = await resp.blob();
+          const dataUrl = await this.blobToDataUrl(blob);
+          img.setAttribute('src', dataUrl);
+        } catch {
+          // si l'image n'est pas accessible, on la laisse — le backend strippera son src non-data
+        }
+      }
+      const fragment = doc.body.innerHTML;
+      this.processedTemplateHtml.set(fragment);  // cache pour download PDF
+      this.api.previewHtml(fragment).subscribe({
+        next: r => {
+          // bypassSecurityTrustHtml empeche DomSanitizer de supprimer le <style> embarque
+          // qui rendrait l'iframe blanche. Le HTML vient de notre propre backend authentifie.
+          this.previewHtml.set(this.sanitizer.bypassSecurityTrustHtml(r.html));
+          this.cdr.detectChanges();
+        },
+        error: e => this.toast.error('Aperçu impossible : ' + (e?.error?.error ?? e?.message ?? 'erreur')),
+        complete: () => this.previewing.set(false),
+      });
+    } catch (e: any) {
+      this.toast.error('Aperçu impossible : ' + (e?.message ?? 'erreur inconnue'));
+      this.previewing.set(false);
+    }
+  }
+
+  closeTdocPreview() {
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = undefined;
+    this.previewHtml.set(null);
+    this.processedTemplateHtml.set('');
+    this.showTdocPreview.set(false);
+  }
+
+  downloadTdocPdf() {
+    const html = this.processedTemplateHtml();
+    if (!html) return;
+    this.downloadingPdf.set(true);
+    this.api.generatePdfBlob(html).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const safeName = (this.tdocForm['libelle'] || this.tdocForm['code'] || 'gabarit')
+          .toString()
+          .replace(/[^a-zA-Z0-9-_]/g, '_');
+        a.download = `${safeName}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: e => this.toast.error('Téléchargement impossible : ' + (e?.message ?? 'erreur')),
+      complete: () => this.downloadingPdf.set(false),
+    });
+  }
+
+  private blobToDataUrl(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result as string);
+      fr.onerror = () => reject(fr.error);
+      fr.readAsDataURL(blob);
+    });
+  }
+
+  onPreviewIframeLoad(iframe: HTMLIFrameElement) {
+    const doc = iframe.contentDocument;
+    if (!doc) return;
+    // Attendre le rendu (images data: URI, fonts), puis ajuster la hauteur
+    // pour avoir un seul scroll au niveau de la modal.
+    requestAnimationFrame(() => {
+      const h = doc.documentElement.scrollHeight;
+      if (h > 0) iframe.style.height = h + 'px';
+    });
+  }
+
+  private observePreviewResize() {
+    const target = this.previewTarget?.nativeElement;
+    const parent = target?.parentElement;
+    if (!target || !parent) return;
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = new ResizeObserver(() => this.updatePreviewScale());
+    this.resizeObserver.observe(parent);
+    this.updatePreviewScale();
+  }
+
+  private updatePreviewScale() {
+    const target = this.previewTarget?.nativeElement;
+    const parent = target?.parentElement;
+    if (!target || !parent) return;
+    // -24 px de safety pour scrollbar éventuelle + padding cellule
+    const avail = parent.clientWidth - 24;
+    const scale = Math.min(1, avail / ParametresComponent.A4_WIDTH_PX);
+    target.style.setProperty('--preview-scale', String(scale));
   }
 
   onEtapePosteChange(etape: { posteId: string; posteLibelle: string }, posteId: string) {
@@ -1522,15 +1460,4 @@ export class ParametresComponent implements OnInit {
     } as Record<Urgence, string>)[u];
   }
 
-  livrableLabel(l: Livrable): string {
-    return ({ CONFIRMATION: 'Confirmation', PREUVE: 'Preuve', DOCUMENT: 'Document' } as Record<Livrable, string>)[l];
-  }
-
-  livrablebadge(l: Livrable): string {
-    return ({
-      CONFIRMATION: 'px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600',
-      PREUVE:       'px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700',
-      DOCUMENT:     'px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700',
-    } as Record<Livrable, string>)[l];
-  }
 }

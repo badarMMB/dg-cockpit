@@ -1,21 +1,26 @@
 package com.dgcockpit.controller;
 
 import com.dgcockpit.entity.AppUser;
+import com.dgcockpit.entity.Assignee;
 import com.dgcockpit.entity.BureauDocument;
 import com.dgcockpit.entity.CircuitSignature;
 import com.dgcockpit.entity.Instruction;
 import com.dgcockpit.entity.InstructionMessage;
+import com.dgcockpit.entity.InstructionType;
 import com.dgcockpit.entity.PageAnnotation;
 import com.dgcockpit.entity.PdfDocument;
 import com.dgcockpit.entity.TypeDocument;
 import com.dgcockpit.repository.AppUserRepository;
+import com.dgcockpit.repository.AssigneeRepository;
 import com.dgcockpit.repository.BureauDocumentRepository;
 import com.dgcockpit.repository.CircuitSignatureRepository;
 import com.dgcockpit.repository.InstructionMessageRepository;
 import com.dgcockpit.repository.InstructionRepository;
+import com.dgcockpit.repository.InstructionTypeRepository;
 import com.dgcockpit.repository.PageAnnotationRepository;
 import com.dgcockpit.repository.PdfDocumentRepository;
 import com.dgcockpit.repository.TypeDocumentRepository;
+import com.dgcockpit.service.AuthorizationService;
 import com.dgcockpit.service.DocumentFinalizationService;
 import com.dgcockpit.service.MinioService;
 import com.dgcockpit.sse.SseService;
@@ -25,6 +30,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -42,6 +48,10 @@ public class BureauController {
 
     private static final String BUCKET = "ged-bureau-documents";
 
+    // Bucket par défaut MinIO (dgcockpit) — utilisé pour les templates TypeDocument
+    @org.springframework.beans.factory.annotation.Value("${minio.bucket:dgcockpit}")
+    private String defaultBucket;
+
     private final BureauDocumentRepository bureauRepo;
     private final PdfDocumentRepository pdfRepo;
     private final PageAnnotationRepository annotRepo;
@@ -49,11 +59,22 @@ public class BureauController {
     private final AppUserRepository userRepo;
     private final InstructionRepository instructionRepo;
     private final InstructionMessageRepository instructionMessageRepo;
+    private final InstructionTypeRepository instructionTypeRepo;
+    private final AssigneeRepository assigneeRepo;
     private final TypeDocumentRepository typeDocRepo;
     private final MinioService minio;
+    private final AuthorizationService authorizationService;
     private final DocumentFinalizationService finalizer;
     private final SseService sseService;
     private final ObjectMapper objectMapper;
+    private final com.dgcockpit.service.WopiTokenService wopiTokenService;
+    private final com.dgcockpit.service.CollaboraConvertService collaboraConvertService;
+
+    @org.springframework.beans.factory.annotation.Value("${collabora.public-url:http://localhost:9980}")
+    private String collaboraPublicUrl;
+
+    @org.springframework.beans.factory.annotation.Value("${collabora.wopi.host:http://localhost:8080}")
+    private String wopiHost;
 
     public BureauController(BureauDocumentRepository bureauRepo,
                             PdfDocumentRepository pdfRepo,
@@ -62,11 +83,16 @@ public class BureauController {
                             AppUserRepository userRepo,
                             InstructionRepository instructionRepo,
                             InstructionMessageRepository instructionMessageRepo,
+                            InstructionTypeRepository instructionTypeRepo,
+                            AssigneeRepository assigneeRepo,
                             TypeDocumentRepository typeDocRepo,
                             MinioService minio,
+                            AuthorizationService authorizationService,
                             DocumentFinalizationService finalizer,
                             SseService sseService,
-                            ObjectMapper objectMapper) {
+                            ObjectMapper objectMapper,
+                            com.dgcockpit.service.WopiTokenService wopiTokenService,
+                            com.dgcockpit.service.CollaboraConvertService collaboraConvertService) {
         this.bureauRepo = bureauRepo;
         this.pdfRepo = pdfRepo;
         this.annotRepo = annotRepo;
@@ -74,32 +100,45 @@ public class BureauController {
         this.userRepo = userRepo;
         this.instructionRepo = instructionRepo;
         this.instructionMessageRepo = instructionMessageRepo;
+        this.instructionTypeRepo = instructionTypeRepo;
+        this.assigneeRepo = assigneeRepo;
         this.typeDocRepo = typeDocRepo;
         this.minio = minio;
+        this.authorizationService = authorizationService;
         this.finalizer = finalizer;
         this.sseService = sseService;
         this.objectMapper = objectMapper;
+        this.wopiTokenService = wopiTokenService;
+        this.collaboraConvertService = collaboraConvertService;
     }
 
-    // ── POST /api/bureau/documents ── upload PDF
+    // ── POST /api/bureau/documents ── upload PDF ou .docx
     @PostMapping("/documents")
+    @PreAuthorize("hasAuthority('HAS_BUREAU')")
     public ResponseEntity<Map<String, Object>> upload(
             @RequestParam MultipartFile file,
             @RequestParam(defaultValue = "COURRIER") String type,
             @RequestParam(required = false) String titre,
             @RequestParam(required = false) String destinataire,
             @RequestParam(required = false) String typeDocumentId,
+            @RequestParam(required = false) String sourceInstructionId,
             HttpServletRequest request) throws Exception {
 
-        AppUser currentUser = (AppUser) request.getAttribute("currentUser");
-        if (currentUser == null || !currentUser.hasBureau()) return ResponseEntity.status(403).build();
+        AppUser currentUser = authorizationService.currentUser();
         String proprietaireId = currentUser.getId();
 
-        minio.ensureBucket(BUCKET);
-        String objectKey = UUID.randomUUID() + "_" + file.getOriginalFilename();
-        minio.uploadBytes(BUCKET, objectKey, file.getBytes(), "application/pdf");
+        String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "document";
+        boolean isDocx = originalName.toLowerCase().endsWith(".docx");
+        String contentType = isDocx
+            ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            : "application/pdf";
 
-        int pageCount = finalizer.getPageCount(BUCKET, objectKey);
+        minio.ensureBucket(BUCKET);
+        String objectKey = UUID.randomUUID() + "_" + originalName;
+        minio.uploadBytes(BUCKET, objectKey, file.getBytes(), contentType);
+
+        // Calcul du nombre de pages : PDFBox ne sait lire que les PDF
+        int pageCount = isDocx ? 0 : finalizer.getPageCount(BUCKET, objectKey);
 
         // Résoudre le code type depuis le TypeDocument si fourni
         String codeType = type;
@@ -120,8 +159,23 @@ public class BureauController {
         if (typeDocumentId != null && !typeDocumentId.isBlank()) {
             doc.setTypeDocumentId(typeDocumentId);
         }
+        if (sourceInstructionId != null && !sourceInstructionId.isBlank()) {
+            doc.setSourceInstructionId(sourceInstructionId);
+        }
 
-        return ResponseEntity.ok(toDto(bureauRepo.save(doc)));
+        BureauDocument savedDoc = bureauRepo.save(doc);
+
+        if (sourceInstructionId != null && !sourceInstructionId.isBlank()) {
+            // Flux Top-Down : document lié à une instruction existante
+            ajouterMessageSysteme(sourceInstructionId,
+                "📄 Document \"" + savedDoc.getTitre() + "\" créé dans le bureau par "
+                    + currentUser.getNomComplet());
+        } else if (typeDocumentId != null && !typeDocumentId.isBlank()) {
+            // Flux Bottom-Up : auto-création de l'instruction si le TypeDocument a un binôme
+            creerInstructionBottomUp(savedDoc, typeDocumentId, currentUser);
+        }
+
+        return ResponseEntity.ok(toDto(savedDoc));
     }
 
     // ── GET /api/bureau/documents ── liste des documents du bureau de l'utilisateur connecté
@@ -141,7 +195,10 @@ public class BureauController {
                                              @PathVariable int pageIndex) throws Exception {
         BureauDocument doc = bureauRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("BureauDocument introuvable: " + id));
-        byte[] png = finalizer.renderPageFromStorage(doc.getBucket(), doc.getObjectKey(), pageIndex);
+        // Pour un .docx, rendre le PDF régénéré (PDFBox ne sait pas lire un .docx)
+        String bucket = doc.getSignaturePdfKey() != null ? "ged-documents" : doc.getBucket();
+        String key    = doc.getSignaturePdfKey() != null ? doc.getSignaturePdfKey() : doc.getObjectKey();
+        byte[] png = finalizer.renderPageFromStorage(bucket, key, pageIndex);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.IMAGE_PNG_VALUE)
                 .header(HttpHeaders.CACHE_CONTROL, "no-cache")
@@ -197,9 +254,7 @@ public class BureauController {
     public ResponseEntity<Void> delete(@PathVariable String id, HttpServletRequest request) {
         BureauDocument doc = bureauRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("BureauDocument introuvable: " + id));
-        AppUser currentUser = (AppUser) request.getAttribute("currentUser");
-        String proprietaireId = currentUser != null ? currentUser.getId() : "";
-        if (!doc.getProprietaireId().equals(proprietaireId)) return ResponseEntity.status(403).build();
+        authorizationService.requireBureauOwner(doc);
         try { minio.delete(doc.getBucket(), doc.getObjectKey()); } catch (Exception ignored) {}
         bureauRepo.delete(doc);
         return ResponseEntity.noContent().build();
@@ -238,16 +293,11 @@ public class BureauController {
             @RequestParam(required = false) String circuit,
             HttpServletRequest request) {
 
-        AppUser currentUser = (AppUser) request.getAttribute("currentUser");
-        if (currentUser == null) return ResponseEntity.status(403).build();
+        AppUser currentUser = authorizationService.currentUser();
 
         BureauDocument doc = bureauRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("BureauDocument introuvable: " + id));
-
-        // Les docs de transit (circuit) sont accessibles à tout utilisateur authentifié
-        if (!currentUser.hasBureau() && doc.getCircuitPdfDocumentId() == null) {
-            return ResponseEntity.status(403).build();
-        }
+        authorizationService.requireBureauSubmitAccess(doc);
 
         if (doc.getStatut() == BureauDocument.Statut.SOUMIS) {
             return ResponseEntity.badRequest().build();
@@ -261,6 +311,9 @@ public class BureauController {
         }
 
         List<Map<String, Object>> sigZones = parseZones(doc.getSignatureZonesJson());
+        boolean isDocx = doc.getOriginalFileName() != null
+            && doc.getOriginalFileName().toLowerCase().endsWith(".docx");
+        // Zones de signature requises pour tous (PDF comme .docx) — la signature passe par PDFBox
         if (sigZones.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
@@ -344,7 +397,13 @@ public class BureauController {
         List<Map<String, Object>> circuitSteps;
         if (typeDoc != null && typeDoc.getModeCircuit() == TypeDocument.ModeCircuit.MANAGER_SEUL) {
             // Forcer le manager direct, ignorer le picker
-            AppUser manager = currentUser.getManager();
+            AppUser managerProxy = currentUser.getManager();
+            if (managerProxy == null) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "Aucun supérieur hiérarchique défini. Contactez l'administrateur."));
+            }
+            // Recharger depuis le repo pour éviter LazyInitializationException sur le proxy Hibernate
+            AppUser manager = userRepo.findById(managerProxy.getId()).orElse(null);
             if (manager == null) {
                 return ResponseEntity.badRequest()
                         .body(Map.of("error", "Aucun supérieur hiérarchique défini. Contactez l'administrateur."));
@@ -367,6 +426,19 @@ public class BureauController {
             }
         }
 
+        // Vérifier que tous les signataires du circuit ont CAN_SIGN
+        for (Map<String, Object> step : circuitSteps) {
+            String sigId = (String) step.get("userId");
+            if (sigId != null) {
+                AppUser sig = userRepo.findById(sigId).orElse(null);
+                if (sig != null && !sig.hasHabilitation(com.dgcockpit.entity.Poste.Habilitation.CAN_SIGN)) {
+                    return ResponseEntity.badRequest()
+                        .body(Map.of("error", "L'utilisateur « " + sig.getNomComplet()
+                            + " » n'a pas l'habilitation CAN_SIGN et ne peut pas être signataire."));
+                }
+            }
+        }
+
         // ActionFinale → ParapheurType
         boolean publier = typeDoc != null
                 ? typeDoc.getActionFinale() == TypeDocument.ActionFinale.PUBLIER
@@ -376,13 +448,42 @@ public class BureauController {
                 ? PdfDocument.ParapheurType.NOTE_SERVICE
                 : PdfDocument.ParapheurType.COURRIER;
 
+        // ── Pour les .docx : convertir en PDF avant de créer le PdfDocument ──────
+        // PdfDocument doit pointer sur un vrai PDF pour que PDFBox fonctionne.
+        // BureauDocument reste lié au .docx (pour la réédition dans Collabora).
+        String pdfBucket  = doc.getBucket();
+        String pdfKey     = doc.getObjectKey();
+        int    pdfPages   = doc.getPageCount() != null ? doc.getPageCount() : 1;
+        String pdfFileName = doc.getOriginalFileName();
+
+        if (isDocx) {
+            // Réutiliser le PDF déjà régénéré au dernier enregistrement Collabora —
+            // c'est le PDF EXACT sur lequel les zones ont été posées.
+            if (doc.getSignaturePdfKey() == null) {
+                return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Ouvrez et enregistrez le document dans Collabora, puis placez les zones."));
+            }
+            pdfBucket   = "ged-documents";
+            pdfKey      = doc.getSignaturePdfKey();
+            pdfFileName = doc.getOriginalFileName().replaceAll("\\.docx$", ".pdf");
+            if (doc.getPageCount() != null) {
+                pdfPages = doc.getPageCount();
+            } else {
+                try {
+                    pdfPages = finalizer.getPageCount(pdfBucket, pdfKey);
+                } catch (Exception e) {
+                    return ResponseEntity.status(500)
+                        .body(Map.of("error", "Lecture du PDF de signature échouée : " + e.getMessage()));
+                }
+            }
+        }
+
         PdfDocument pdf = new PdfDocument();
         pdf.setTitle(doc.getTitre());
-        pdf.setOriginalFileName(doc.getOriginalFileName());
-        pdf.setBucket(doc.getBucket());
-        pdf.setObjectKey(doc.getObjectKey());
-        Integer pageCount = doc.getPageCount();
-        pdf.setPageCount(pageCount != null ? pageCount : 1);
+        pdf.setOriginalFileName(pdfFileName);
+        pdf.setBucket(pdfBucket);
+        pdf.setObjectKey(pdfKey);
+        pdf.setPageCount(pdfPages);
         pdf.setStatus("DRAFT");
         pdf.setParapheurType(parapheurType);
         pdf.setParapheurStatut(PdfDocument.ParapheurStatut.EN_ATTENTE_SIGNATURE);
@@ -451,23 +552,12 @@ public class BureauController {
         doc.setUpdatedAt(LocalDateTime.now());
         bureauRepo.save(doc);
 
-        // Lors d'une re-soumission, réactiver l'instruction de correction liée
-        if (isResoumission && doc.getCorrectionInstructionId() != null) {
-            instructionRepo.findById(doc.getCorrectionInstructionId()).ifPresent(instr -> {
-                if (instr.getStatut() != Instruction.StatutInstruction.CLOTURE) {
-                    InstructionMessage sysMsg = new InstructionMessage();
-                    sysMsg.setInstruction(instr);
-                    sysMsg.setSender("Système");
-                    sysMsg.setSelf(false);
-                    sysMsg.setText("📤 Document re-soumis au parapheur — en attente de signature DG.");
-                    sysMsg.setType(InstructionMessage.TypeMessage.SYSTEM);
-                    instructionMessageRepo.save(sysMsg);
-                    instr.setStatut(Instruction.StatutInstruction.EN_COURS);
-                    instructionRepo.save(instr);
-                    sseService.broadcast("INSTRUCTION_UPDATED", Map.of(
-                        "id", instr.getId(), "statut", "EN_COURS"));
-                }
-            });
+        // Message système dans l'instruction liée (soumission initiale ou re-soumission)
+        if (doc.getSourceInstructionId() != null) {
+            String msgSoumis = isResoumission
+                ? "📤 Document re-soumis au circuit de signature par " + currentUser.getNomComplet()
+                : "📤 Document soumis au circuit de signature par " + currentUser.getNomComplet();
+            ajouterMessageSysteme(doc.getSourceInstructionId(), msgSoumis);
         }
 
         sseService.broadcast("PARAPHEUR_UPDATED", Map.of(
@@ -501,10 +591,12 @@ public class BureauController {
         m.put("stampZones", stZones);
         m.put("hasSignatureZone", !sigZones.isEmpty());
         m.put("hasStampZone", !stZones.isEmpty());
+        m.put("hasSignaturePdf", d.getSignaturePdfKey() != null);
         m.put("renvoyeMotif", d.getRenvoyeMotif());
         m.put("corrigeDepuisRenvoi", d.isCorrigeDepuisRenvoi());
         m.put("circuitPdfDocumentId", d.getCircuitPdfDocumentId());
         m.put("typeDocumentId", d.getTypeDocumentId());
+        m.put("sourceInstructionId", d.getSourceInstructionId());
         // Exposer le mode circuit pour que le frontend adapte la modale de soumission
         if (d.getTypeDocumentId() != null) {
             typeDocRepo.findById(d.getTypeDocumentId()).ifPresent(td -> {
@@ -544,6 +636,188 @@ public class BureauController {
     }
 
     /**
+     * Flux Bottom-Up : crée automatiquement l'instruction DOCUMENTAIRE jumelle quand un document
+     * est uploadé sans instruction préalable et que son TypeDocument est lié à un InstructionType.
+     */
+    private void creerInstructionBottomUp(BureauDocument savedDoc, String typeDocumentId,
+                                           AppUser currentUser) {
+        TypeDocument td = typeDocRepo.findById(typeDocumentId).orElse(null);
+        if (td == null) return;
+
+        InstructionType itype = instructionTypeRepo
+                .findFirstByTypeDocumentAttenduIdAndActifTrue(td.getId())
+                .orElse(null);
+        if (itype == null) return;
+
+        // Créer l'instruction DOCUMENTAIRE
+        Instruction instr = new Instruction();
+        instr.setTitle("Rédaction : " + savedDoc.getTitre());
+        instr.setInstructionType(itype);
+        instr.setType(itype.getLabel());
+        instr.setStatut(Instruction.StatutInstruction.EN_COURS);
+        instr.setCreatedById(currentUser.getId());
+        instr.setUrgence(itype.getUrgenceDefaut().name());
+        Instruction savedInstr = instructionRepo.save(instr);
+
+        // Routage de l'assignee selon le modeCircuit du TypeDocument
+        AppUser assignee = resoudreAssignee(td, currentUser);
+        if (assignee != null) {
+            Assignee a = new Assignee();
+            a.setInstruction(savedInstr);
+            a.setUserId(assignee.getId());
+            a.setAgent(assignee.getNomComplet());
+            assigneeRepo.save(a);
+        }
+
+        // Lier le bureau à l'instruction
+        savedDoc.setSourceInstructionId(savedInstr.getId());
+        bureauRepo.save(savedDoc);
+
+        // Message système initial dans le fil
+        ajouterMessageSysteme(savedInstr.getId(),
+            "📄 Document « " + savedDoc.getTitre() + " » créé par " + currentUser.getNomComplet());
+    }
+
+    /**
+     * Détermine l'assignee de l'instruction selon le modeCircuit du TypeDocument.
+     * Par défaut (MANAGER_SEUL / LIBRE) → manager direct de l'initiateur.
+     * PREDEFINI / PREDEFINI_MODIFIABLE → premier utilisateur actif du poste dans initiateurPostesJson.
+     */
+    private AppUser resoudreAssignee(TypeDocument td, AppUser initiateur) {
+        if (td.getModeCircuit() == TypeDocument.ModeCircuit.PREDEFINI
+                || td.getModeCircuit() == TypeDocument.ModeCircuit.PREDEFINI_MODIFIABLE) {
+            AppUser parPoste = resoudreParPosteJson(td.getInitiateurPostesJson());
+            if (parPoste != null) return parPoste;
+        }
+        // Fallback : manager direct (rechargé depuis le repo pour éviter LazyInitializationException)
+        AppUser managerProxy = initiateur.getManager();
+        if (managerProxy == null) return null;
+        return userRepo.findById(managerProxy.getId()).orElse(null);
+    }
+
+    /**
+     * Résout le premier utilisateur actif dont le poste figure dans un JSON [{posteId, ...}].
+     */
+    private AppUser resoudreParPosteJson(String json) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            List<Map<String, Object>> postes = objectMapper.readValue(json,
+                    new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+            for (Map<String, Object> p : postes) {
+                String posteId = (String) p.get("posteId");
+                if (posteId == null) continue;
+                List<AppUser> occupants = userRepo.findByPosteIdAndActifTrue(posteId);
+                if (!occupants.isEmpty()) return occupants.get(0);
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    // ── POST /api/bureau/documents/from-template ── crée un .docx depuis le template du TypeDocument
+    @PostMapping("/documents/from-template")
+    @PreAuthorize("hasAuthority('HAS_BUREAU')")
+    public ResponseEntity<Map<String, Object>> createFromTemplate(
+            @RequestBody Map<String, String> body,
+            HttpServletRequest request) throws Exception {
+
+        AppUser currentUser = authorizationService.currentUser();
+
+        String typeDocumentId  = body.get("typeDocumentId");
+        String sourceInstructionId = body.get("sourceInstructionId"); // nullable
+        String titre           = body.get("titre");
+
+        if (typeDocumentId == null || typeDocumentId.isBlank())
+            return ResponseEntity.badRequest().body(Map.of("error", "typeDocumentId requis"));
+
+        TypeDocument td = typeDocRepo.findById(typeDocumentId)
+            .orElseThrow(() -> new com.dgcockpit.exception.AccesRefuseException("TypeDocument introuvable"));
+
+        if (td.getTemplateDocxPath() == null || td.getTemplateDocxPath().isBlank())
+            return ResponseEntity.badRequest()
+                .body(Map.of("error", "Ce type de document n'a pas de modèle .docx configuré"));
+
+        // Le template est stocké dans le bucket par défaut (dgcockpit) par TypeDocumentController
+        byte[] templateBytes = minio.downloadBytes(defaultBucket, td.getTemplateDocxPath());
+        String newFileName = td.getCode().toLowerCase() + "_" + UUID.randomUUID() + ".docx";
+        String newObjectKey = UUID.randomUUID() + "_" + newFileName;
+        minio.ensureBucket(BUCKET);
+        minio.uploadBytes(BUCKET, newObjectKey, templateBytes,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+
+        BureauDocument doc = new BureauDocument();
+        doc.setProprietaireId(currentUser.getId());
+        doc.setTitre(titre != null && !titre.isBlank() ? titre : td.getLibelle());
+        doc.setType(td.getCode());
+        doc.setOriginalFileName(newFileName);
+        doc.setBucket(BUCKET);
+        doc.setObjectKey(newObjectKey);
+        doc.setPageCount(0); // page count N/A pour .docx
+        doc.setTypeDocumentId(typeDocumentId);
+        if (sourceInstructionId != null && !sourceInstructionId.isBlank())
+            doc.setSourceInstructionId(sourceInstructionId);
+
+        BureauDocument saved = bureauRepo.save(doc);
+
+        if (sourceInstructionId != null && !sourceInstructionId.isBlank()) {
+            ajouterMessageSysteme(sourceInstructionId,
+                "📄 Document \"" + saved.getTitre() + "\" créé depuis le modèle \""
+                + td.getLibelle() + "\" par " + currentUser.getNomComplet());
+        }
+
+        return ResponseEntity.ok(Map.of(
+            "id",               saved.getId(),
+            "titre",            saved.getTitre(),
+            "originalFileName", saved.getOriginalFileName(),
+            "statut",           saved.getStatut().name(),
+            "typeDocumentId",   typeDocumentId
+        ));
+    }
+
+    // ── GET /api/bureau/documents/{id}/wopi-session ── amorce une session Collabora
+    @GetMapping("/documents/{id}/wopi-session")
+    public ResponseEntity<Map<String, Object>> openWopiSession(
+            @PathVariable String id,
+            HttpServletRequest request) {
+
+        AppUser current = authorizationService.currentUser();
+        BureauDocument doc = bureauRepo.findById(id)
+            .orElseThrow(() -> new com.dgcockpit.exception.AccesRefuseException("Document introuvable"));
+
+        boolean canWrite = authorizationService.canEditBureauDocument(current, doc);
+        com.dgcockpit.entity.WopiToken token = wopiTokenService.issue(current.getId(), doc.getId(), canWrite);
+
+        String wopiSrc = wopiHost + "/api/wopi/files/" + doc.getId();
+        String collaboraUrl = collaboraPublicUrl
+            + "/browser/dist/cool.html"
+            + "?WOPISrc=" + java.net.URLEncoder.encode(wopiSrc, java.nio.charset.StandardCharsets.UTF_8)
+            + "&closebutton=true&revisionhistory=false";
+
+        return ResponseEntity.ok(Map.of(
+            "collaboraUrl",    collaboraUrl,
+            "accessToken",     token.getToken(),
+            "accessTokenTtl",  token.getExpiresAt().toEpochMilli(),
+            "canWrite",        canWrite
+        ));
+    }
+
+    /** Injecte un message système dans le fil d'une instruction (sans la clôturer). */
+    private void ajouterMessageSysteme(String instructionId, String texte) {
+        instructionRepo.findById(instructionId).ifPresent(instr -> {
+            if (instr.getStatut() != Instruction.StatutInstruction.CLOTURE) {
+                InstructionMessage msg = new InstructionMessage();
+                msg.setInstruction(instr);
+                msg.setSender("Système");
+                msg.setSelf(false);
+                msg.setSystemMessage(true);
+                msg.setText(texte);
+                instructionMessageRepo.save(msg);
+                sseService.broadcast("INSTRUCTION_UPDATED", Map.of(
+                    "id", instructionId, "statut", instr.getStatut().name()));
+            }
+        });
+    }
+
+    /**
      * Résout la liste ordonnée de signataires pour le circuit.
      * Si {@code circuitJson} est fourni et non vide, il est utilisé tel quel.
      * Sinon, le circuit par défaut est [{manager de currentUser}].
@@ -557,7 +831,10 @@ public class BureauController {
                 if (!steps.isEmpty()) return steps;
             } catch (Exception ignored) {}
         }
-        AppUser manager = currentUser.getManager();
+        AppUser managerProxy = currentUser.getManager();
+        if (managerProxy == null) return List.of();
+        // Recharger depuis le repo pour éviter LazyInitializationException sur le proxy Hibernate
+        AppUser manager = userRepo.findById(managerProxy.getId()).orElse(null);
         if (manager == null) return List.of();
         return List.of(Map.of("userId", manager.getId(), "nom", manager.getNomComplet()));
     }

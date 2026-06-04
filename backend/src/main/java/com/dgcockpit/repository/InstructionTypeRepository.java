@@ -8,4 +8,5 @@ public interface InstructionTypeRepository extends JpaRepository<InstructionType
     List<InstructionType> findAllByOrderByCategorieAscLabelAsc();
     List<InstructionType> findByActifTrueOrderByCategorieAscLabelAsc();
     boolean existsByCode(String code);
+    java.util.Optional<InstructionType> findFirstByTypeDocumentAttenduIdAndActifTrue(String typeDocId);
 }

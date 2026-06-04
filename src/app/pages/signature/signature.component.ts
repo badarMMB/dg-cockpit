@@ -1,14 +1,15 @@
-import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
+import { CollaboraEditorComponent } from '../../shared/collabora-editor/collabora-editor.component';
 
 @Component({
   selector: 'app-signature',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, CollaboraEditorComponent],
   templateUrl: './signature.component.html',
   styleUrl: './signature.component.css'
 })
@@ -58,6 +59,76 @@ export class SignatureComponent implements OnInit, OnDestroy {
   pendingSignature  = computed(() => this.pending().filter(d => d.parapheurStatut === 'EN_ATTENTE_SIGNATURE'));
   pendingCorrection = computed(() => this.pending().filter(d => d.parapheurStatut === 'EN_CORRECTION'));
   pendingCount      = computed(() => this.pending().length);
+
+  // Éditeur Collabora — document ouvert pour révision/signature
+  @ViewChild('collaboraEditor') collaboraEditor?: CollaboraEditorComponent;
+  editingParapheurDoc = signal<any | null>(null);
+  signing             = signal(false);
+  signError           = signal('');
+
+  ouvrirEditionParapheur(doc: any) {
+    this.editingParapheurDoc.set(doc);
+    this.signError.set('');
+  }
+
+  fermerEditionParapheur() {
+    this.editingParapheurDoc.set(null);
+    this.signing.set(false);
+    this.load();
+  }
+
+  /**
+   * Flux de signature complet pour un document .docx :
+   * 1. Récupérer l'image de signature de l'utilisateur courant
+   * 2. Injecter via postMessage Collabora → autosave WOPI PutFile
+   * 3. Écouter documentSaved → appeler api.signerDocument()
+   * 4. Fermer l'éditeur et rafraîchir
+   */
+  signerDocumentCollabora(doc: any) {
+    if (this.signing()) return;
+    this.signing.set(true);
+    this.signError.set('');
+
+    // Récupérer l'asset signature de l'utilisateur courant
+    this.api.getMySignatureAsset().subscribe({
+      next: (asset: any) => {
+        if (!asset?.base64) {
+          // Pas d'image de signature configurée — signer quand même (PDFBox gère les zones)
+          this.appellerSigner(doc);
+          return;
+        }
+        const editor = this.collaboraEditor;
+        if (!editor) { this.appellerSigner(doc); return; }
+
+        // Injecter la signature graphique dans le .docx via postMessage
+        editor.injectSignature('SignZone_DG', asset.base64);
+
+        // Attendre que Collabora confirme la sauvegarde (PutFile WOPI déclenché)
+        const sub = editor.documentSaved.subscribe(() => {
+          sub.unsubscribe();
+          this.appellerSigner(doc);
+        });
+
+        // Timeout de sécurité : signer quand même après 5s si pas d'ack
+        setTimeout(() => { sub.unsubscribe(); this.appellerSigner(doc); }, 5000);
+      },
+      error: () => this.appellerSigner(doc)  // pas d'asset → signer quand même
+    });
+  }
+
+  private appellerSigner(doc: any) {
+    this.api.signerDocument(doc.id).subscribe({
+      next: () => {
+        this.signing.set(false);
+        this.editingParapheurDoc.set(null);
+        this.load();
+      },
+      error: (err: any) => {
+        this.signing.set(false);
+        this.signError.set('Erreur lors de la signature. Veuillez réessayer.');
+      }
+    });
+  }
 
   ngOnInit() {
     this.load();

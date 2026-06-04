@@ -8,5 +8,4 @@ import java.util.List;
 @Repository
 public interface InstructionMessageRepository extends JpaRepository<InstructionMessage, String> {
     List<InstructionMessage> findByInstructionIdOrderBySentAtAsc(String instructionId);
-    long countByTypeAndStatut(InstructionMessage.TypeMessage type, InstructionMessage.StatutMessage statut);
 }

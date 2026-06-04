@@ -1,15 +1,19 @@
 package com.dgcockpit.entity;
 
 import jakarta.persistence.*;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 @Entity
 @Table(name = "app_users")
-public class AppUser {
+public class AppUser implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -105,19 +109,20 @@ public class AppUser {
         return poste != null && poste.hasHabilitation(habilitation);
     }
 
-    /**
-     * Indique si cet utilisateur est l'acteur requis pour une étape de workflow.
-     * La correspondance se fait par l'identifiant du poste.
-     */
-    public boolean peutAgirSurEtape(WorkflowStep step) {
-        if (step == null || step.getRequiredPoste() == null) return true; // étape ouverte
-        return poste != null && poste.getId().equals(step.getRequiredPoste().getId());
-    }
-
     // ── Getters / Setters ─────────────────────────────────────────────────────
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
+
+    // ── UserDetails (Spring Security) ────────────────────────────────────────
+    // Les authorities réelles sont injectées par AuthFilter via le SecurityContext.
+    // getAuthorities() retourne une liste vide ici car elles sont calculées dynamiquement.
+    @Override public Collection<? extends GrantedAuthority> getAuthorities() { return Collections.emptyList(); }
+    @Override public String getPassword() { return passwordHash; }
+    @Override public boolean isAccountNonExpired() { return true; }
+    @Override public boolean isAccountNonLocked() { return actif; }
+    @Override public boolean isCredentialsNonExpired() { return true; }
+    @Override public boolean isEnabled() { return actif; }
 
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }

@@ -32,44 +32,21 @@ public class DataInitializer {
     }
 
     @Bean
-    CommandLineRunner seedDomainTypes(
-            InstructionTypeRepository instructionTypeRepo,
-            ProofTypeRepository proofTypeRepo) {
-
+    CommandLineRunner seedDomainTypes(InstructionTypeRepository instructionTypeRepo) {
         return args -> {
             if (instructionTypeRepo.count() > 0) return;
 
-            // ── Types d'Instructions — Douanes Djibouti ────────────────────
-            // Catégorie STRATÉGIQUE
-            instructionTypeRepo.save(itype("AUDIT_RECETTES",         "Audit des recettes douanières",          InstructionType.Categorie.STRATEGIQUE,   InstructionType.Urgence.NORMAL,   InstructionType.TypeLivrable.DOCUMENT));
-            instructionTypeRepo.save(itype("REFORME_ZLECAF",         "Réforme ZLECAF",                         InstructionType.Categorie.STRATEGIQUE,   InstructionType.Urgence.PLANIFIE, InstructionType.TypeLivrable.DOCUMENT));
-            instructionTypeRepo.save(itype("AUDIT_COMPARATIF",       "Audit comparatif des services",          InstructionType.Categorie.STRATEGIQUE,   InstructionType.Urgence.PLANIFIE, InstructionType.TypeLivrable.DOCUMENT));
+            // Instructions LIBRE — tâches de direction sans livrable documentaire
+            instructionTypeRepo.save(itype("MISSION",          "Mission terrain",          InstructionType.Categorie.OPERATIONNELLE, InstructionType.Urgence.NORMAL));
+            instructionTypeRepo.save(itype("RELANCE",          "Relance / suivi",          InstructionType.Categorie.OPERATIONNELLE, InstructionType.Urgence.NORMAL));
+            instructionTypeRepo.save(itype("CONVOCATION",      "Convocation d'agent",      InstructionType.Categorie.MANAGERIALE,   InstructionType.Urgence.NORMAL));
+            instructionTypeRepo.save(itype("INFORMATION",      "Diffusion d'information",  InstructionType.Categorie.STRATEGIQUE,   InstructionType.Urgence.PLANIFIE));
 
-            // Catégorie OPÉRATIONNELLE
-            instructionTypeRepo.save(itype("CIBLAGE_FRAUDE",         "Ciblage de fraude",                      InstructionType.Categorie.OPERATIONNELLE, InstructionType.Urgence.URGENT,   InstructionType.TypeLivrable.PREUVE));
-            instructionTypeRepo.save(itype("BLOCAGE_CONTENEUR",      "Blocage de conteneur",                   InstructionType.Categorie.OPERATIONNELLE, InstructionType.Urgence.URGENT,   InstructionType.TypeLivrable.PREUVE));
-            instructionTypeRepo.save(itype("ENQUETE_TERRAIN",        "Enquête terrain",                        InstructionType.Categorie.OPERATIONNELLE, InstructionType.Urgence.URGENT,   InstructionType.TypeLivrable.PREUVE));
-            instructionTypeRepo.save(itype("SURVEILLANCE_RENFORCEE", "Renforcement surveillance",              InstructionType.Categorie.OPERATIONNELLE, InstructionType.Urgence.NORMAL,   InstructionType.TypeLivrable.PREUVE));
-            instructionTypeRepo.save(itype("SUSPENSION_SYDONIA",     "Suspension accès SYDONIA",               InstructionType.Categorie.OPERATIONNELLE, InstructionType.Urgence.URGENT,   InstructionType.TypeLivrable.CONFIRMATION));
-
-            // Catégorie MANAGÉRIALE
-            instructionTypeRepo.save(itype("CONVOCATION_AGENT",      "Convocation d'agent",                    InstructionType.Categorie.MANAGERIALE,   InstructionType.Urgence.NORMAL,   InstructionType.TypeLivrable.CONFIRMATION));
-            instructionTypeRepo.save(itype("ROULEMENT_EQUIPES",      "Roulement des équipes",                  InstructionType.Categorie.MANAGERIALE,   InstructionType.Urgence.PLANIFIE, InstructionType.TypeLivrable.DOCUMENT));
-            instructionTypeRepo.save(itype("MUTATION_AGENT",         "Mutation d'agent",                       InstructionType.Categorie.MANAGERIALE,   InstructionType.Urgence.NORMAL,   InstructionType.TypeLivrable.DOCUMENT));
-            instructionTypeRepo.save(itype("RAPPORT_ACTIVITE",       "Rapport d'activité",                     InstructionType.Categorie.MANAGERIALE,   InstructionType.Urgence.NORMAL,   InstructionType.TypeLivrable.DOCUMENT));
-
-            // Catégorie JURIDIQUE
-            instructionTypeRepo.save(itype("RECOURS_OPERATEUR",      "Recours opérateur",                      InstructionType.Categorie.JURIDIQUE,     InstructionType.Urgence.NORMAL,   InstructionType.TypeLivrable.DOCUMENT));
-            instructionTypeRepo.save(itype("PROTOCOLE_TRANSAC",      "Protocole transactionnel",               InstructionType.Categorie.JURIDIQUE,     InstructionType.Urgence.NORMAL,   InstructionType.TypeLivrable.DOCUMENT));
-            instructionTypeRepo.save(itype("TRANSMISSION_JUSTICE",   "Transmission dossier justice",           InstructionType.Categorie.JURIDIQUE,     InstructionType.Urgence.URGENT,   InstructionType.TypeLivrable.DOCUMENT));
-
-            // ── Types de Preuves ───────────────────────────────────────────
-            proofTypeRepo.save(ptype("Procès-verbal (PV)",         "PDF",              "Document officiel constatant une infraction ou une saisie"));
-            proofTypeRepo.save(ptype("Photo terrain",              "JPG, PNG",         "Photographie prise sur le lieu de l'opération"));
-            proofTypeRepo.save(ptype("Capture d'écran SYDONIA",    "JPG, PNG, PDF",    "Capture du système SYDONIA attestant d'une action ou d'un état"));
-            proofTypeRepo.save(ptype("Vidéo de saisie",            "MP4, MOV",         "Enregistrement vidéo d'une saisie ou d'une opération terrain"));
-            proofTypeRepo.save(ptype("Document scanné",            "PDF",              "Tout document physique numérisé comme preuve"));
-            proofTypeRepo.save(ptype("Rapport terrain",            "PDF",              "Rapport rédigé suite à une mission ou opération de terrain"));
+            // Instructions DOCUMENTAIRE — binômes TypeDocument ↔ InstructionType
+            // (typeDocumentAttenduId à configurer via Paramètres → Types d'Instruction)
+            instructionTypeRepo.save(itypeDoc("REDACTION_NOTE",      "Rédaction Note de Service",   InstructionType.Categorie.MANAGERIALE,   InstructionType.Urgence.NORMAL));
+            instructionTypeRepo.save(itypeDoc("REDACTION_COURRIER",  "Rédaction Courrier Officiel", InstructionType.Categorie.OPERATIONNELLE, InstructionType.Urgence.NORMAL));
+            instructionTypeRepo.save(itypeDoc("PREPARATION_DECISION","Préparation Décision",         InstructionType.Categorie.STRATEGIQUE,   InstructionType.Urgence.NORMAL));
         };
     }
 
@@ -97,7 +74,7 @@ public class DataInitializer {
             i1.setTitle("Rapport Trimestriel Q2");
             i1.setType("Demande de rapport");
             i1.setAgentDisplay("Sophie Martin");
-            i1.setStatut(Instruction.StatutInstruction.EN_ATTENTE);
+            i1.setStatut(Instruction.StatutInstruction.EN_COURS);
             instructionRepo.save(i1);
 
             InstructionMessage m1 = new InstructionMessage();
@@ -282,16 +259,20 @@ public class DataInitializer {
     }
 
     private InstructionType itype(String code, String label, InstructionType.Categorie cat,
-                                  InstructionType.Urgence urgence, InstructionType.TypeLivrable livrable) {
+                                  InstructionType.Urgence urgence) {
         InstructionType t = new InstructionType();
         t.setCode(code); t.setLabel(label); t.setCategorie(cat);
-        t.setUrgenceDefaut(urgence); t.setLivrableAttendu(livrable);
+        t.setUrgenceDefaut(urgence);
+        t.setTypeInstruction(InstructionType.TypeInstruction.LIBRE);
         return t;
     }
 
-    private ProofType ptype(String label, String formats, String description) {
-        ProofType p = new ProofType();
-        p.setLabel(label); p.setAcceptedFormats(formats); p.setDescription(description);
-        return p;
+    private InstructionType itypeDoc(String code, String label, InstructionType.Categorie cat,
+                                      InstructionType.Urgence urgence) {
+        InstructionType t = new InstructionType();
+        t.setCode(code); t.setLabel(label); t.setCategorie(cat);
+        t.setUrgenceDefaut(urgence);
+        t.setTypeInstruction(InstructionType.TypeInstruction.DOCUMENTAIRE);
+        return t;
     }
 }

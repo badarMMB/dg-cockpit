@@ -4,14 +4,35 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { AudioRecorderComponent } from '../../shared/audio-recorder/audio-recorder.component';
+import { CollaboraEditorComponent } from '../../shared/collabora-editor/collabora-editor.component';
 
 interface Highlight { x: number; y: number; w: number; h: number; }
 
 @Component({
   selector: 'app-pdf-viewer',
   standalone: true,
-  imports: [CommonModule, FormsModule, AudioRecorderComponent],
+  imports: [CommonModule, FormsModule, AudioRecorderComponent, CollaboraEditorComponent],
   template: `
+    <!-- Éditeur Collabora plein écran (édition DG au parapheur) -->
+    @if (editing()) {
+      <div class="fixed inset-0 z-[60] bg-white flex flex-col">
+        <div class="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-gray-50">
+          <span class="font-semibold text-gray-800 text-sm truncate">{{ doc()?.title || 'Document' }}</span>
+          <button (click)="fermerEdition()"
+                  class="px-4 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700">
+            ✓ Terminer l'édition
+          </button>
+        </div>
+        <div class="flex-1 overflow-hidden">
+          <app-collabora-editor
+            [bureauDocumentId]="bureauDocumentId()!"
+            context="PARAPHEUR"
+            (documentClosed)="fermerEdition()">
+          </app-collabora-editor>
+        </div>
+      </div>
+    }
+
     <div class="flex h-screen bg-gray-100 overflow-hidden">
 
       <!-- Panneau gauche -->
@@ -81,6 +102,13 @@ interface Highlight { x: number; y: number; w: number; h: number; }
                 <span class="bg-yellow-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">{{ totalHighlights() }}</span>
               }
             </button>
+
+            @if (bureauDocumentId()) {
+              <button (click)="ouvrirEdition()"
+                      class="px-4 py-1.5 border border-indigo-300 text-indigo-700 text-sm rounded-lg hover:bg-indigo-50">
+                ✏️ Éditer dans Collabora
+              </button>
+            }
 
             <button (click)="openCorrectionModal()"
                     class="px-4 py-1.5 border border-amber-300 text-amber-700 text-sm rounded-lg hover:bg-amber-50">
@@ -282,6 +310,25 @@ export class PdfViewerComponent implements OnInit, OnDestroy {
 
   isParapheur = signal(false);
 
+  // ── Édition Collabora (DG au parapheur) ──────────────────────────────────
+  bureauDocumentId = signal<string | null>(null);
+  editing          = signal(false);
+
+  ouvrirEdition() {
+    if (this.bureauDocumentId()) this.editing.set(true);
+  }
+
+  fermerEdition() {
+    this.editing.set(false);
+    // Recharger le document : le PDF a pu être re-synchronisé avec les corrections du DG
+    this.blobUrls.forEach(u => URL.revokeObjectURL(u));
+    this.blobUrls = [];
+    this.thumbUrls.set({});
+    this.pageUrl.set(null);
+    this.signatureAnnotations.set({});
+    this.loadDoc();
+  }
+
   // ── Dimensions image courante (capturées au chargement) ──────────────────
   imgW = signal(0);
   imgH = signal(0);
@@ -336,6 +383,10 @@ export class PdfViewerComponent implements OnInit, OnDestroy {
       this.loadThumbs(count);
       if (d.parapheurStatut === 'EN_ATTENTE_SIGNATURE') {
         this.loadSignatureAnnotations(count);
+        // Récupérer le .docx source pour activer l'édition Collabora
+        this.api.getSourceDocx(this.docId).subscribe(res => {
+          this.bureauDocumentId.set(res.isDocx ? res.bureauDocumentId : null);
+        });
       }
     });
   }

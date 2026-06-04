@@ -47,14 +47,60 @@
             <artifactId>pdfbox</artifactId>
             <version>3.0.3</version>
         </dependency>
-        <!-- BCrypt password hashing (sans Spring Security complet) -->
+        <!-- OpenHTMLToPDF (fork maintenu io.github.openhtmltopdf) : compatible PDFBox 3.x.
+             L'ancien artefact com.openhtmltopdf:1.0.10 est compile contre PDFBox 2 et casse
+             sur NoSuchFieldError COURIER_BOLD_OBLIQUE quand on a PDFBox 3 au runtime. -->
+        <dependency>
+            <groupId>io.github.openhtmltopdf</groupId>
+            <artifactId>openhtmltopdf-pdfbox</artifactId>
+            <version>1.1.31</version>
+        </dependency>
+        <!-- Mammoth : conversion .docx -> HTML semantique propre -->
+        <dependency>
+            <groupId>org.zwobble.mammoth</groupId>
+            <artifactId>mammoth</artifactId>
+            <version>1.11.0</version>
+        </dependency>
+        <!-- JSoup : sanitisation finale HTML (whitelist anti-XSS) -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.18.1</version>
+        </dependency>
+        <!-- Apache POI : extraction des alignements de paragraphe que Mammoth ignore -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.3.0</version>
+        </dependency>
+        <!-- Spring Security: authentication chain + BCrypt password hashing -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-config</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-crypto</artifactId>
         </dependency>
+        <!-- DevTools : auto-restart sur changement de classe (mode dev uniquement) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

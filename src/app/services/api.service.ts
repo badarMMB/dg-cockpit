@@ -1,37 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { Observable, of } from 'rxjs';
+import { map, switchMap } from 'rxjs/operators';
 
-// ── Interfaces du moteur de workflow ─────────────────────────────────────────
-
-export interface WorkflowPoste {
-  id: string;
-  code: string;
-  libelle: string;
-}
-
-export interface WorkflowStep {
-  id: string;
-  stepOrder: number;
-  stepLabel: string;
-  requiresSignature: boolean;
-  requiresAttachment: boolean;
-  actorInstructions: string | null;
-  requiredPoste: WorkflowPoste | null;
-}
-
-export interface WorkflowActeur {
-  id: string;
-  nomComplet: string;
-}
-
-export interface WorkflowEtat {
-  id: string;
-  globalStatus: 'BROUILLON' | 'EN_CIRCUIT' | 'CLOTURE_VALIDE' | 'CLOTURE_REJETE';
-  currentStep: WorkflowStep | null;
-  currentActor: WorkflowActeur | null;
-}
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -61,11 +32,11 @@ export class ApiService {
   sendMessage(instructionId: string, msg: any): Observable<any> {
     return this.http.post(`${this.base}/instructions/${instructionId}/messages`, msg);
   }
-  validateMessage(msgId: string): Observable<any> {
-    return this.http.patch(`${this.base}/instructions/messages/${msgId}/validate`, {});
+  cloturerInstruction(instructionId: string): Observable<any> {
+    return this.http.post(`${this.base}/instructions/${instructionId}/cloturer`, {});
   }
-  rejectMessage(msgId: string): Observable<any> {
-    return this.http.patch(`${this.base}/instructions/messages/${msgId}/reject`, {});
+  getInstructionsPendingForTypeDoc(typeDocId: string): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/instructions/pending-for-document-type/${typeDocId}`);
   }
 
   // Courrier Arrivé
@@ -104,30 +75,11 @@ export class ApiService {
     return this.http.patch(`${this.base}/rendez-vous/${id}`, body);
   }
 
-  // Workflow legacy (rétro-compatibilité ancien modèle)
-  soumettre(instructionId: string, body: any): Observable<any> {
-    return this.http.post(`${this.base}/instructions/${instructionId}/soumettre`, body);
-  }
-
-  // Nouveau moteur de circuit (/api/workflow)
-  lancerCircuit(instructionId: string): Observable<WorkflowEtat> {
-    return this.http.post<WorkflowEtat>(`${this.base}/workflow/${instructionId}/lancer`, {});
-  }
-  validerEtape(instructionId: string): Observable<WorkflowEtat> {
-    return this.http.post<WorkflowEtat>(`${this.base}/workflow/${instructionId}/valider`, {});
-  }
-  rejeterEtape(instructionId: string, motif: string): Observable<WorkflowEtat> {
-    return this.http.post<WorkflowEtat>(`${this.base}/workflow/${instructionId}/rejeter`, { motif });
-  }
-  getEtatWorkflow(instructionId: string): Observable<WorkflowEtat> {
-    return this.http.get<WorkflowEtat>(`${this.base}/workflow/${instructionId}/etat`);
-  }
-
   // Fichiers (MinIO)
-  uploadFile(file: File): Observable<{ name: string }> {
+  uploadFile(file: File): Observable<{ name: string; url?: string }> {
     const form = new FormData();
     form.append('file', file);
-    return this.http.post<{ name: string }>(`${this.base}/files/upload`, form);
+    return this.http.post<{ name: string; url?: string }>(`${this.base}/files/upload`, form);
   }
   getFileUrl(name: string): string {
     return `${this.base}/files/${encodeURIComponent(name)}`;
@@ -188,6 +140,31 @@ export class ApiService {
     return this.http.delete<void>(`${this.base}/users/me/signature-assets/${id}`);
   }
 
+  /** Retourne le premier asset signature actif avec son image en base64. */
+  getMySignatureAsset(): Observable<{ id: string; base64: string } | null> {
+    return this.getSignatureAssets().pipe(
+      map((assets: any[]) => {
+        const sig = assets.find(a => a.assetType === 'SIGNATURE' && a.active !== false);
+        return sig ? { id: sig.id, base64: null as any } : null;
+      }),
+      switchMap((sig: any) => {
+        if (!sig) return of(null);
+        return this.http.get(`${this.base}/users/me/signature-assets/${sig.id}/image`,
+          { responseType: 'blob' }).pipe(
+          switchMap(blob => new Observable<{ id: string; base64: string }>(obs => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const b64 = (reader.result as string).split(',')[1];
+              obs.next({ id: sig.id, base64: b64 });
+              obs.complete();
+            };
+            reader.readAsDataURL(blob);
+          }))
+        );
+      })
+    );
+  }
+
   // Annotations
   getAnnotations(pageId: string): Observable<any[]> {
     return this.http.get<any[]>(`${this.base}/pages/${encodeURIComponent(pageId)}/annotations`);
@@ -244,6 +221,15 @@ export class ApiService {
     return this.http.delete<void>(`${this.base}/pdf-documents/${docId}`);
   }
 
+  // Server-side preview / generation
+  previewHtml(html: string): Observable<{ html: string }> {
+    return this.http.post<{ html: string }>(`${this.base}/pdf/preview`, { html });
+  }
+
+  generatePdfBlob(html: string, css?: string): Observable<Blob> {
+    return this.http.post(`${this.base}/pdf/generate`, { html, css: css || '' }, { responseType: 'blob' });
+  }
+
   // Paramètres — Types d'Instructions
   getInstructionTypes(activeOnly = false): Observable<any[]> {
     return this.http.get<any[]>(`${this.base}/parametres/instruction-types`, { params: { activeOnly } });
@@ -261,22 +247,6 @@ export class ApiService {
     return this.http.delete<void>(`${this.base}/parametres/instruction-types/${id}`);
   }
 
-  // Paramètres — Types de Preuves
-  getProofTypes(activeOnly = false): Observable<any[]> {
-    return this.http.get<any[]>(`${this.base}/parametres/proof-types`, { params: { activeOnly } });
-  }
-  createProofType(body: any): Observable<any> {
-    return this.http.post(`${this.base}/parametres/proof-types`, body);
-  }
-  updateProofType(id: string, body: any): Observable<any> {
-    return this.http.put(`${this.base}/parametres/proof-types/${id}`, body);
-  }
-  toggleProofType(id: string): Observable<void> {
-    return this.http.patch<void>(`${this.base}/parametres/proof-types/${id}/toggle`, {});
-  }
-  deleteProofType(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.base}/parametres/proof-types/${id}`);
-  }
 
   // Paramètres — Postes (nouveau modèle)
   getPostes(activeOnly = false): Observable<any[]> {
@@ -293,20 +263,6 @@ export class ApiService {
   }
   deletePoste(id: string): Observable<void> {
     return this.http.delete<void>(`${this.base}/parametres/postes/${id}`);
-  }
-
-  // Paramètres — Étapes de circuit (WorkflowStep)
-  getWorkflowSteps(typeId: string): Observable<any[]> {
-    return this.http.get<any[]>(`${this.base}/parametres/instruction-types/${typeId}/steps`);
-  }
-  createWorkflowStep(typeId: string, body: any): Observable<any> {
-    return this.http.post(`${this.base}/parametres/instruction-types/${typeId}/steps`, body);
-  }
-  updateWorkflowStep(typeId: string, stepId: string, body: any): Observable<any> {
-    return this.http.put(`${this.base}/parametres/instruction-types/${typeId}/steps/${stepId}`, body);
-  }
-  deleteWorkflowStep(typeId: string, stepId: string): Observable<void> {
-    return this.http.delete<void>(`${this.base}/parametres/instruction-types/${typeId}/steps/${stepId}`);
   }
 
   // Users
@@ -333,6 +289,9 @@ export class ApiService {
   getTypeDocuments(): Observable<any[]> {
     return this.http.get<any[]>(`${this.base}/type-documents`);
   }
+  getTypeDocument(id: string): Observable<any> {
+    return this.http.get(`${this.base}/type-documents/${id}`);
+  }
   createTypeDocument(body: any): Observable<any> {
     return this.http.post(`${this.base}/type-documents`, body);
   }
@@ -345,18 +304,35 @@ export class ApiService {
   deleteTypeDocument(id: string): Observable<void> {
     return this.http.delete<void>(`${this.base}/type-documents/${id}`);
   }
+  convertTemplate(file: File): Observable<{ html: string; docxPath: string }> {
+    const form = new FormData();
+    form.append('file', file);
+    return this.http.post<{ html: string; docxPath: string }>(
+      `${this.base}/type-documents/convert-template`, form);
+  }
+  uploadTemplate(file: File): Observable<{ docxPath: string; pdfPath: string; fileName: string }> {
+    const form = new FormData();
+    form.append('file', file);
+    return this.http.post<{ docxPath: string; pdfPath: string; fileName: string }>(
+      `${this.base}/type-documents/upload-template`, form);
+  }
+  getTemplatePreviewBlob(id: string): Observable<Blob> {
+    return this.http.get(`${this.base}/type-documents/${id}/template-preview`,
+      { responseType: 'blob' });
+  }
 
   // Bureau Secrétaire
   getBureauDocuments(): Observable<any[]> {
     return this.http.get<any[]>(`${this.base}/bureau/documents`);
   }
-  uploadBureauDocument(file: File, type: string, titre?: string, destinataire?: string, typeDocumentId?: string): Observable<any> {
+  uploadBureauDocument(file: File, type: string, titre?: string, destinataire?: string, typeDocumentId?: string, sourceInstructionId?: string): Observable<any> {
     const form = new FormData();
     form.append('file', file);
     form.append('type', type);
     if (titre) form.append('titre', titre);
     if (destinataire) form.append('destinataire', destinataire);
     if (typeDocumentId) form.append('typeDocumentId', typeDocumentId);
+    if (sourceInstructionId) form.append('sourceInstructionId', sourceInstructionId);
     return this.http.post(`${this.base}/bureau/documents`, form);
   }
   getBureauPageUrl(docId: string, pageIndex: number): string {
@@ -381,6 +357,24 @@ export class ApiService {
   }
   deleteBureauDocument(docId: string): Observable<void> {
     return this.http.delete<void>(`${this.base}/bureau/documents/${docId}`);
+  }
+
+  /** Crée un BureauDocument .docx en clonant le template du TypeDocument. */
+  createFromTemplate(typeDocumentId: string, titre?: string, sourceInstructionId?: string): Observable<any> {
+    const body: Record<string, string> = { typeDocumentId };
+    if (titre) body['titre'] = titre;
+    if (sourceInstructionId) body['sourceInstructionId'] = sourceInstructionId;
+    return this.http.post(`${this.base}/bureau/documents/from-template`, body);
+  }
+
+  // ── WOPI / Collabora ─────────────────────────────────────────────────────
+  /** Ouvre une session WOPI pour éditer un document au Bureau. */
+  openBureauWopiSession(docId: string): Observable<any> {
+    return this.http.get(`${this.base}/bureau/documents/${docId}/wopi-session`);
+  }
+  /** Ouvre une session WOPI pour réviser/signer un document au Parapheur. */
+  openParapheurWopiSession(docId: string): Observable<any> {
+    return this.http.get(`${this.base}/parapheur/${docId}/wopi-session`);
   }
 
   // Parapheur
@@ -418,6 +412,11 @@ export class ApiService {
   }
   getCircuitSignatures(docId: string): Observable<any[]> {
     return this.http.get<any[]>(`${this.base}/parapheur/${docId}/circuit`);
+  }
+  /** Retrouve le .docx source d'un PdfDocument (pour ouvrir Collabora côté parapheur). */
+  getSourceDocx(pdfDocId: string): Observable<{ bureauDocumentId: string | null; isDocx: boolean }> {
+    return this.http.get<{ bureauDocumentId: string | null; isDocx: boolean }>(
+      `${this.base}/parapheur/${pdfDocId}/source-docx`);
   }
   envoyerCorrection(docId: string, comment: string, audio?: File, highlights?: string): Observable<any> {
     const form = new FormData();

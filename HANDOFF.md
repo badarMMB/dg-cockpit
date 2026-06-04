@@ -2,9 +2,14 @@
 
 Document de transmission pour reprise du projet par une autre IA / un nouveau développeur.
 
-**Date du handoff :** 2026-05-26 (mis à jour — session 6 : UI workflow, données d'exemple, bug fix persistance)
-**Branche courante :** `appmod/java-upgrade-20260520231724`
+**Date du handoff :** 2026-06-04 (session 11 — flux hybride Collabora/PDFBox + édition DG au parapheur)
+**Branche courante :** `feat/type-documents-circuit-configure`
 **Branche principale :** `master`
+**Dernier commit :** `18737c3` — *feat: TypeDocument configurables + circuit multi-signataires + parapheur universel*
+
+> ⚠️ **Working tree non commité massif** : les changements des sessions 7, 8, 9 et 10 sont dans le working tree. Committer avant merge vers `master`.
+
+> ✅ **Collabora Online opérationnel** : conteneur `dg-cockpit-collabora` (port 9980) en cours d'exécution sur le réseau `dg-cockpit_default`. Backend Spring Boot sur port 8080 (Maven local). MinIO + PostgreSQL en Docker.
 
 ---
 
@@ -20,81 +25,87 @@ Document de transmission pour reprise du projet par une autre IA / un nouveau d�
 | Backend | Spring Boot (Java 21) + Spring Data JPA + REST + SSE |
 | Base de données | PostgreSQL 15 |
 | Stockage objet | MinIO (compatible S3) |
-| Auth | JWT (filtre Spring + intercepteur Angular) |
+| Auth | JWT (filtre Spring + intercepteur Angular) + SecurityConfig |
+| Édition documentaire | **Collabora Online CODE 23.05** via protocole WOPI |
 | Build/Deploy | Docker multi-stage (Node 20 → Maven JDK21 → JRE21 Alpine) |
 
 ### Modèle de déploiement
 
-Image **standalone** unique : le JAR Spring Boot sert l'API REST **ET** les fichiers Angular compilés depuis `backend/src/main/resources/static/`. Pas de Nginx, pas de service frontend séparé. Le stack docker-compose démarre 3 conteneurs : `postgres`, `minio`, `app`.
+Image **standalone** unique : le JAR Spring Boot sert l'API REST **ET** les fichiers Angular compilés depuis `backend/src/main/resources/static/`. Le stack docker-compose démarre 4 conteneurs : `postgres`, `minio`, `app`, **`collabora`**.
 
 ---
 
-## 2. Rôles et workflow métier
+## 2. Rôles et modèle métier
 
-### ⚠️ Migration en cours — deux modèles coexistent
+### Postes (nouveau modèle — actif)
 
-Le projet est en cours de refonte de son modèle de rôles. **Étapes 1, 2 et 3 terminées.**
+Les rôles codés en dur ont été remplacés par l'entité **`Poste`** avec des **`Habilitation`** dynamiques.
 
-#### Ancien modèle (déprécié, encore fonctionnel)
+| Code | Libelle | Habilitations |
+|------|---------|---------------|
+| `DG` | Directeur Général | Toutes (8/8) |
+| `CS` | Chef de Service | CREATE, VALIDATE, REJECT, VIEW_ALL |
+| `INS` | Inspecteur des Douanes | CREATE |
+| `CTR` | Contrôleur Douanier | CREATE |
+| `SEC` | Secrétaire de Direction | CREATE, CLOSE, VIEW_ALL |
 
-| Rôle (enum `AppUser.Role`) | Capacités |
-|------|-----------|
-| `DG` | Crée des instructions, les assigne, valide ou refuse les soumissions finales |
-| `SECRETAIRE` | Reçoit les courriers, gère les rendez-vous, peut envoyer des messages de clôture |
-| `SUBORDONNE` | Reçoit les instructions assignées, soumet la Réponse Définitive |
+**Affectation actuelle :** `dg` → DG | `secretaire` → SEC | `agent.douane` → CS | `ibrahim_said` → CTR | `ahmed.hassan` / `fatima.omar` → INS
 
-#### Nouveau modèle (Étapes 1 + 2 + 3 implémentées)
+### Module Instructions — modèle simplifié (session 7)
 
-Les rôles codés en dur sont remplacés par l'entité **`Poste`** (fonction dans l'organigramme) avec un ensemble d'**`Habilitation`** dynamiques. Les étapes de circuit sont définies en base via **`WorkflowStep`**. Le moteur de workflow est opérationnel côté backend ET frontend.
+> **⚠️ Le moteur de workflow (WorkflowService/WorkflowController/WorkflowStep) a été entièrement supprimé.** Le module Instructions est désormais centré sur deux types d'instructions simples.
 
-Voir §3 Architecture et §7 Session courante pour le détail des entités.
+#### Deux natures d'instruction (configurable par type)
 
-### Workflow d'une instruction — ancien modèle (toujours actif en prod)
+| Nature | Comportement |
+|--------|-------------|
+| **LIBRE** | Chat entre initiateur et assignés. Pas de document attendu. Clôture manuelle par l'initiateur uniquement. |
+| **DOCUMENTAIRE** | Un document doit être produit. Les événements du circuit documentaire (upload, soumission, signature, renvoi, finalisation) sont reportés comme messages système dans le fil. Clôture automatique à la signature finale. |
 
-```
-DG crée  →  OUVERT  →  SUBORDONNE travaille  →  EN_COURS
-                                                    ↓
-                                                 [Rép. Définitive]
-                                                    ↓
-                                            SOUMIS_VALIDATION
-                                                    ↓
-                                       ┌────────────┴────────────┐
-                                       ↓                         ↓
-                                  DG valide                 DG refuse
-                                       ↓                         ↓
-                                   CLOTURE                    REFUSE
-                                  (terminé)         (subordonné peut resoumettre)
-```
-
-### Workflow d'une instruction — nouveau modèle (opérationnel bout en bout)
+#### Statuts simplifiés (3 états)
 
 ```
-Initiateur crée  →  BROUILLON  →  POST /api/workflow/{id}/lancer
-                                        ↓
-                                   EN_CIRCUIT
-                                        ↓
-                              [Étape N : acteur requis = Poste X]
-                                        ↓ (si requiresSignature → DocumentFinalizationService)
-                                    ┌───┴───┐
-                                    ↓       ↓
-                     POST /valider  ↓       ↓  POST /rejeter
-                                  Valide  Refuse
-                                    ↓       ↓
-                              Étape N+1  CLOTURE_REJETE
-                                    ↓
-                         (plus d'étapes suivantes)
-                                    ↓
-                            CLOTURE_VALIDE
+OUVERT   → Instruction créée, aucune réponse encore
+EN_COURS → Au moins un message reçu (ou document créé/soumis)
+CLOTURE  → Clôture manuelle (LIBRE, initiateur only) OU auto (DOCUMENTAIRE, signature finale)
 ```
 
-### Règles critiques (à ne PAS contourner)
+#### Flux LIBRE
 
-1. **Les computed signals Angular remplacent les méthodes `isDG()`** — `isDG()`, `isSubordonne()`, `isSecretaire()` ont été supprimés. Utiliser `peutAgirSurEtapeActuelle()`, `peutValiderMessages()`, `peutEnvoyerRepDefinitive()`, `peutEnvoyerCloture()`, `peutCreerInstruction()`.
-2. **Une instruction `CLOTURE` ne peut plus recevoir de message `FINAL`** — protection côté backend (`InstructionController.sendMessage`) qui dégrade silencieusement en message normal.
-3. **Le bouton "Rép. Définitive" du Subordonné est désactivé** quand le thread est `SOUMIS_VALIDATION` ou `CLOTURE`. Il est réactif si le statut est `REFUSE`.
-4. **Validate/reject de message** — le backend accepte `CAN_VALIDATE` (nouveau modèle) **OU** le rôle legacy `DG` (ancien modèle). Les deux coexistent pendant la transition.
-5. **Les zones de signature doivent être brûlées dans l'image PNG côté serveur** — pas d'overlay CSS. Voir `feedback_signature_zones.md`.
-6. **`DocumentFinalizationService` et le SSE `/api/events` ne doivent pas être modifiés** — conservés intacts dans la refonte workflow.
+```
+Initiateur crée instruction LIBRE (titre + assignés + urgence)
+  └──▶ Fil de chat ouvert
+         ├── Échange de messages texte/audio
+         └── Initiateur clôture manuellement → statut CLOTURE
+```
+
+#### Flux DOCUMENTAIRE — entrée A (instruction d'abord)
+
+```
+Initiateur crée instruction DOCUMENTAIRE (type lié à TypeDocument X)
+  └──▶ Fil ouvert avec bannière "📎 Document attendu : [TypeDocument.libelle]"
+         └── Assigné clique "Produire le document"
+               └──▶ Bureau pré-rempli avec typeDocumentId + sourceInstructionId
+                      └── Circuit du document → messages système dans le fil
+                             └── Signature finale → CLOTURE auto
+```
+
+#### Flux DOCUMENTAIRE — entrée B (upload d'abord)
+
+```
+Utilisateur uploade un document dont le TypeDocument a linkedInstructionTypeId
+  └──▶ Section "Instruction" apparaît dans la modale d'upload :
+         ├── "Nouvelle instruction" → instruction créée + BureauDocument.sourceInstructionId lié
+         └── "Rattacher à une instruction existante" → picker instructions DOCUMENTAIRE ouvertes
+```
+
+#### Intégration Parapheur → Instructions
+
+```
+Parapheur [renvoi correction] → si bureau.sourceInstructionId → message système "↩️" dans instruction existante
+                               → si pas de lien → crée instruction LIBRE "Correction" (rétro-compat)
+Parapheur [signature finale]  → si bureau.sourceInstructionId → message "✅" + instruction CLOTURE auto
+```
 
 ---
 
@@ -106,82 +117,75 @@ Initiateur crée  →  BROUILLON  →  POST /api/workflow/{id}/lancer
 src/app/
 ├── components/          # Composants partagés ponctuels
 ├── guards/              # AuthGuard, RoleGuard
-├── interceptors/        # JWT interceptor (ajoute Authorization: Bearer)
+├── interceptors/        # JWT interceptor
 ├── layout/              # Layout principal (sidebar + topbar)
 ├── pages/
-│   ├── appointments/    # Rendez-vous
-│   ├── bureau/          # Bureau de la Secrétaire (documents entrants)
-│   ├── chat/            # ★ Flux des instructions — entièrement connecté au nouveau workflow
-│   │   ├── chat.component.ts   # Signals workflow + computed droits (Étape 3 ✅)
-│   │   └── chat.component.html # Bandeau workflow + modales rejet (Étape 3 ✅)
-│   ├── classeurs/       # Classement documentaire
-│   ├── dashboard/       # Tableau de bord
-│   ├── editor/          # Éditeur de courrier départ
-│   ├── inbox/           # Courrier arrivé
-│   ├── login/           # Authentification
-│   ├── notes/           # Notes de service
-│   ├── outbox/          # Courrier départ
-│   ├── parametres/      # ★ Configuration — onglet Postes + circuit par type (Étape 3 ✅)
-│   │   └── parametres.component.ts   # Inline template + toute la logique
-│   ├── pdf-documents/   # Documents PDF
-│   ├── settings/        # Préférences utilisateur
+│   ├── bureau/          # Bureau (upload documents + soumission parapheur)
+│   │   ├── bureau.component.ts    # ★ Accepte sourceInstructionId query param
+│   │   └── bureau.component.html  # ★ Section Instruction dans modal upload
+│   ├── chat/            # ★ Flux des instructions (modèle LIBRE/DOCUMENTAIRE)
+│   │   ├── chat.component.ts      # Signals simplifiés, produireDocument(), cloturerInstruction()
+│   │   └── chat.component.html    # Bannière DOCUMENTAIRE, bouton "Produire", messages système
+│   ├── parametres/      # ★ Configuration — Postes, Types d'instructions, Types de documents
+│   │   └── parametres.component.ts  # LIBRE/DOCUMENTAIRE + linkedInstructionTypeId
 │   ├── signature/       # Parapheur électronique
-│   └── signature-assets/# Gestion des signatures/cachets
+│   ├── pdf-viewer/      # Visualiseur PDF
+│   └── ... (autres pages inchangées)
 ├── services/
-│   ├── api.service.ts        # ★ Toutes les méthodes workflow + Postes + WorkflowSteps (Étape 3 ✅)
-│   ├── auth.service.ts       # Gestion du JWT + currentUser (AppUser avec posteId)
-│   ├── notification.service.ts
+│   ├── api.service.ts        # ★ cloturerInstruction(), uploadBureauDocument() avec sourceInstructionId
+│   ├── auth.service.ts       # JWT + currentUser (avec posteId)
 │   └── toast.service.ts
 └── shared/
-    ├── audio-recorder/       # Enregistreur vocal (WebM/Opus)
-    ├── audit-timeline/       # Timeline d'audit
-    ├── pdf-file-viewer/      # ★ Visualiseur PDF page-par-page
+    ├── audio-recorder/
+    ├── audit-timeline/
+    ├── pdf-file-viewer/      # Visualiseur PDF page-par-page
     ├── search-bar/
-    ├── toast/                # Toasts globaux
-    └── workflow-timeline/    # ★ Timeline workflow instruction (Étape 3 ✅)
-            ├── workflow-timeline.component.ts   # input() + effect() + computed statuts
-            └── workflow-timeline.component.html # template vertical Tailwind
+    └── toast/
 ```
+
+> **⚠️ `workflow-timeline/` a été supprimé** — composant inutile après la suppression du moteur workflow.
 
 ### Backend Spring Boot
 
 ```
 backend/src/main/java/com/dgcockpit/
-├── config/              # Sécurité, CORS, beans
+├── config/
 ├── controller/
-│   ├── AuthController.java             # toUserDto null-safe sur role + posteId/posteLibelle
-│   ├── GlobalExceptionHandler.java     # ★ AccesRefuseException→403, IllegalState→409
-│   ├── InstructionController.java      # null-safe role, globalStatus + étapes dans DTO, soumettre legacy
-│   ├── WorkflowController.java         # /api/workflow/{id}/lancer|valider|rejeter|etat
-│   ├── ParametresController.java       # CRUD Poste + CRUD WorkflowStep + toUserDto avec poste
+│   ├── AuthController.java
+│   ├── GlobalExceptionHandler.java     # AccesRefuseException→403, IllegalState→409
+│   ├── InstructionController.java      # /cloturer endpoint + toThreadDto expose typeInstruction/createdById
+│   ├── BureauController.java           # ★ sourceInstructionId sur upload + messages système circuit
+│   ├── ParapheurController.java        # ★ messages système renvoi/signature + auto-clôture instruction
+│   ├── ParametresController.java       # CRUD Poste + InstructionType (typeInstruction/typeDocumentAttenduId)
 │   ├── FileController.java
-│   ├── ParapheurController.java
-│   ├── BureauController.java
-│   └── ... (autres inchangés)
-├── exception/
-│   └── AccesRefuseException.java       # ★ RuntimeException → HTTP 403 (pas de Spring Security)
+│   ├── SignatureAssetController.java
+│   └── DashboardController.java
 ├── entity/
-│   ├── AppUser.java           # role @Deprecated → poste (Poste) + manager (auto-relation)
-│   ├── Poste.java             # ★ fonction + habilitations dynamiques
-│   ├── WorkflowStep.java      # ★ étape de circuit liée à InstructionType
-│   ├── Instruction.java       # statut @Deprecated → globalStatus + currentStep + currentActor
-│   ├── InstructionMessage.java
-│   ├── InstructionType.java   # + workflowSteps (OneToMany, circuit template)
-│   ├── Assignee.java
-│   └── ... (autres inchangés)
-├── filter/              # JwtAuthFilter (custom — PAS Spring Security)
+│   ├── AppUser.java           # poste (Poste) + manager (auto-relation)
+│   ├── Poste.java             # fonction + habilitations dynamiques
+│   ├── Instruction.java       # statut OUVERT/EN_COURS/CLOTURE + createdById
+│   ├── InstructionMessage.java # isSystemMessage (boolean — remplace TypeMessage enum)
+│   ├── InstructionType.java   # ★ typeInstruction (LIBRE|DOCUMENTAIRE) + typeDocumentAttenduId
+│   ├── Assignee.java          # simplifié : id, instructionId, userId, nomComplet
+│   ├── BureauDocument.java    # ★ sourceInstructionId (remplace correctionInstructionId)
+│   ├── PdfDocument.java
+│   └── TypeDocument.java      # ★ linkedInstructionTypeId (FK vers InstructionType)
+├── filter/                    # JwtAuthFilter (custom — PAS Spring Security)
 ├── repository/
-│   ├── PosteRepository.java          # ★ CRUD Postes
-│   ├── WorkflowStepRepository.java   # ★ + findFirstBy... pour étape suivante
+│   ├── InstructionRepository.java
+│   ├── InstructionMessageRepository.java
+│   ├── PosteRepository.java
 │   └── ... (autres inchangés)
 ├── service/
-│   ├── WorkflowService.java          # ★ moteur de workflow : lancer/valider/rejeter
-│   ├── ParametresService.java        # ★ CRUD Poste + WorkflowStep + posteId sur User
+│   ├── ParametresService.java        # CRUD Poste + InstructionType (typeInstruction/typeDocumentAttenduId)
+│   ├── DocumentFinalizationService   # ⚠️ NE PAS MODIFIER
 │   └── ... (autres inchangés)
-└── sse/                 # Server-Sent Events — NE PAS MODIFIER
+└── sse/                       # Server-Sent Events — NE PAS MODIFIER
 ```
 
-### Modèle de données actuel
+> **⚠️ Fichiers supprimés :** `WorkflowService.java`, `WorkflowController.java`, `WorkflowStepRepository.java`, `WorkflowStep.java` — entièrement retirés.
+
+### Modèle de données
 
 ```
 Poste
@@ -191,30 +195,35 @@ Poste
          CAN_REJECT, CAN_CLOSE, CAN_MANAGE_USERS, CAN_MANAGE_TYPES, CAN_VIEW_ALL)
 
 AppUser
-  ├── (role @Deprecated — conservé pour compatibilité)
   ├── poste → Poste (ManyToOne, EAGER)
   ├── manager → AppUser (auto-relation ManyToOne, LAZY)
-  ├── hasHabilitation(Poste.Habilitation) → boolean
-  └── peutAgirSurEtape(WorkflowStep) → boolean  [compare poste.id == step.requiredPoste.id]
+  └── hasHabilitation(Poste.Habilitation) → boolean
 
 InstructionType
-  └── workflowSteps → List<WorkflowStep> (OneToMany, orphanRemoval=true, ordre ASC)
+  ├── code, label, categorie, urgenceDefaut, actif
+  ├── typeInstruction : LIBRE | DOCUMENTAIRE  ← nouveau
+  └── typeDocumentAttenduId : String (nullable, FK vers TypeDocument)  ← nouveau
 
-WorkflowStep
-  ├── instructionType → InstructionType
-  ├── stepOrder (int, unique par type)
-  ├── stepLabel
-  ├── requiredPoste → Poste (EAGER, qui doit agir — null = étape ouverte)
-  ├── requiresSignature (délègue appel DocumentFinalizationService)
-  ├── requiresAttachment
-  ├── timeoutJours
-  └── actorInstructions (texte affiché à l'acteur dans le bandeau workflow)
+TypeDocument
+  ├── code, libelle, actif, ...
+  └── linkedInstructionTypeId : String (nullable, FK vers InstructionType)  ← nouveau
 
 Instruction
-  ├── (statut @Deprecated — conservé pour compatibilité, synchronisé par WorkflowService)
-  ├── globalStatus : BROUILLON | EN_CIRCUIT | CLOTURE_VALIDE | CLOTURE_REJETE
-  ├── currentStep → WorkflowStep (étape courante, null si brouillon/clôturé)
-  └── currentActor → AppUser (acteur désigné pour l'étape courante)
+  ├── id, titre, instructionTypeId, urgence, echeance, confidentialite
+  ├── statut : OUVERT | EN_COURS | CLOTURE  ← simplifié
+  └── createdById : String  ← pour règle "initiateur only" sur clôture LIBRE
+
+Assignee
+  └── id, instructionId, userId, nomComplet  ← simplifié (RoleAssignee supprimé)
+
+InstructionMessage
+  ├── id, instructionId, senderId, senderNom, isSelf, texte, sentAt
+  ├── audioUrl (nullable), attachmentName (nullable)
+  └── isSystemMessage : boolean (défaut false)  ← remplace TypeMessage enum
+
+BureauDocument
+  ├── ... (champs existants)
+  └── sourceInstructionId : String (nullable)  ← remplace correctionInstructionId
 ```
 
 ---
@@ -223,47 +232,45 @@ Instruction
 
 ### Authentification
 - `POST /api/auth/login` — retourne `{ token, user }` ; `user.posteId` + `user.posteLibelle` inclus
-- `GET /api/auth/me` — utilisateur courant
+- `GET /api/auth/me`
 
-### Instructions (chat)
-- `GET /api/instructions` — liste filtrée : sans `CAN_VIEW_ALL` → seulement les instructions assignées
-- `POST /api/instructions` — création
-- `GET /api/instructions/{id}/messages` — messages d'un thread
-- `POST /api/instructions/{id}/messages` — envoi (NORMAL ou FINAL)
-- `POST /api/instructions/{id}/soumettre` — legacy : SUBORDONNE soumet pour validation DG
-- `PATCH /api/instructions/messages/{msgId}/validate` — accepte `CAN_VALIDATE` OU role legacy `DG`
-- `PATCH /api/instructions/messages/{msgId}/reject` — idem
+### Instructions
+- `GET /api/instructions` — liste filtrée (sans `CAN_VIEW_ALL` → seulement les instructions assignées)
+  - DTO inclut : `typeInstruction`, `typeDocumentAttendu`, `createdById`
+- `POST /api/instructions` — création (body : `title`, `instructionTypeId`, `urgence`, `echeance`, `confidentialite`, `message`, `assignees`, `hasAudio`)
+- `GET /api/instructions/{id}/messages`
+- `POST /api/instructions/{id}/messages`
+- `POST /api/instructions/{id}/cloturer` — clôture manuelle (vérifie `createdById == currentUser.id`)
 
-  **DTO `GET /api/instructions` retourne :**
-  `id`, `title`, `type`, `statut` (legacy), `globalStatus`, `currentStepLabel`, `currentStepOrder`, `currentStepPosteLibelle`, `urgence`, `confidentialite`, `echeance`, `instructionTypeId`, ...
+### Bureau
+- `GET /api/bureau/documents` — liste des documents du bureau courant
+- `POST /api/bureau/documents` (multipart) — upload ; paramètre optionnel `sourceInstructionId`
+  - Si `sourceInstructionId` fourni → message système "📄 Document créé…" injecté dans l'instruction
+- `POST /api/bureau/documents/{id}/soumettre` — soumet au parapheur
+  - Message système "📤 Soumis…" injecté dans l'instruction liée (via `sourceInstructionId`)
+- `DELETE /api/bureau/documents/{id}`
 
-### Workflow
-- `POST /api/workflow/{id}/lancer` — BROUILLON → EN_CIRCUIT
-- `POST /api/workflow/{id}/valider` — valide l'étape courante (vérifie `peutAgirSurEtape`)
-- `POST /api/workflow/{id}/rejeter` — body `{ "motif": "..." }` → CLOTURE_REJETE
-- `GET /api/workflow/{id}/etat` — `{ id, globalStatus, currentStep, currentActor }`
-
-  Retourne HTTP 403 (`AccesRefuseException`) si le Poste de l'acteur ne correspond pas.
+### Parapheur
+- `GET /api/parapheur` — liste documents en attente de signature
+- `POST /api/parapheur/{id}/signer` — signe le document
+  - Si signature finale ET `bureau.sourceInstructionId` → message "✅ Finalisé" + auto-clôture instruction
+- `POST /api/parapheur/{id}/renvoyer` / `POST /api/parapheur/{id}/correction` — renvoi
+  - Si `bureau.sourceInstructionId` → message "↩️ Renvoyé…" dans instruction existante
+  - Sinon → crée instruction LIBRE "Correction" (rétro-compat)
+- `GET /api/parapheur/{id}/render-page/{page}` — rendu PNG d'une page avec zones signature/cachet
 
 ### Paramètres (admin)
-- `GET /api/parametres/instruction-types` (avec `?activeOnly=true`)
-- `POST|PUT|DELETE /api/parametres/instruction-types/{id}`
-- `GET /api/parametres/instruction-types/{typeId}/steps` — étapes du circuit
-- `POST|PUT|DELETE /api/parametres/instruction-types/{typeId}/steps/{stepId}`
-- `GET /api/parametres/postes` — liste des postes
-- `POST|PUT|DELETE /api/parametres/postes/{id}`
+- `GET|POST|PUT|DELETE /api/parametres/instruction-types/{id}` — CRUD types d'instructions
+  - DTO inclut `typeInstruction`, `typeDocumentAttenduId`
+- `GET|POST|PUT|DELETE /api/parametres/type-documents/{id}` — CRUD types de documents
+  - DTO inclut `linkedInstructionTypeId`
+- `GET|POST|PUT|DELETE /api/parametres/postes/{id}` — CRUD postes
 - `PATCH /api/parametres/postes/{id}/toggle`
-- `GET /api/parametres/users` — DTO inclut `posteId`, `posteLibelle`, `role` nullable
-- `POST|PUT /api/parametres/users/{id}` — accepte `posteId` + `role` nullable dans le body
+- `GET|POST|PUT /api/parametres/users/{id}`
 
-### Fichiers
-- `POST /api/files/upload` → `{ name }`
-- `GET /api/files/{name}` — download
-- `GET /api/files/{name}/info` → `{ pageCount, name }`
-- `GET /api/files/{name}/page/{n}` — rendu PNG d'une page
-
-### SSE
-- `GET /api/events` — flux (`INSTRUCTION_CREATED`, `INSTRUCTION_UPDATED`, `FILE_UPLOADED`)
+### Fichiers / SSE
+- `POST /api/files/upload`, `GET /api/files/{name}`, `GET /api/files/{name}/info`, `GET /api/files/{name}/page/{n}`
+- `GET /api/events` — SSE (`INSTRUCTION_CREATED`, `INSTRUCTION_UPDATED`, `FILE_UPLOADED`, `PARAPHEUR_UPDATED`)
 
 ---
 
@@ -286,13 +293,11 @@ docker-compose -f docker-compose.standalone.yml up -d
 
 ### ⚠️ Démarrage manuel (si postgres + minio sont déjà en route)
 
-**Ne pas** utiliser `docker run` sans réseau ni variables — l'app cherchera postgres sur `localhost:5432` depuis l'intérieur du conteneur et échouera.
-
 ```powershell
-# Récupérer le nom du réseau Docker (ex: dg-cockpit_default)
+# Récupérer le nom du réseau Docker
 docker inspect dg-cockpit-postgres --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}'
 
-# Démarrer avec le bon réseau et les bonnes variables
+# Démarrer avec le bon réseau
 docker stop dg-cockpit-app; docker rm dg-cockpit-app
 docker run -d --name dg-cockpit-app `
   --network dg-cockpit_default `
@@ -312,26 +317,25 @@ Accès :
 - App : http://localhost:8080
 - MinIO console : http://localhost:9001 (login `minioadmin` / `minioadmin`)
 
-### Variables d'environnement (overrides)
+### Variables d'environnement
 
-| Variable | Défaut | Notes |
-|----------|--------|-------|
-| `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/dgcockpit` | En Docker : utiliser le hostname du conteneur postgres |
-| `SPRING_DATASOURCE_USERNAME` | `postgres` | `ged_user` en compose |
-| `SPRING_DATASOURCE_PASSWORD` | `postgres` | `ged_password` en compose |
-| `MINIO_URL` | `http://localhost:9000` | Interne au réseau Docker |
-| `MINIO_PUBLIC_URL` | `http://localhost:9000` | URL externe pour presigned (doit être accessible depuis le navigateur) |
-| `MINIO_BUCKET` | `dgcockpit` | Bucket principal (chat, parapheur) |
+| Variable | Valeur compose | Notes |
+|----------|---------------|-------|
+| `SPRING_DATASOURCE_URL` | `jdbc:postgresql://dg-cockpit-postgres:5432/dgcockpit` | hostname conteneur |
+| `SPRING_DATASOURCE_USERNAME` | `ged_user` | |
+| `SPRING_DATASOURCE_PASSWORD` | `ged_password` | |
+| `MINIO_URL` | `http://dg-cockpit-minio:9000` | interne réseau Docker |
+| `MINIO_PUBLIC_URL` | `http://localhost:9000` | doit être accessible depuis le navigateur |
+| `MINIO_BUCKET` | `dgcockpit` | bucket principal |
 
-Autres buckets utilisés : `ged-bureau-documents` (bureau Secrétaire).
+Autre bucket : `ged-bureau-documents` (documents bureau).
 
 ### Dev frontend hors Docker
 
 ```powershell
 npm install
-npm start       # ng serve --port 4200
+npm start   # ng serve --port 4200 (proxy /api → localhost:8080)
 ```
-⚠️ Configurer le proxy Angular vers `http://localhost:8080` pour `/api`.
 
 ### Dev backend hors Docker
 
@@ -344,9 +348,9 @@ mvn spring-boot:run
 
 ## 6. Polices et thème
 
-**⚠️ NE PAS réintroduire Google Fonts** dans `styles.css`. Dans l'environnement Docker / proxy d'entreprise, l'import HTTP vers `fonts.googleapis.com` retourne du HTML qui fait planter le parser OTS (erreur `invalid sfntVersion: 1008821359` = bytes `<!do`).
+**⚠️ NE PAS réintroduire Google Fonts** dans `styles.css`. Dans l'environnement Docker / proxy d'entreprise, l'import HTTP vers `fonts.googleapis.com` retourne du HTML qui fait planter le parser OTS.
 
-Stack de polices utilisée (`tailwind.config.js`) :
+Stack de polices (`tailwind.config.js`) :
 ```js
 fontFamily: {
   'sans': ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
@@ -355,200 +359,299 @@ fontFamily: {
 
 ---
 
-## 7. Sessions récentes — modifications appliquées
+## 7. Sessions — historique des modifications
+
+### Session 2026-06-03 (session 8) — Audit du working tree
+
+Aucune modification de code à ce passage : vérification de l'état réel par rapport à HANDOFF.md.
+
+**Constats :**
+- Branche `feat/type-documents-circuit-configure`, HEAD = `18737c3` (commit "TypeDocument configurables + circuit multi-signataires").
+- La refonte LIBRE/DOCUMENTAIRE (session 7) existe **uniquement dans le working tree non commité** sur cette branche.
+- `SecurityConfig.java` (Spring Security) a été ajouté en complément de `AuthFilter` — voir §8.
+- Nouveaux fichiers backend non commités : `controller/PdfGenerationController.java`, `service/PdfGenerationService.java`, `service/DocxToHtmlConverter.java`, `service/AuthorizationService.java`, `repository/AssigneeRepository.java`, `config/SecurityConfig.java`, `resources/fonts/`, `resources/pdf-template.css`, `test/`.
+- Nouveaux fichiers frontend non commités : `src/app/guards/permission.guard.ts`, `src/types/`, `proxy.conf.json`.
+- Autres ajouts non commités : `DEV.md`, `docker-compose.dev.yml`, `migration_v3_instructions_simplification.sql` (la migration SQL v3 est désormais versionnée comme fichier).
+
+**Action recommandée :** committer le working tree en plusieurs commits cohérents (1) refonte LIBRE/DOCUMENTAIRE, (2) SecurityConfig, (3) génération PDF/DOCX) avant tout merge.
+
+---
+
+### Session 2026-05-30 (session 7) — Simplification module Instructions LIBRE/DOCUMENTAIRE
+
+**Objectif :** Supprimer le moteur de workflow parallèle (WorkflowService/WorkflowStep) et recentrer le module Instructions sur deux types simples : LIBRE (chat) et DOCUMENTAIRE (livrable document).
+
+#### Backend
+
+**Fichiers supprimés :**
+- `WorkflowService.java`
+- `WorkflowController.java`
+- `WorkflowStepRepository.java`
+- `entity/WorkflowStep.java`
+
+**Fichiers modifiés :**
+
+| Fichier | Modification |
+|---------|-------------|
+| `entity/Instruction.java` | Suppression statut legacy + globalStatus + currentStep + currentActor ; statut simplifié OUVERT/EN_COURS/CLOTURE ; ajout `createdById` |
+| `entity/InstructionMessage.java` | Suppression TypeMessage enum + StatutMessage + actionType + workflowStep ; ajout `isSystemMessage` boolean |
+| `entity/InstructionType.java` | Suppression workflowSteps + documentsAttendus + livrableAttendu ; ajout `typeInstruction` (LIBRE|DOCUMENTAIRE) + `typeDocumentAttenduId` |
+| `entity/Assignee.java` | Suppression RoleAssignee |
+| `entity/BureauDocument.java` | Ajout `sourceInstructionId` (remplace `correctionInstructionId`) |
+| `entity/TypeDocument.java` | Ajout `linkedInstructionTypeId` |
+| `controller/InstructionController.java` | Ajout endpoint `POST /{id}/cloturer` ; exposition `typeInstruction`, `typeDocumentAttenduId`, `createdById` dans `toThreadDto()` |
+| `controller/BureauController.java` | Injection `instructionRepo` + `instructionMessageRepo` ; helper `ajouterMessageSysteme()` ; `sourceInstructionId` sur upload ; messages système sur soumettre |
+| `controller/ParapheurController.java` | Helper `ajouterMessageSysteme()` ; messages système sur renvoi + signature finale ; auto-clôture instruction DOCUMENTAIRE |
+| `service/ParametresService.java` | `applyInstructionTypeFields()` gère `typeInstruction` + `typeDocumentAttenduId` |
+| `controller/ParametresController.java` | Exposition `typeInstruction` + `typeDocumentAttenduId` dans DTO InstructionType ; `linkedInstructionTypeId` dans DTO TypeDocument |
+
+#### Frontend
+
+**Fichiers supprimés :**
+- `src/app/shared/workflow-timeline/workflow-timeline.component.ts`
+- `src/app/shared/workflow-timeline/workflow-timeline.component.html`
+
+**Fichiers modifiés :**
+
+| Fichier | Modification |
+|---------|-------------|
+| `chat.component.ts` | Suppression signals workflow ; computed `isDocumentaire`, `peutCloturerManuellement` ; méthodes `produireDocument()`, `cloturerInstruction()` ; `availableAgents` → `{id, nomComplet}[]` |
+| `chat.component.html` | Suppression bandeau workflow + timeline + ActionType footer + validation messages ; ajout bannière "📎 Document attendu" + bouton "Produire le document" ; messages système stylés différemment |
+| `api.service.ts` | Suppression méthodes workflow ; ajout `cloturerInstruction()` ; `uploadBureauDocument()` avec `sourceInstructionId` param |
+| `bureau.component.ts` | Ajout `ActivatedRoute` ; lecture `typeDocumentId` + `sourceInstructionId` en query params ; modal auto-ouvert si arrivée depuis Chat ; signals `uploadInstructionMode`, `instructionsOuvertes`, `creatingInstruction` |
+| `bureau.component.html` | Section "Instruction" dans modal upload (visible si `linkedInstructionTypeId` non null) ; 3 options : Autonome / Nouvelle instruction / Rattacher à existante |
+| `parametres.component.ts` | Suppression livrableAttendu + documentsAttendus + circuit modal + WorkflowStep CRUD ; ajout `typeInstruction` select + `typeDocumentAttenduId` picker ; TypeDocument : ajout `linkedInstructionTypeId` picker |
+
+#### Migration SQL (exécutée en base le 2026-05-30)
+
+```sql
+ALTER TABLE instruction_types ADD COLUMN IF NOT EXISTS type_instruction VARCHAR(20) DEFAULT 'LIBRE';
+ALTER TABLE instruction_types ADD COLUMN IF NOT EXISTS type_document_attendu_id VARCHAR(255);
+ALTER TABLE bureau_documents ADD COLUMN IF NOT EXISTS source_instruction_id VARCHAR(255);
+ALTER TABLE type_documents ADD COLUMN IF NOT EXISTS linked_instruction_type_id VARCHAR(255);
+ALTER TABLE instruction_messages ADD COLUMN IF NOT EXISTS is_system_message BOOLEAN DEFAULT FALSE;
+```
+
+---
 
 ### Session 2026-05-26 (session 6) — UI workflow enrichie + données d'exemple + bug fix persistance
 
-#### Bug critique corrigé : instructions non persistantes
-**Symptôme :** Créer une instruction semblait ne pas fonctionner — elle disparaissait immédiatement.
+**Bug critique corrigé :** instructions non persistantes — `createInstruction()` n'initialisait pas `globalStatus` → NPE sur `toThreadDto()` → liste vide.
 
-**Cause racine (double) :**
-1. `InstructionController.createInstruction()` n'initialisait jamais `globalStatus` → null en base
-2. `toThreadDto()` appelait `getGlobalStatus().name()` sans null check → NPE → le GET `/api/instructions` retournait 500 → le frontend ne rechargait pas la liste
+**Données d'exemple injectées en base :** 5 postes + affectation utilisateurs + 12 étapes de circuit sur 5 types.
 
-**Corrections apportées :**
-- `createInstruction()` initialise maintenant `globalStatus = BROUILLON` et `statut = OUVERT` à la création
-- `toThreadDto()` lignes 250-251 : null-safe sur `getStatut()` et `getGlobalStatus()`
-- SQL patch : `UPDATE instructions SET global_status = 'BROUILLON' WHERE global_status IS NULL` (12 instructions existantes patchées)
-
-#### Améliorations UI — mise en avant du workflow nouveau modèle
-
-**`chat.component.ts`** — ajouts :
-- Import `WorkflowTimelineComponent` + ajout aux `imports[]` du composant
-- `circuitPreview = signal<WorkflowStep[]>([])` — aperçu du circuit dans la modale de création
-- `showTimelinePanel = signal(false)` — panneau latéral droit toggleable
-- `lancerApresCreation = signal(false)` — option de la modale
-- `chargerCircuitPreview(typeId)` — charge les étapes du type sélectionné
-- `lancerCircuitPourInstruction(id)` — méthode privée extraite pour éviter imbrication > 4 niveaux
-- `createNewInstruction()` : gestion d'erreur `.error`, support du lancement immédiat, assignees vidés (remplacés par le circuit)
-- `closeNewInstructionModal()` : reset des nouveaux signaux
-
-**`chat.component.html`** — améliorations visuelles :
-- Liste threads : bordure gauche colorée (`border-l-4`) selon `globalStatus` (indigo EN_CIRCUIT, vert CLOTURE_VALIDE, rouge CLOTURE_REJETE, orange BROUILLON)
-- Header : bouton "Circuit" toggle (icône checklist, indigo plein quand actif)
-- Panneau latéral droit (`hidden md:flex w-64`) : `app-workflow-timeline` avec infos étape courante, fermable
-- Modale création : section "Participants & Résultats attendus" **supprimée** (ancien modèle)
-- Modale création : **Aperçu du circuit** (étapes numérotées avec poste requis + badges Signature/PJ)
-- Modale création : avertissement si type sans circuit configuré
-- Modale création : checkbox "Lancer le circuit immédiatement"
-- Modale création : bouton contextuel "💾 Créer en Brouillon" vs "⚡ Créer et Lancer le Circuit"
-
-#### Données d'exemple injectées en base
-
-**Postes créés** (IDs fixes `11111111-1111-...`) :
-
-| Code | Libelle | Habilitations |
-|------|---------|---------------|
-| `DG` | Directeur Général | Toutes (8/8) |
-| `CS` | Chef de Service | CREATE, VALIDATE, REJECT, VIEW_ALL |
-| `INS` | Inspecteur des Douanes | CREATE |
-| `CTR` | Contrôleur Douanier | CREATE |
-| `SEC` | Secrétaire de Direction | CREATE, CLOSE, VIEW_ALL |
-
-**Affectation utilisateurs → postes :**
-- `dg` → DG | `secretaire` → SEC | `agent.douane` → CS
-- `ibrahim_said` → CTR | `ahmed.hassan` → INS | `fatima.omar` → INS
-
-**Circuits workflow (12 étapes sur 5 types) :**
-
-| Type | Étapes | Particularités |
-|------|--------|----------------|
-| Rapport d'activité | CTR → DG | — |
-| Ciblage de fraude | CTR → DG | — |
-| Convocation d'agent | CS → DG | Signature DG requise |
-| Suspension accès SYDONIA | INS → CS → DG | PJ requise étape 1 |
-| Transmission dossier justice | INS → CS → DG | PJ étape 1 + Signature DG |
-
-#### Analyse déséquilibres workflow (points en attente)
-
-Problèmes identifiés mais non encore implémentés :
-- `requiresSignature = true` est un stub dans `WorkflowService.appliquerSignature()` — valide sans rien faire
-- Sender du message initial hardcodé `"DG"` — devrait utiliser `currentUser`
-- `peutLancerCircuit()` trop permissif (tout poste peut lancer)
-- Pas de mécanisme "Relancer" après `CLOTURE_REJETE`
-- Pas d'indicateur "Étape X/Y" dans le bandeau
-- `timeoutJours` stocké mais jamais enforced
+**Améliorations UI chat :** bordures colorées par statut, panneau timeline droit, aperçu circuit dans modale de création, checkbox "Lancer immédiatement".
 
 ---
 
-### Session 2026-05-26 (session 5) — workflow-timeline + Docker rebuild
+### Sessions 2026-05-25 (sessions 1→5) — Refonte moteur workflow (supersédé par session 7)
 
-**workflow-timeline.component.html** créé (fichier manquant causant une erreur de compilation `-992008`) :
-- Timeline verticale Tailwind avec `@for` + `let last = $last`
-- États : spinner chargement, erreur, vide, liste des étapes
-- Icônes SVG ✓/✗/numéro selon statut (PASSE/REJETE/EN_COURS/A_VENIR)
-- Instructions acteur affichées seulement quand `EN_COURS`
-- Badge terminal vert (`CLOTURE_VALIDE`) / rouge (`CLOTURE_REJETE`)
-
-**Build Angular** : ✅ aucune erreur — seul warning pré-existant NG8107 dans `pdf-viewer.component.ts:48`
-
-**Build Docker + redémarrage** :
-- `docker build -f Dockerfile.standalone -t dg-cockpit:latest .` → succès (Angular prod + Maven)
-- Conteneur `dg-cockpit-app` redémarré sur réseau `dg-cockpit_default`
-- Spring Boot démarré en 11.7s, connexion PostgreSQL 15 OK, Tomcat port 8080
+> Ces sessions ont introduit le moteur WorkflowService/WorkflowStep/WorkflowController qui a été **entièrement supprimé en session 7**. Voir git log pour l'historique complet si nécessaire.
 
 ---
 
-### Session 2026-05-26 (session 4) — Étape 3 Frontend : connexion UI au moteur de workflow
+### Session 2026-06-04 (session 10) — Gabarit .docx direct + aperçu PDF en modale + cache MinIO
 
-**Objectif :** Connecter l'interface Angular au nouveau moteur de workflow backend.
+#### Contexte
 
-#### PARTIE 1 — `api.service.ts`
+Remplacement du flux Quill/Mammoth dans Paramètres > Types de Documents par un upload `.docx` natif, avec prévisualisation PDF en modale et cache pré-converti pour un aperçu instantané.
 
-Interfaces exportées ajoutées :
-```typescript
-WorkflowPoste   { id, code, libelle }
-WorkflowStep    { id, stepOrder, stepLabel, requiresSignature, requiresAttachment, actorInstructions, requiredPoste }
-WorkflowActeur  { id, nomComplet }
-WorkflowEtat    { id, globalStatus, currentStep, currentActor }
+#### Backend
+
+| Fichier modifié | Changement |
+|---|---|
+| `entity/TypeDocument.java` | +`templatePdfPath` (chemin MinIO du PDF pré-converti) + getter/setter |
+| `controller/TypeDocumentController.java` | +`CollaboraConvertService` injecté ; `upload-template` stocke `.docx` ET `.pdf` pré-converti ; `template-preview` sert le PDF depuis MinIO (fallback conversion-à-la-volée si `templatePdfPath` null) ; `appliquerBody()` + `toDto()` exposent `templatePdfPath` |
+| `service/CollaboraConvertService.java` | **Bug fix critique** : `HttpEntity<byte[]>` → `ByteArrayResource` avec `getFilename()` — Spring n'incluait pas le filename dans le multipart, Collabora ne détectait pas le format `.docx` → "Not found" → 500 |
+
+> **⚠️ Bug fix `CollaboraConvertService`** : ce fix corrige aussi `BureauController.soumettre()` et `ParapheurController.signer()` qui appelaient le même `docxToPdf()`. Le flux `.docx` complet (soumettre + signer) n'était jamais fonctionnel avant ce correctif.
+
+#### Frontend
+
+| Fichier modifié | Changement |
+|---|---|
+| `services/api.service.ts` | `uploadTemplate()` retourne `{ docxPath, pdfPath, fileName }` ; +`getTemplatePreviewBlob(id)` |
+| `pages/parametres/parametres.component.ts` | Interface `TypeDocParam` +`templatePdfPath` ; `onTemplateUpload()` stocke `pdfPath` ; `previewTemplate()` ouvre la modale immédiatement avec spinner ; `closeTemplatePreview()` libère l'ObjectURL ; modale `@if (showTemplatePreview())` avec `<iframe [src]>` + spinner pendant chargement |
+
+#### Flux gabarit .docx (session 10)
+
+```
+Admin charge un .docx dans Paramètres → Types de Documents
+  │
+  ▼ POST /api/type-documents/upload-template
+  MinIO : templates/{uuid}.docx  +  templates/{uuid}.pdf (pré-converti via Collabora)
+  ↳ TypeDocument.templateDocxPath + templatePdfPath persistés
+  │
+  ▼ Bouton "👁 Aperçu" (visible si doc sauvegardé)
+  Modale s'ouvre IMMÉDIATEMENT avec spinner
+  GET /api/type-documents/{id}/template-preview
+  → MinIO download templatePdfPath (~ms)   [ou fallback conversion si path null]
+  → <iframe> affiche le PDF
 ```
 
-Méthodes ajoutées :
-- `lancerCircuit(id)`, `validerEtape(id)`, `rejeterEtape(id, motif)`, `getEtatWorkflow(id)` → `/api/workflow`
-- `soumettre(id, body)` → conservé pour legacy SUBORDONNE
-- `getPostes()`, `createPoste()`, `updatePoste()`, `togglePoste()`, `deletePoste()` → `/api/parametres/postes`
-- `getWorkflowSteps(typeId)`, `createWorkflowStep()`, `updateWorkflowStep()`, `deleteWorkflowStep()` → `/api/parametres/instruction-types/{typeId}/steps`
+#### Modèle de données — nouvelle colonne
 
-#### PARTIE 2 — `chat.component.ts` + `.html`
-
-**chat.component.ts** — réécriture :
-- Suppression de `isDG()`, `isSubordonne()`, `isSecretaire()` (méthodes publiques supprimées)
-- Ajout de `workflowEtat = signal<WorkflowEtat | null>(null)`
-- Computed signals :
-  - `peutAgirSurEtapeActuelle()` — compare `user.posteId === workflowEtat.currentStep.requiredPoste.id`
-  - `workflowEnCircuit()`, `peutLancerCircuit()`, `peutCreerInstruction()`
-  - `peutEnvoyerRepDefinitive()` (remplace `isSubordonne()`), `peutEnvoyerCloture()` (remplace `isSecretaire()`), `peutValiderMessages()` (remplace `isDG()`)
-- Méthodes workflow : `lancerCircuit()`, `validerEtapeWorkflow()`, `ouvrirModalRejet()`, `fermerModalRejet()`, `rejeterEtapeWorkflow()`
-- `chargerMessages()` appelle aussi `getEtatWorkflow()` → met à jour `workflowEtat`
-- SSE `INSTRUCTION_UPDATED` rafraîchit messages + `workflowEtat` si thread actif
-- `getBadgeLabel(thread)` / `getBadgeClasses(thread)` — priorité au `globalStatus` si circuit actif/clôturé
-
-**chat.component.html** — mise à jour complète :
-- **Bandeau Workflow** (sous le header) :
-  - BROUILLON + `peutLancerCircuit()` → bouton "🚀 Lancer le Circuit"
-  - EN_CIRCUIT + `peutAgirSurEtapeActuelle()` → "À votre tour" + boutons Valider/Rejeter
-  - EN_CIRCUIT + pas mon tour → "En attente de : [poste requis]"
-  - CLOTURE_VALIDE → banner vert ✅
-  - CLOTURE_REJETE → banner rouge ❌
-- Badges threads : `getBadgeLabel()` / `getBadgeClasses()` (priorité globalStatus)
-- Footer : `peutEnvoyerRepDefinitive()` / `peutEnvoyerCloture()` / fallback "Répondre" générique
-- Cartes action finale : `peutValiderMessages()` remplace `isDG()`
-- Panel documents : `peutEnvoyerRepDefinitive()` remplace `isSubordonne()`
-- Bouton "Nouvelle Instruction" : `peutCreerInstruction()`
-- **Modale de rejet** avec textarea motif (bouton Confirmer désactivé si vide)
-
-#### PARTIE 3 — `parametres.component.ts` + `workflow-timeline`
-
-Mise à jour complète (inline template) :
-- **Nouvel onglet "Postes & Rôles"** — CRUD complet (code, libelle, actif)
-- **Bouton "⚙️ Circuit"** sur chaque ligne de type d'instruction
-- **Modale de gestion des étapes** (inline dans la même modale) :
-  - Liste des étapes triées par `stepOrder`
-  - Formulaire d'ajout/modification : label, ordre, Poste requis (dropdown des postes actifs), instructions acteur, checkboxes signature/pièce jointe
-  - Édition inline : cliquer "Modifier" sur une étape peuple le formulaire du bas
-- **Onglet Utilisateurs mis à jour** :
-  - Colonne "Rôle legacy" (null → "—") + colonne "Poste" (badge teal)
-  - Formulaire : champ rôle avec option "Nouveau modèle (Poste uniquement)" (value vide) + dropdown Poste (postes actifs)
-  - `saveUser()` transforme role vide → null, posteId vide → null
-- `AppUser` interface mise à jour : `role: UserRole | null`, `posteId: string | null`, `posteLibelle: string | null`
-- Postes chargés au `ngOnInit()` (disponibles pour les dropdowns dans les modales step et user)
-
-**workflow-timeline component** — refonte complète :
-- `workflow-timeline.component.ts` : `input()` signal Angular 18 (`instructionId`, `typeId`), `effect()` en constructeur pour recharger sur changement d'input, `computed()` `etapesAffichage` + `globalStatut`, logique `calculerStatut()` pour PASSE/EN_COURS/REJETE/A_VENIR, helpers CSS `cercleCls()` / `ligneCls()` / `textCls()` avec classes Tailwind complètes
-- `workflow-timeline.component.html` : timeline verticale Tailwind, `@for` avec `let last = $last`, icônes SVG ✓/✗/numéro selon statut, instructions acteur (EN_COURS seulement), badge rejet (REJETE), badge terminal vert (CLOTURE_VALIDE) / rouge (CLOTURE_REJETE)
+```sql
+-- Ajoutée automatiquement par ddl-auto=update au redémarrage
+ALTER TABLE type_documents ADD COLUMN IF NOT EXISTS template_pdf_path VARCHAR(255);
+```
 
 ---
 
-### Session 2026-05-25 (session 3) — Refonte Moteur Workflow, Étape 2 backend
+### Session 2026-06-03 (session 9) — Intégration Collabora Online WOPI (Lots 1-2-3)
 
-**Fichiers créés :** `AccesRefuseException.java`, `GlobalExceptionHandler.java`
+**Abandon de la conversion `.docx → HTML` (Mammoth/JSoup) et de ngx-quill.** Le format master est désormais le `.docx` natif stocké dans MinIO, édité via Collabora Online embarqué dans une `<iframe>`.
 
-**Fichiers réécrits :** `WorkflowController.java` (`/api/workflow`), `WorkflowService.java` (moteur complet), `ParametresService.java` (CRUD Poste + WorkflowStep), `ParametresController.java` (endpoints postes + steps)
+#### Lot 1 — Infrastructure WOPI socle
 
-**Fichiers modifiés :** `InstructionController.java` (null-safe role, globalStatus dans DTO, endpoint `soumettre` récupéré), `AuthController.toUserDto` (null-safe + posteId)
+| Fichier créé/modifié | Rôle |
+|---|---|
+| `entity/WopiToken.java` | Token court (TTL 1h) lié à (user, bureauDoc, canWrite) |
+| `repository/WopiTokenRepository.java` | `findByToken`, `deleteByBureauDocumentId`, purge |
+| `service/WopiTokenService.java` | `issue()`, `validate()`, `invalidateForDocument()`, purge `@Scheduled` |
+| `controller/WopiController.java` | CheckFileInfo / GetFile / PutFile — 3 endpoints WOPI standard |
+| `filter/AuthFilter.java` | `/api/wopi/**` exempté du JWT |
+| `config/SecurityConfig.java` | `permitAll()` sur `/api/wopi/**` |
+| `service/MinioService.java` | `sizeOf(bucket, objectKey)` requis par CheckFileInfo |
+| `docker-compose.standalone.yml` | Service `collabora/code:23.05.10.1.1` + variables app |
+| `application.properties` | Clés `collabora.*` + fix `wopi.host=host.docker.internal:8080` |
+| `migration_v4_collabora_wopi.sql` | Table `wopi_tokens` + index |
+| `DgCockpitApplication.java` | `@EnableScheduling` pour la purge des tokens |
 
-**Note critique :** Pas de Spring Security. Filtre custom `AuthFilter.java`. Ne jamais importer `org.springframework.security.*`. Utiliser `AccesRefuseException` pour les 403.
+#### Lot 2 — Sessions & iframe Angular
+
+| Fichier créé/modifié | Rôle |
+|---|---|
+| `service/AuthorizationService.java` | +`canEditBureauDocument()`, +`canEditParapheurDocument()` |
+| `controller/BureauController.java` | +`GET /documents/{id}/wopi-session`, +`POST /documents/from-template`, upload `.docx` accepté (skip PDFBox page count) |
+| `controller/ParapheurController.java` | +`GET /{id}/wopi-session` |
+| `shared/collabora-editor/` | `CollaboraEditorComponent` : `[src]` SafeResourceUrl, postMessage Collabora, `injectSignature()`, `forceSave()` |
+| `services/api.service.ts` | +`openBureauWopiSession()`, +`openParapheurWopiSession()`, +`createFromTemplate()` |
+| `pages/bureau/bureau.component.*` | Overlay plein écran Collabora, bouton "✏️ Éditer/Corriger dans Collabora", bouton "📋 Créer depuis modèle", `peutSoumettre()` bypass pour `.docx` |
+| `pages/signature/signature.component.*` | Overlay Collabora Parapheur, bouton "✅ Signer le document" |
+| `entity/TypeDocument.java` | Champ `templateDocxPath` déjà présent — désormais utilisé |
+
+#### Lot 3 — Pipeline de signature finale
+
+| Fichier créé/modifié | Rôle |
+|---|---|
+| `service/CollaboraConvertService.java` | `POST /cool/convert-to/pdf` → retourne `byte[]` PDF |
+| `service/DocxSignatureService.java` | Apache POI : remplace `[SIGN_DG]` par l'image de signature dans le `.docx` |
+| `controller/BureauController.java` — `soumettre()` | Si `.docx` : convertit en PDF via Collabora avant de créer le `PdfDocument` |
+| `controller/ParapheurController.java` — `signer()` | 1. Injecte `[SIGN_DG]` (DocxSignatureService) 2. Convertit `.docx → PDF` si besoin (fallback) 3. `DocumentFinalizationService.finalize()` 4. Invalide WopiToken |
+| `services/api.service.ts` | +`getMySignatureAsset()` (récupère base64 image signature) |
+| `pages/signature/signature.component.ts` | `signerDocumentCollabora()` : inject signature → attente `documentSaved` → `signerDocument()` |
+
+#### Flux `.docx` complet (session 9)
+
+```
+TypeDocument.templateDocxPath (MinIO dgcockpit)
+  │
+  ▼ [Bureau → Créer depuis modèle]
+BureauDocument .docx (MinIO ged-bureau-documents)
+  │
+  ▼ [Éditeur Collabora — iframe]
+  Secrétaire rédige + tape [SIGN_DG] à l'emplacement de signature
+  │
+  ▼ [Soumettre]
+  CollaboraConvertService.docxToPdf() → PDF temporaire (ged-documents)
+  PdfDocument créé pointant sur le PDF → Parapheur
+  │
+  ▼ [Parapheur DG — iframe Collabora]
+  DG révise le .docx (édition live), puis clique "✅ Signer"
+  │
+  ▼ [signer()]
+  DocxSignatureService : [SIGN_DG] → image de signature (4×2 cm)
+  CollaboraConvertService.docxToPdf() → PDF signé
+  DocumentFinalizationService.finalize() → PDFBox scellement
+  WopiToken invalidé → document verrouillé
+  BureauDocument.statut = SIGNE
+```
+
+#### Migration SQL v4
+
+```sql
+CREATE TABLE wopi_tokens (token VARCHAR(64) PRIMARY KEY, user_id VARCHAR(64),
+  bureau_document_id VARCHAR(64), can_write BOOLEAN, expires_at TIMESTAMPTZ, created_at TIMESTAMPTZ);
+```
+
+Appliquée automatiquement par `ddl-auto=update` au démarrage.
 
 ---
 
-### Session 2026-05-25 (session 2) — Refonte Moteur Workflow, Étape 1
+### Session 2026-06-04 (session 11) — Flux hybride Collabora/PDFBox + édition DG au parapheur
 
-Nouvelles entités : `Poste.java`, `WorkflowStep.java`, `PosteRepository.java`, `WorkflowStepRepository.java`
+#### Contexte
 
-Entités modifiées (rétro-compatibles) : `AppUser` (+poste, +manager), `Instruction` (+globalStatus, +currentStep, +currentActor), `InstructionType` (+workflowSteps), `InstructionMessage` (+workflowStep)
+Le mécanisme `[SIGN_DG]` (marqueur textuel remplacé par l'image via `DocxSignatureService`) ne fonctionnait pas : l'image de signature n'apparaissait jamais dans le PDF final. Décision : **abandonner ce mécanisme** et revenir à l'**ancien système PDFBox** (zones-pixel → `PageAnnotation` → `DocumentFinalizationService.finalize()`), qui fonctionnait parfaitement, tout en **conservant Collabora pour l'édition** du `.docx`.
+
+#### Principe du flux hybride
+
+```
+1. Édition / modification → Collabora sur le .docx
+   └─▶ À chaque enregistrement (WopiController.putFile), le PDF est régénéré
+       automatiquement depuis le .docx via CollaboraConvertService
+
+2. Placement des zones de signature → bureau-placement sur le PDF régénéré
+   (composant bureau-placement inchangé — dessine sur rendu PDFBox)
+
+3. Signature → DocumentFinalizationService.finalize() brûle les images PDFBox
+   (ancien système restauré — les zones PDF et les images correspondent exactement)
+```
+
+#### Backend
+
+| Fichier modifié | Changement |
+|---|---|
+| `entity/BureauDocument.java` | +`signaturePdfKey` : clé MinIO du PDF régénéré depuis le .docx à chaque save Collabora (colonne `signature_pdf_key` ajoutée par `ddl-auto=update`) |
+| `controller/WopiController.java` | **Cœur du flux** : `putFile()` déclenche `collaboraConvert.docxToPdf()` après chaque enregistrement, réécrit la même clé MinIO (idempotent), reset des zones si la pagination change ; si le doc est déjà soumis au parapheur (`EN_ATTENTE_SIGNATURE`), re-synchronise le `PdfDocument` (bucket/objectKey/pageCount + `PageAnnotation` recréées) pour que les corrections DG apparaissent dans le PDF final. Injecte : `CollaboraConvertService`, `DocumentFinalizationService`, `PdfDocumentRepository`, `PageAnnotationRepository`, `ObjectMapper` |
+| `controller/BureauController.java` — `renderPage()` | Rend le `signaturePdfKey` pour les `.docx` (PDFBox peut lire le PDF, pas le `.docx`) |
+| `controller/BureauController.java` — `soumettre()` | Réutilise `signaturePdfKey` (PDF exact sur lequel les zones ont été posées, pas de re-conversion) ; zones désormais requises aussi pour les `.docx` |
+| `controller/BureauController.java` — `toDto()` | +`hasSignaturePdf` (vrai si `signaturePdfKey != null`) |
+| `controller/ParapheurController.java` — `signer()` | Suppression du bloc `DocxSignatureService.injectSignature()` (`[SIGN_DG]`) — plus utilisé. Retour au brûlage PDFBox pur via `finalizer.finalize()`. Filet de sécurité : conversion `.docx → PDF` si le `PdfDocument` pointe encore vers un `.docx` (données antérieures) |
+| `controller/ParapheurController.java` | +`GET /{pdfDocId}/source-docx` : retourne `{ bureauDocumentId, isDocx }` pour que le pdf-viewer ouvre Collabora |
+
+#### Frontend
+
+| Fichier modifié | Changement |
+|---|---|
+| `services/api.service.ts` | +`getSourceDocx(pdfDocId)` |
+| `pages/bureau/bureau.component.ts` | Interface `BureauDoc` +`hasSignaturePdf` ; suppression `return true` pour `.docx` dans `peutSoumettre()` (exige les zones) ; +`peutPlacerZones()` (désactivé tant que `signaturePdfKey` null pour un `.docx`) |
+| `pages/bureau/bureau.component.html` | Suppression bulle `[SIGN_DG]` ; bouton « 📐 Placer zones » unifié PDF + `.docx` avec tooltip « Ouvrez d'abord dans Collabora » si pas encore de PDF ; suppression conditions `!isDocx(doc)` sur tooltips soumission |
+| `pages/pdf-viewer/pdf-viewer.component.ts` | Import + usage `CollaboraEditorComponent` ; signal `bureauDocumentId` chargé via `getSourceDocx()` ; overlay plein écran Collabora (`editing`) ; bouton « ✏️ Éditer dans Collabora » dans la toolbar parapheur ; `fermerEdition()` recharge le document (PDF re-synchronisé) |
+
+#### Flux `.docx` complet (session 11 — hybride)
+
+```
+Bureau → "Éditer dans Collabora" → modifier le .docx
+  │
+  ▼ Enregistrement Collabora (WopiController.putFile)
+  CollaboraConvertService.docxToPdf() → PDF stocké sous signaturePdfKey
+  BureauDocument.pageCount mis à jour
+  (si déjà soumis → PdfDocument + PageAnnotation re-synchronisés)
+  │
+  ▼ "📐 Placer zones" (actif si signaturePdfKey présent)
+  bureau-placement rend le PDF (renderPageFromStorage(signaturePdfKey))
+  Secrétaire dessine les zones → signatureZonesJson / stampZonesJson
+  │
+  ▼ "📨 Soumettre"
+  PdfDocument créé pointant sur signaturePdfKey (PDF exact des zones)
+  PageAnnotation créées depuis les zones
+  │
+  ▼ Parapheur DG — pdf-viewer
+  "✏️ Éditer dans Collabora" → corrections → fermer → PDF rechargé
+  "✍️ Signer" → resolveZones() → finalizer.finalize() → PDFBox brûle les images
+  ✅ Signature/tampon exactement dans les zones dessinées
+```
+
+#### Modèle de données — nouvelle colonne
+
+```sql
+-- Ajoutée automatiquement par ddl-auto=update au redémarrage backend
+ALTER TABLE bureau_documents ADD COLUMN IF NOT EXISTS signature_pdf_key VARCHAR(255);
+```
 
 ---
-
-### Session 2026-05-25 (session 1) — Corrections workflow chat
-
-- Split boutons toolbar : `isDG()` / `isSecretaire()` / `isSubordonne()`
-- Bouton "Rép. Définitive" désactivé quand `SOUMIS_VALIDATION` ou `CLOTURE`
-- Backend : rejet → `REFUSE` ; garde anti-réouverture sur thread `CLOTURE`
-- Fix démarrage Docker : réseau + variables d'env explicites
-
-### Sessions précédentes (compactées)
-
-- Boutons validate/reject restreints au DG ; visualiseur PDF `PdfFileViewerComponent` ; endpoints `/info` et `/page/{n}` ; Google Fonts retiré
 
 ### Sessions antérieures (historique git)
 
@@ -563,18 +666,32 @@ Entités modifiées (rétro-compatibles) : `AppUser` (+poste, +manager), `Instru
 
 | Sujet | Détail |
 |-------|--------|
-| **Pas de Spring Security** | Filtre custom `AuthFilter.java`. Ne jamais importer `org.springframework.security.*`. Utiliser `AccesRefuseException` pour les 403. |
-| **isDG() / isSubordonne() supprimés** | Ces méthodes n'existent plus dans `chat.component.ts`. Utiliser les computed signals `peutAgirSurEtapeActuelle()`, `peutValiderMessages()`, `peutEnvoyerRepDefinitive()`, `peutEnvoyerCloture()`. |
-| **role: null sur AppUser Angular** | `AppUser.role` est maintenant `UserRole | null`. Tout `user.role === 'X'` doit d'abord vérifier `user.role != null`. |
+| **Spring Security + AuthFilter custom** | ⚠️ Une `SecurityConfig` Spring Security a été ajoutée (working tree non commité) en complément du filtre custom `AuthFilter.java`. Le filtre custom reste la source de vérité JWT ; `SecurityConfig` désactive csrf/formLogin/httpBasic/logout et délègue à `AuthFilter`. `AccesRefuseException` → 403 via `GlobalExceptionHandler`. |
+| **WorkflowService supprimé** | Ne pas tenter de le réintroduire. Le circuit documentaire passe par Bureau → Parapheur, les événements sont injectés comme messages système dans l'instruction liée. |
+| **Clôture LIBRE** | Seul l'initiateur (`createdById`) peut clôturer manuellement. Le backend vérifie `createdById == currentUser.id` dans `/cloturer`. |
+| **Clôture DOCUMENTAIRE** | Auto-clôture par `ParapheurController` lors de la signature finale si `bureau.sourceInstructionId != null`. Ne pas clôturer manuellement côté frontend pour ce type. |
+| **isSystemMessage** | Les messages système sont stylés différemment dans `chat.component.html` (fond gris, italique, pas de bulle de chat normale). Ne pas les confondre avec les messages utilisateur. |
+| **sourceInstructionId** | Champ unique qui fait le lien BureauDocument ↔ Instruction. Remplace l'ancien `correctionInstructionId`. Si null → comportement legacy (instruction LIBRE "Correction" créée). |
+| **linkedInstructionTypeId** | Sur TypeDocument : définit si les documents de ce type déclenchent la section "Instruction" dans la modal upload du bureau. Si null → pas de section (document autonome). |
 | **Docker sans réseau** | `docker run` sans `--network` → app cherche postgres sur `localhost:5432` → échec. Voir §5. |
 | **iframe + JWT** | Ne jamais afficher PDF via `<iframe src="/api/files/...">` → 401. Utiliser `PdfFileViewerComponent`. |
 | **Google Fonts** | Ne pas réintroduire (cf. §6). |
-| **Champs @Deprecated** | `AppUser.role` et `Instruction.statut` conservés pendant la migration. `@SuppressWarnings({"deprecation","removal","java:S1874"})` sur tout code qui les utilise. |
-| **Migration Hibernate** | `ddl-auto=update` ajoute les nouvelles colonnes mais ne supprime pas les anciennes. Faire une migration Flyway après stabilisation. |
-| **WorkflowStep.requiredPoste null** | Si null → `peutAgirSurEtape()` retourne `true` (étape ouverte à tous). À éviter en prod. |
+| **DocumentFinalizationService + SseService** | Ne jamais modifier ces deux services. Signatures brûlées côté serveur via PDFBox. |
 | **Présignature MinIO** | `MINIO_PUBLIC_URL` doit être accessible depuis le navigateur client, pas le hostname interne Docker. |
-| **Zones de signature** | Rasterisées dans l'image PNG par le backend (`DocumentFinalizationService`). Pas d'overlay CSS. |
-| **SSE** | Si le SSE casse, le chat ne se met plus à jour temps réel. Vérifier `/api/events`. Ne pas modifier `SseService`. |
+| **Migration Hibernate** | `ddl-auto=update` ajoute les nouvelles colonnes mais ne supprime pas les anciennes. Certains champs legacy (`Instruction.statut` old values) peuvent encore exister en base. |
+| **WOPI — `/api/wopi/**` public** | Ces endpoints sont exemptés du filtre JWT (`AuthFilter` + `SecurityConfig`). La sécurité est portée par `WopiToken` validé par `WopiTokenService`. Ne pas re-ajouter du JWT sur ces routes. |
+| **WOPI — `host.docker.internal`** | En dev local (Spring Boot Maven + Collabora Docker), `collabora.wopi.host` doit être `http://host.docker.internal:8080` et non `localhost:8080`. Collabora (conteneur Docker) résout `localhost` comme lui-même, pas le host Windows. |
+| **Collabora — `aliasgroup1`** | Le domaine WOPI source doit être whitelisté dans `aliasgroup1` sinon Collabora refuse de charger le document ("Host not allowed"). Inclure `http://host.docker.internal:8080` en dev. |
+| **Collabora — iframe `[src]`** | L'iframe Collabora utilise `[src]="SafeResourceUrl"` avec l'`access_token` en query param. Ne pas revenir à un `<form method="post">` : Angular sanitise `[action]` avec `SecurityContext.URL` (pas `RESOURCE_URL`) → URL vidée → iframe vide. |
+| **WopiToken vs JWT** | Les deux coexistent mais ne se mélangent pas : JWT en `Authorization: Bearer` header (navigateur → Spring), WopiToken en `?access_token=` query param (Collabora → Spring WOPI endpoints server-to-server). |
+| **Conversion .docx → PDF** | Toute soumission au Parapheur d'un `.docx` passe par `CollaboraConvertService.docxToPdf()` avant création du `PdfDocument`. `DocumentFinalizationService` (PDFBox) n'accepte que des PDF. Ne jamais faire pointer un `PdfDocument` vers un `.docx`. |
+| **CollaboraConvertService — filename obligatoire** | `docxToPdf(bytes, filename)` utilise `ByteArrayResource` avec `getFilename()`. **Ne jamais revenir à `HttpEntity<byte[]>`** : sans filename dans le Content-Disposition multipart, Collabora ne détecte pas le format `.docx` et retourne "Not found" (→ RuntimeException → 500). |
+| **templatePdfPath** | Sur `TypeDocument` : PDF pré-converti stocké dans MinIO bucket `dgcockpit` sous `templates/{uuid}.pdf`. Généré automatiquement à l'upload via `upload-template`. Si null (anciens enregistrements), `template-preview` fait la conversion à la volée. |
+| **Marqueur `[SIGN_DG]` — ABANDONNÉ** | ⚠️ `DocxSignatureService.injectSignature()` et le marqueur `[SIGN_DG]` ne sont plus utilisés. Le bloc correspondant dans `ParapheurController.signer()` a été supprimé. La signature passe uniquement par les zones-pixel PDFBox. Ne pas le réintroduire. |
+| **`signaturePdfKey` — même clé réutilisée** | `WopiController.putFile()` réécrit toujours la même clé MinIO à chaque enregistrement Collabora (idempotent). MinIO garde l'historique via les clés archivées `_v_{timestamp}` mais le PDF courant est toujours accessible via la même clé. |
+| **Re-synchronisation PdfDocument** | Si le DG édite le `.docx` dans Collabora au parapheur, le `PdfDocument` et les `PageAnnotation` sont automatiquement re-synchronisés dans `WopiController.putFile()`. Le pdf-viewer recharge après `fermerEdition()` pour afficher le PDF à jour. |
+| **`.docx` sans enregistrement Collabora** | Un `.docx` uploadé sans jamais être ouvert dans Collabora n'a pas de `signaturePdfKey`. Le bouton « 📐 Placer zones » reste désactivé jusqu'au premier enregistrement. |
+| **SSL Collabora en prod** | `--o:ssl.enable=false` est dev uniquement. En production : reverse proxy HTTPS (nginx + Let's Encrypt) devant Collabora port 9980. Collabora refuse le mode non-SSL sur des domaines publics. |
 
 ---
 
@@ -584,12 +701,14 @@ Le dossier `C:\Users\User\.claude\projects\c--Users-User-Desktop-test-angular18-
 
 - `MEMORY.md` — index
 - `feedback_signature_zones.md` — règle métier sur les zones de signature
+- `feedback_collabora_resttemplate.md` — fix CollaboraConvertService (ByteArrayResource + filename)
+- `project_template_docx_flow.md` — flux upload gabarit .docx + cache PDF
 
 Toute IA reprenant le projet devrait :
 1. Lire `MEMORY.md` au démarrage
 2. Mettre à jour les mémoires `feedback`/`project` au fil des sessions
 3. Respecter le style **français** dans les commits, commentaires UI, labels
-4. **Lire ce HANDOFF.md en priorité** — il contient l'état de la migration en cours
+4. **Lire ce HANDOFF.md en priorité** — il contient l'état exact de la migration en cours
 
 ---
 
@@ -597,29 +716,42 @@ Toute IA reprenant le projet devrait :
 
 ### ✅ Terminé
 
-- [x] **Étape 1** : Entités `Poste`, `WorkflowStep`, migration non-destructive de `AppUser` et `Instruction`
-- [x] **Étape 2** : `WorkflowService` (lancer/valider/rejeter), `WorkflowController`, CRUD Poste + WorkflowStep dans Paramètres, `InstructionController` null-safe + `globalStatus` dans DTO
-- [x] **Étape 3** : `api.service.ts` (méthodes workflow + CRUD postes/steps), `chat.component` (bandeau workflow, computed signals, modale rejet), `parametres.component` (onglet Postes, gestion circuit par type, utilisateurs avec poste)
-- [x] **Workflow Timeline** : `workflow-timeline.component.ts` + `.html` — affichage vertical Tailwind avec statuts PASSE/EN_COURS/REJETE/A_VENIR, spinner, erreur, badge terminal
+- [x] Entités `Poste`, CRUD postes/habilitations
+- [x] Suppression moteur workflow (WorkflowService/WorkflowStep)
+- [x] Simplification module Instructions (LIBRE/DOCUMENTAIRE, 3 statuts)
+- [x] Intégration Bureau ↔ Instructions via `sourceInstructionId`
+- [x] Messages système dans le fil d'instruction (événements circuit documentaire)
+- [x] Auto-clôture instruction DOCUMENTAIRE à la signature finale
+- [x] Renvoi parapheur : message système dans instruction existante (pas de nouvelle instruction)
+- [x] Frontend : bannière DOCUMENTAIRE + bouton "Produire le document" + modal upload enrichie
+- [x] Paramètres : configuration LIBRE/DOCUMENTAIRE sur types d'instructions + `linkedInstructionTypeId` sur types de documents
+- [x] Migration SQL v3 (2026-05-30)
+- [x] **Collabora Online WOPI — Lot 1** : WopiToken, WopiController (CheckFileInfo/GetFile/PutFile), AuthFilter/SecurityConfig exemptions, docker-compose service collabora, migration v4
+- [x] **Collabora Online WOPI — Lot 2** : wopi-session endpoints, CollaboraEditorComponent (iframe `[src]`), upload `.docx`, création depuis template TypeDocument, bypass zone signature pour `.docx`
+- [x] **Collabora Online WOPI — Lot 3** : CollaboraConvertService, DocxSignatureService (`[SIGN_DG]`), pipeline signer() complet, invalidation WopiToken post-signature
+- [x] Fix `host.docker.internal` pour WOPI server-to-server en dev local
+- [x] **Session 10** : Upload gabarit `.docx` direct dans Paramètres (sans Quill/Mammoth), aperçu PDF en modale, cache PDF pré-converti dans MinIO
+- [x] **Fix critique `CollaboraConvertService`** : `ByteArrayResource` avec `getFilename()` — débloque le flux `.docx` complet (soumettre + signer)
+- [x] **Session 11** : Flux hybride Collabora (édition) + PDFBox (signature) — régénération automatique du PDF au save Collabora, zones-pixel restaurées pour les `.docx`, bouton « ✏️ Éditer dans Collabora » dans pdf-viewer + re-synchronisation PdfDocument
 
-### 🔴 Priorité haute — Validation en conditions réelles
+### 🔴 Priorité haute
 
-- [ ] **Test bout en bout** : créer un `Poste`, lui assigner un utilisateur, créer un type d'instruction avec 2 étapes de circuit, créer une instruction, lancer le circuit → valider chaque étape avec le bon utilisateur → vérifier `CLOTURE_VALIDE`
-- [x] **Rebuild Docker** — image reconstruite et déployée le 2026-05-26, Spring Boot démarré en 11.7s, accessible sur http://localhost:8080
+- [ ] **Test flux complet .docx hybride** : éditer dans Collabora → enregistrer → placer zones → soumettre → DG ouvre dans pdf-viewer → optionnel : "✏️ Éditer" + correction → "✍️ Signer" → vérifier que signature/tampon apparaissent exactement dans les zones
+- [ ] **Test renvoi unifié** : DG renvoie → secrétaire rouvre le `.docx` dans Collabora → re-soumet
+- [ ] **Rebuild Docker** — reconstruire `dg-cockpit:latest` (Dockerfile.standalone) pour intégrer toutes les modifications des sessions 9 et 10
 
 ### 🟡 Priorité moyenne
 
-- [x] Affichage du circuit complet dans la timeline (`workflow-timeline` component) — statuts dynamiques via `getEtatWorkflow` + `getWorkflowSteps`
+- [ ] Entrée B flux DOCUMENTAIRE (upload d'abord) — la section "Instruction" dans la modal bureau est implémentée mais le flux "Rattacher à une instruction existante" nécessite un test complet
 - [ ] Pagination des threads d'instruction (actuellement tout chargé d'un coup)
-- [ ] Notification push (au-delà des toasts in-app) pour l'acteur désigné quand c'est son tour
-- [ ] Drag-and-drop pour réordonner les étapes dans la modale circuit (actuellement saisie manuelle du `stepOrder`)
+- [ ] Notification push pour l'acteur désigné quand c'est son tour
 
 ### 🟢 Priorité basse
 
 - [ ] Migration de `ddl-auto=update` vers Flyway (après stabilisation du schéma)
+- [ ] Supprimer les champs legacy en base (`correction_instruction_id`, anciens statuts instructions)
+- [ ] Cache des thumbs PDF côté backend
 - [ ] Tests d'intégration sur les gardes `AccesRefuseException`
-- [ ] Cache des thumbs PDF côté backend (actuellement re-rendu à chaque ouverture)
-- [ ] Supprimer les champs `@Deprecated` (`AppUser.role`, `Instruction.statut`) après validation complète de l'Étape 3
 
 ---
 
@@ -632,33 +764,23 @@ docker logs -f dg-cockpit-app
 # Rebuild après modification code
 docker build -f Dockerfile.standalone -t dg-cockpit:latest .
 
-# Redémarrer l'app (avec réseau + variables — voir §5 pour la commande complète)
-docker stop dg-cockpit-app; docker rm dg-cockpit-app
-docker run -d --name dg-cockpit-app --network dg-cockpit_default -p 8080:8080 `
-  -e SPRING_DATASOURCE_URL=jdbc:postgresql://dg-cockpit-postgres:5432/dgcockpit `
-  -e SPRING_DATASOURCE_USERNAME=ged_user -e SPRING_DATASOURCE_PASSWORD=ged_password `
-  -e MINIO_URL=http://dg-cockpit-minio:9000 -e MINIO_PUBLIC_URL=http://localhost:9000 `
-  -e MINIO_ACCESS_KEY=minioadmin -e MINIO_SECRET_KEY=minioadmin -e MINIO_BUCKET=dgcockpit `
-  dg-cockpit:latest
-
-# Compilation backend seule (vérification rapide)
-cd backend; mvn.cmd compile -q
+# Redémarrer l'app (voir §5 pour commande complète avec réseau)
+docker restart dg-cockpit-app
 
 # Accès SQL
 docker exec -it dg-cockpit-postgres psql -U ged_user -d dgcockpit
 
-# Vérifier les nouvelles tables créées par Hibernate
-docker exec -it dg-cockpit-postgres psql -U ged_user -d dgcockpit -c "\dt"
+# Vérifier les nouvelles colonnes (migration v3)
+docker exec dg-cockpit-postgres psql -U ged_user -d dgcockpit -c "\d instruction_types"
+docker exec dg-cockpit-postgres psql -U ged_user -d dgcockpit -c "\d bureau_documents"
+docker exec dg-cockpit-postgres psql -U ged_user -d dgcockpit -c "\d type_documents"
+docker exec dg-cockpit-postgres psql -U ged_user -d dgcockpit -c "\d instruction_messages"
 
-# Lister les postes et utilisateurs
-docker exec -it dg-cockpit-postgres psql -U ged_user -d dgcockpit -c "SELECT * FROM postes;"
-docker exec -it dg-cockpit-postgres psql -U ged_user -d dgcockpit -c "SELECT id, username, nom_complet, poste_id FROM app_users;"
+# Lister les instructions avec leur type
+docker exec dg-cockpit-postgres psql -U ged_user -d dgcockpit -c "SELECT i.titre, it.type_instruction, i.statut FROM instructions i LEFT JOIN instruction_types it ON i.instruction_type_id = it.id;"
 
-# Lister les étapes de circuit par type
-docker exec -it dg-cockpit-postgres psql -U ged_user -d dgcockpit -c "SELECT ws.step_order, ws.step_label, p.libelle AS poste FROM workflow_steps ws LEFT JOIN postes p ON ws.required_poste_id = p.id ORDER BY ws.step_order;"
-
-# Lister les fichiers dans MinIO
-docker exec -it dg-cockpit-minio mc ls local/dgcockpit
+# Lister les types de documents avec leur lien instruction
+docker exec dg-cockpit-postgres psql -U ged_user -d dgcockpit -c "SELECT libelle, linked_instruction_type_id FROM type_documents;"
 
 # Git
 git status
@@ -671,10 +793,10 @@ git diff master..HEAD
 ## 12. Contacts / Références
 
 - **Utilisateur principal** : axexpress123456@gmail.com
-- **Branche actuelle** : `appmod/java-upgrade-20260520231724` (migration Java + refonte workflow)
+- **Branche actuelle** : `appmod/java-upgrade-20260520231724`
 - **Style commits** : `feat:`, `fix:`, `refactor:` en anglais court ; corps en français OK
 - **Commentaires Java** : en français (convention projet)
 
 ---
 
-*Document mis à jour le 2026-05-26 par Claude Sonnet 4.6 (session 6 — UI workflow, données d'exemple, bug fix persistance). À mettre à jour après chaque session significative.*
+*Document mis à jour le 2026-06-04 par Claude Opus 4.8 (session 11 — flux hybride Collabora/PDFBox : régénération PDF auto au save WOPI, zones-pixel pour .docx, bouton édition Collabora dans pdf-viewer, re-sync PdfDocument, abandon `[SIGN_DG]`).*

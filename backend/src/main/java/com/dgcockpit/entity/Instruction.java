@@ -33,42 +33,11 @@ public class Instruction {
 
     private LocalDate echeance;
 
-    // ── Statut global du circuit (nouveau modèle) ─────────────────────────────
-
-    /**
-     * Statut de haut niveau du dossier dans le moteur de workflow.
-     * Remplace progressivement {@link #statut}.
-     */
-    @Enumerated(EnumType.STRING)
-    private GlobalStatus globalStatus = GlobalStatus.BROUILLON;
-
-    /**
-     * Étape courante du circuit de validation.
-     * Null si le dossier est en BROUILLON ou CLÔTURÉ.
-     */
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "current_step_id")
-    private WorkflowStep currentStep;
-
-    /**
-     * Utilisateur actuellement en charge de l'étape courante.
-     * Alimenté automatiquement par le WorkflowService lors du passage d'étape.
-     */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "current_actor_id")
-    private AppUser currentActor;
-
-    // ── Statut simplifié (modèle hérité, déprécié) ───────────────────────────
-
-    /**
-     * @deprecated Remplacé par {@link #globalStatus} + {@link #currentStep}.
-     * Conservé pour la compatibilité des contrôleurs existants
-     * jusqu'à la finalisation de la migration (Étape 2).
-     */
-    @Deprecated(since = "workflow-engine-v2")
-    @SuppressWarnings({"java:S1133", "java:S1874"})
     @Enumerated(EnumType.STRING)
     private StatutInstruction statut = StatutInstruction.OUVERT;
+
+    /** ID de l'utilisateur qui a créé l'instruction */
+    private String createdById;
 
     private final LocalDateTime createdAt = LocalDateTime.now();
 
@@ -79,26 +48,7 @@ public class Instruction {
     @OneToMany(mappedBy = "instruction", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Assignee> assignees = new ArrayList<>();
 
-    // ── Enums ─────────────────────────────────────────────────────────────────
-
-    /** Statut de haut niveau — utilisé par le nouveau moteur de workflow */
-    public enum GlobalStatus {
-        /** Dossier créé mais circuit pas encore lancé */
-        BROUILLON,
-        /** Circuit en cours, en attente d'action sur une étape */
-        EN_CIRCUIT,
-        /** Toutes les étapes ont été validées : dossier clôturé positivement */
-        CLOTURE_VALIDE,
-        /** Un acteur a rejeté son étape de façon définitive */
-        CLOTURE_REJETE
-    }
-
-    /** @deprecated Utiliser {@link GlobalStatus}. */
-    @Deprecated(since = "workflow-engine-v2")
-    @SuppressWarnings("java:S1133")
-    public enum StatutInstruction {
-        OUVERT, EN_COURS, EN_ATTENTE, SOUMIS_VALIDATION, CLOTURE, REFUSE
-    }
+    public enum StatutInstruction { OUVERT, EN_COURS, CLOTURE }
 
     // ── Getters / Setters ─────────────────────────────────────────────────────
 
@@ -126,22 +76,11 @@ public class Instruction {
     public LocalDate getEcheance() { return echeance; }
     public void setEcheance(LocalDate echeance) { this.echeance = echeance; }
 
-    public GlobalStatus getGlobalStatus() { return globalStatus; }
-    public void setGlobalStatus(GlobalStatus globalStatus) { this.globalStatus = globalStatus; }
-
-    public WorkflowStep getCurrentStep() { return currentStep; }
-    public void setCurrentStep(WorkflowStep currentStep) { this.currentStep = currentStep; }
-
-    public AppUser getCurrentActor() { return currentActor; }
-    public void setCurrentActor(AppUser currentActor) { this.currentActor = currentActor; }
-
-    /** @deprecated Utiliser {@link #getGlobalStatus()} */
-    @Deprecated(since = "workflow-engine-v2", forRemoval = true)
     public StatutInstruction getStatut() { return statut; }
-
-    /** @deprecated Utiliser {@link #setGlobalStatus(GlobalStatus)} */
-    @Deprecated(since = "workflow-engine-v2", forRemoval = true)
     public void setStatut(StatutInstruction statut) { this.statut = statut; }
+
+    public String getCreatedById() { return createdById; }
+    public void setCreatedById(String createdById) { this.createdById = createdById; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
 

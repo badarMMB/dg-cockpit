@@ -35,20 +35,18 @@ import { ApiService } from '../../services/api.service';
       <div class="flex-1 flex flex-col overflow-hidden">
 
         <!-- Toolbar -->
-        <div class="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-3">
-          <button (click)="prevPage()" [disabled]="currentPage() === 0"
-                  class="p-1.5 rounded hover:bg-gray-100 disabled:opacity-30 transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        <div class="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-2">
+          <button (click)="prevPage()" [disabled]="currentPage() === 0" class="btn-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
             </svg>
           </button>
-          <span class="text-sm text-gray-600 font-medium">
-            Page {{ currentPage() + 1 }} / {{ pages().length }}
+          <span class="text-sm text-gray-600 font-medium tabular-nums">
+            {{ currentPage() + 1 }} / {{ pages().length }}
           </span>
-          <button (click)="nextPage()" [disabled]="currentPage() === pages().length - 1"
-                  class="p-1.5 rounded hover:bg-gray-100 disabled:opacity-30 transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          <button (click)="nextPage()" [disabled]="currentPage() === pages().length - 1" class="btn-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
             </svg>
           </button>
           <div class="flex-1"></div>

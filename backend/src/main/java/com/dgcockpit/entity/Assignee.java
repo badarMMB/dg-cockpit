@@ -14,26 +14,19 @@ public class Assignee {
     @JoinColumn(name = "instruction_id", nullable = false)
     private Instruction instruction;
 
+    /** ID de l'utilisateur assigné */
+    private String userId;
+
+    /** Nom complet dénormalisé pour l'affichage */
     private String agent;
-
-    @Enumerated(EnumType.STRING)
-    private RoleAssignee role;
-
-    private boolean hasRequestedClosure = false;
-
-    public enum RoleAssignee {
-        ACTION_SIGNATURE, ACTION_COURRIER, ACTION_NOTE, AVIS_SIMPLE
-    }
 
     // Getters / Setters
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public Instruction getInstruction() { return instruction; }
     public void setInstruction(Instruction instruction) { this.instruction = instruction; }
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
     public String getAgent() { return agent; }
     public void setAgent(String agent) { this.agent = agent; }
-    public RoleAssignee getRole() { return role; }
-    public void setRole(RoleAssignee role) { this.role = role; }
-    public boolean isHasRequestedClosure() { return hasRequestedClosure; }
-    public void setHasRequestedClosure(boolean hasRequestedClosure) { this.hasRequestedClosure = hasRequestedClosure; }
 }

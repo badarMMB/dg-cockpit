@@ -16,11 +16,12 @@ public class AuthService {
 
     private final AppUserRepository userRepo;
     private final UserTokenRepository tokenRepo;
-    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+    private final BCryptPasswordEncoder encoder;
 
-    public AuthService(AppUserRepository userRepo, UserTokenRepository tokenRepo) {
+    public AuthService(AppUserRepository userRepo, UserTokenRepository tokenRepo, BCryptPasswordEncoder encoder) {
         this.userRepo = userRepo;
         this.tokenRepo = tokenRepo;
+        this.encoder = encoder;
     }
 
     public AppUser login(String username, String password) {

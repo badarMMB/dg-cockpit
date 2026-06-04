@@ -22,15 +22,8 @@ import { ClasseursListComponent } from './pages/classeurs/classeurs-list.compone
 import { ClasseurDetailComponent } from './pages/classeurs/classeur-detail.component';
 import { NotesDeServiceComponent } from './pages/notes/notes-de-service.component';
 import { authGuard } from './guards/auth.guard';
-import { roleGuard } from './guards/role.guard';
 import { bureauGuard } from './guards/bureau.guard';
-
-const DG         = ['DG'];
-const DG_SEC     = ['DG', 'SECRETAIRE'];
-const DG_SEC_SUB = ['DG', 'SECRETAIRE', 'SUBORDONNE'];
-const ALL        = ['DG', 'SECRETAIRE', 'SUBORDONNE', 'ADMIN_IT'];
-const DG_ADMIN   = ['DG', 'ADMIN_IT'];
-const SEC        = ['SECRETAIRE'];
+import { permissionGuard } from './guards/permission.guard';
 
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
@@ -41,25 +34,25 @@ export const routes: Routes = [
     children: [
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
       { path: 'dashboard',            component: DashboardComponent },
-      { path: 'chat',                 component: ChatComponent,            canActivate: [roleGuard], data: { roles: DG_SEC_SUB } },
+      { path: 'chat',                 component: ChatComponent },
       { path: 'editor',               component: EditorComponent },
       { path: 'signature',            component: SignatureComponent,       canActivate: [authGuard] },
-      { path: 'signature-assets',     component: SignatureAssetsComponent, canActivate: [roleGuard], data: { roles: ALL } },
-      { path: 'pdf-documents',        component: PdfDocumentsComponent,    canActivate: [roleGuard], data: { roles: DG } },
-      { path: 'pdf-viewer/:id',       component: PdfViewerComponent,       canActivate: [roleGuard], data: { roles: DG_SEC_SUB } },
+      { path: 'signature-assets',     component: SignatureAssetsComponent },
+      { path: 'pdf-documents',        component: PdfDocumentsComponent,    canActivate: [permissionGuard], data: { anyPermissions: ['CAN_VIEW_ALL'] } },
+      { path: 'pdf-viewer/:id',       component: PdfViewerComponent },
       { path: 'settings',             component: SettingsComponent },
-      { path: 'inbox',                component: InboxListComponent,       canActivate: [roleGuard], data: { roles: DG_SEC } },
-      { path: 'inbox/:id',            component: InboxDetailComponent,     canActivate: [roleGuard], data: { roles: DG_SEC } },
-      { path: 'outbox',               component: OutboxListComponent,      canActivate: [roleGuard], data: { roles: DG_SEC } },
-      { path: 'outbox/:id',           component: OutboxDetailComponent,    canActivate: [roleGuard], data: { roles: DG_SEC } },
-      { path: 'appointments',         component: AppointmentListComponent, canActivate: [roleGuard], data: { roles: DG_SEC } },
-      { path: 'appointments/:id',     component: AppointmentDetailComponent, canActivate: [roleGuard], data: { roles: DG_SEC } },
-      { path: 'parametres',           component: ParametresComponent,      canActivate: [roleGuard], data: { roles: DG_ADMIN } },
+      { path: 'inbox',                component: InboxListComponent,       canActivate: [permissionGuard], data: { anyPermissions: ['HAS_BUREAU', 'CAN_VIEW_ALL'] } },
+      { path: 'inbox/:id',            component: InboxDetailComponent,     canActivate: [permissionGuard], data: { anyPermissions: ['HAS_BUREAU', 'CAN_VIEW_ALL'] } },
+      { path: 'outbox',               component: OutboxListComponent,      canActivate: [permissionGuard], data: { anyPermissions: ['HAS_BUREAU', 'CAN_VIEW_ALL'] } },
+      { path: 'outbox/:id',           component: OutboxDetailComponent,    canActivate: [permissionGuard], data: { anyPermissions: ['HAS_BUREAU', 'CAN_VIEW_ALL'] } },
+      { path: 'appointments',         component: AppointmentListComponent, canActivate: [permissionGuard], data: { anyPermissions: ['HAS_BUREAU', 'CAN_VIEW_ALL'] } },
+      { path: 'appointments/:id',     component: AppointmentDetailComponent, canActivate: [permissionGuard], data: { anyPermissions: ['HAS_BUREAU', 'CAN_VIEW_ALL'] } },
+      { path: 'parametres',           component: ParametresComponent,      canActivate: [permissionGuard], data: { anyPermissions: ['CAN_MANAGE_USERS', 'CAN_MANAGE_TYPES'] } },
       { path: 'bureau',               component: BureauComponent,          canActivate: [bureauGuard] },
       { path: 'bureau-placement/:id', component: BureauPlacementComponent, canActivate: [bureauGuard] },
-      { path: 'classeurs',            component: ClasseursListComponent,   canActivate: [roleGuard], data: { roles: DG_SEC } },
-      { path: 'classeurs/:id',        component: ClasseurDetailComponent,  canActivate: [roleGuard], data: { roles: DG_SEC } },
-      { path: 'notes-de-service',     component: NotesDeServiceComponent,  canActivate: [roleGuard], data: { roles: DG_SEC_SUB } },
+      { path: 'classeurs',            component: ClasseursListComponent,   canActivate: [permissionGuard], data: { anyPermissions: ['HAS_BUREAU', 'CAN_VIEW_ALL'] } },
+      { path: 'classeurs/:id',        component: ClasseurDetailComponent,  canActivate: [permissionGuard], data: { anyPermissions: ['HAS_BUREAU', 'CAN_VIEW_ALL'] } },
+      { path: 'notes-de-service',     component: NotesDeServiceComponent },
     ]
   }
 ];

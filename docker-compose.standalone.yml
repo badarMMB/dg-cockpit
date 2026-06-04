@@ -37,6 +37,33 @@ services:
       timeout: 10s
       retries: 10
 
+  # ── Édition documentaire Collabora Online (CODE) ───────────────────────────
+  collabora:
+    image: collabora/code:23.05.10.1.1
+    container_name: dg-cockpit-collabora
+    restart: unless-stopped
+    ports:
+      - "${COLLABORA_PORT:-9980}:9980"
+    environment:
+      # Domaines autorisés pour les requêtes WOPI (séparés par |, points échappés).
+      # Permet à Collabora de rappeler app:8080 sur le réseau Docker interne.
+      aliasgroup1: "http://app:8080|http://localhost:8080|http://host.docker.internal:8080"
+      # Désactivation SSL en DEV. EN PROD : reverse proxy HTTPS + ssl.enable=true.
+      extra_params: >-
+        --o:ssl.enable=false
+        --o:ssl.termination=false
+        --o:net.frame_ancestors=http://localhost:4200 http://localhost:8080
+        --o:logging.level=warning
+      username: ${COLLABORA_ADMIN:-admin}
+      password: ${COLLABORA_ADMIN_PWD:-admin}
+    cap_add:
+      - MKNOD
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9980/hosting/discovery"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
   # ── Application DG Cockpit ──────────────────────────────────────────────────
   app:
     build:
@@ -57,6 +84,11 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_USER:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_PASSWORD:-minioadmin}
       MINIO_BUCKET: dgcockpit
+      # Collabora / WOPI
+      COLLABORA_PUBLIC_URL: http://${SERVER_HOST:-localhost}:${COLLABORA_PORT:-9980}
+      COLLABORA_INTERNAL_URL: http://collabora:9980
+      WOPI_HOST_INTERNAL: http://app:8080
+      WOPI_TOKEN_TTL_SECONDS: 3600
     depends_on:
       postgres:
         condition: service_healthy

@@ -19,6 +19,8 @@ export interface AppUser {
   hasBureau: boolean;
   /** Peut signer (habilitation CAN_SIGN sur le poste) */
   canSign: boolean;
+  /** Habilitations fonctionnelles issues du poste */
+  habilitations: string[];
   /** ID du supérieur hiérarchique direct */
   managerId: string | null;
   /** Nom complet du supérieur hiérarchique direct */
@@ -73,5 +75,42 @@ export class AuthService {
   hasRole(...roles: AppUser['role'][]): boolean {
     const user = this.currentUser();
     return user ? roles.includes(user.role) : false;
+  }
+
+  hasPermission(permission: string): boolean {
+    const user = this.currentUser();
+    if (!user) return false;
+    if (permission === 'HAS_BUREAU') return user.hasBureau === true;
+    if (permission === 'CAN_SIGN') return user.canSign === true || this.effectivePermissions(user).includes(permission);
+    return this.effectivePermissions(user).includes(permission);
+  }
+
+  hasAnyPermission(...permissions: string[]): boolean {
+    return permissions.length === 0 || permissions.some(p => this.hasPermission(p));
+  }
+
+  private effectivePermissions(user: AppUser): string[] {
+    const direct = user.habilitations ?? [];
+    if (direct.length > 0) return direct;
+
+    switch (user.role) {
+      case 'DG':
+        return [
+          'CAN_CREATE_INSTRUCTION',
+          'CAN_SIGN',
+          'CAN_VALIDATE',
+          'CAN_REJECT',
+          'CAN_CLOSE',
+          'CAN_MANAGE_USERS',
+          'CAN_MANAGE_TYPES',
+          'CAN_VIEW_ALL',
+        ];
+      case 'SECRETAIRE':
+        return ['CAN_CREATE_INSTRUCTION', 'CAN_CLOSE', 'CAN_VIEW_ALL'];
+      case 'ADMIN_IT':
+        return ['CAN_MANAGE_USERS', 'CAN_MANAGE_TYPES', 'CAN_VIEW_ALL'];
+      default:
+        return [];
+    }
   }
 }

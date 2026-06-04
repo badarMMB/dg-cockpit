@@ -6,31 +6,21 @@
 
     <div class="p-4 border-b border-gray-200">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">Flux des Instructions</h2>
-      <div class="relative">
-        <input type="text" placeholder="Rechercher un dossier..."
-               class="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary">
-        <span class="absolute left-3 top-2.5 text-gray-400">🔍</span>
-      </div>
     </div>
 
     <div class="flex-1 overflow-y-auto p-3 space-y-2">
       <div *ngFor="let thread of threads()"
            (click)="selectThread(thread.id)"
            class="p-3 rounded-lg cursor-pointer transition-all border border-l-4"
-           [ngClass]="thread.active ? 'bg-primary/5 border-primary shadow-sm' : 'bg-white border-gray-100 hover:border-gray-200'"
-           [style.borderLeftColor]="thread.globalStatus === 'EN_CIRCUIT' ? '#6366f1'
-             : thread.globalStatus === 'CLOTURE_VALIDE' ? '#22c55e'
-             : thread.globalStatus === 'CLOTURE_REJETE' ? '#ef4444'
-             : thread.globalStatus === 'BROUILLON'      ? '#f59e0b'
-             : '#e5e7eb'">
+           [ngClass]="thread.active ? 'bg-primary/5 border-primary shadow-sm' : 'bg-white border-gray-100 hover:border-gray-200'">
         <div class="flex justify-between items-start mb-1">
-          <h3 class="font-medium text-sm text-gray-900 truncate pr-2"
-              [ngClass]="{'font-semibold': thread.unread > 0}">{{ thread.title }}</h3>
+          <h3 class="font-medium text-sm text-gray-900 truncate pr-2">{{ thread.title }}</h3>
           <span class="text-xs text-gray-500 whitespace-nowrap">{{ thread.date }}</span>
         </div>
         <div class="flex justify-between items-center">
           <p class="text-xs text-gray-600 truncate flex items-center gap-1">
             <span *ngIf="thread.confidentialite" title="Confidentiel">🔒</span>
+            <span *ngIf="thread.typeInstruction === 'DOCUMENTAIRE'" title="Document attendu">📎</span>
             {{ thread.agent }}
           </p>
           <div class="flex items-center gap-1.5 flex-shrink-0">
@@ -61,7 +51,7 @@
     </div>
   </aside>
 
-  <!-- ─── Zone messages + workflow ─────────────────────────────────── -->
+  <!-- ─── Zone messages ─────────────────────────────────────────── -->
   <div class="flex-1 flex h-full min-w-0"
        [ngClass]="{'hidden md:flex': mobileView() === 'list', 'flex': mobileView() === 'chat'}">
 
@@ -104,205 +94,70 @@
                 [ngClass]="getBadgeClasses(activeThread())">
             {{ getBadgeLabel(activeThread()) }}
           </span>
-          <!-- Toggle panneau timeline -->
-          <button *ngIf="activeThread()"
-                  (click)="showTimelinePanel.set(!showTimelinePanel())"
-                  class="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-                  [ngClass]="showTimelinePanel()
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-            </svg>
-            <span class="hidden lg:inline">Circuit</span>
+          <!-- Clôture manuelle (LIBRE uniquement, initiateur) -->
+          <button *ngIf="peutCloturerManuellement()"
+                  (click)="cloturerInstruction()"
+                  class="px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1.5 shadow-sm">
+            ✅ Clôturer
           </button>
         </div>
       </header>
 
-      <!-- ─── Bandeau Workflow ─────────────────────────────────────── -->
-      <div *ngIf="activeThread() && workflowEtat()" class="flex-shrink-0 border-b">
-
-        <!-- BROUILLON : invitation à lancer le circuit -->
-        <div *ngIf="workflowEtat()!.globalStatus === 'BROUILLON'"
-             class="px-4 py-2.5 bg-gray-50 flex items-center justify-between gap-3">
-          <div class="flex items-center gap-2 text-sm text-gray-500">
-            <span>📋</span>
-            <span>Circuit non lancé — ce dossier est en brouillon</span>
-          </div>
-          <button *ngIf="peutLancerCircuit()"
-                  (click)="lancerCircuit()"
-                  class="flex-shrink-0 px-4 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-full hover:bg-indigo-700 transition-colors flex items-center gap-1.5 shadow-sm">
-            <span>🚀</span> Lancer le Circuit
+      <!-- Bandeau DOCUMENTAIRE : document attendu -->
+      <div *ngIf="isDocumentaire() && activeThread()?.statut !== 'CLOTURE'"
+           class="flex-shrink-0 px-4 py-2.5 bg-blue-50 border-b border-blue-200 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2 text-sm text-blue-700">
+          <span>📎</span>
+          <span>Document attendu — <strong>{{ activeThread()?.type }}</strong></span>
+        </div>
+        @if (!activeThread()?.documentCree) {
+          <button (click)="produireDocument()"
+                  class="flex-shrink-0 px-4 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-full hover:bg-blue-700 transition-colors flex items-center gap-1.5 shadow-sm">
+            📝 Produire le document
           </button>
-        </div>
-
-        <!-- EN_CIRCUIT : étape courante + actions -->
-        <div *ngIf="workflowEtat()!.globalStatus === 'EN_CIRCUIT'">
-
-          <!-- Indicateur d'étape -->
-          <div class="px-4 pt-2.5 pb-1 flex items-center justify-between gap-3 bg-indigo-50 border-b border-indigo-100">
-            <div class="flex items-center gap-2 min-w-0">
-              <span class="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center">
-                {{ workflowEtat()!.currentStep?.stepOrder ?? '?' }}
-              </span>
-              <div class="min-w-0">
-                <p class="text-sm font-semibold text-indigo-900 truncate">
-                  {{ workflowEtat()!.currentStep?.stepLabel ?? 'Étape en cours' }}
-                </p>
-                <p *ngIf="workflowEtat()!.currentStep?.requiredPoste" class="text-xs text-indigo-600">
-                  Intervenant requis : <strong>{{ workflowEtat()!.currentStep!.requiredPoste!.libelle }}</strong>
-                </p>
-              </div>
-            </div>
-            <!-- Badge "En circuit" -->
-            <span class="flex-shrink-0 px-2.5 py-1 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-bold uppercase tracking-wide">
-              En Circuit
-            </span>
-          </div>
-
-          <!-- Zone action : à mon tour -->
-          <div *ngIf="peutAgirSurEtapeActuelle()" class="px-4 py-2.5 bg-amber-50 border-b border-amber-100">
-            <div class="flex items-center justify-between gap-3 flex-wrap">
-              <div class="flex items-center gap-2 min-w-0">
-                <span class="flex-shrink-0 w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                <div class="min-w-0">
-                  <p class="text-xs font-bold text-amber-800">À votre tour d'agir</p>
-                  <p *ngIf="workflowEtat()!.currentStep?.actorInstructions"
-                     class="text-xs text-amber-700 mt-0.5 truncate max-w-xs">
-                    {{ workflowEtat()!.currentStep!.actorInstructions }}
-                  </p>
-                </div>
-              </div>
-              <div class="flex items-center gap-2 flex-shrink-0">
-                <button (click)="validerEtapeWorkflow()"
-                        class="px-4 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-full hover:bg-green-700 transition-colors flex items-center gap-1 shadow-sm">
-                  ✅ Valider l'Étape
-                </button>
-                <button (click)="ouvrirModalRejet()"
-                        class="px-4 py-1.5 bg-white border border-red-300 text-red-600 text-xs font-semibold rounded-full hover:bg-red-50 transition-colors flex items-center gap-1">
-                  ❌ Rejeter
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- En attente (pas mon tour) -->
-          <div *ngIf="!peutAgirSurEtapeActuelle()" class="px-4 py-2 bg-gray-50 flex items-center gap-2 text-xs text-gray-500">
-            <span class="w-2 h-2 rounded-full bg-gray-400 animate-pulse flex-shrink-0"></span>
-            <span>En attente d'action de : <strong class="text-gray-700">{{ workflowEtat()!.currentStep?.requiredPoste?.libelle ?? workflowEtat()!.currentActor?.nomComplet ?? 'l\'intervenant désigné' }}</strong></span>
-          </div>
-        </div>
-
-        <!-- CLOTURE_VALIDE -->
-        <div *ngIf="workflowEtat()!.globalStatus === 'CLOTURE_VALIDE'"
-             class="px-4 py-2.5 bg-green-50 border-b border-green-200 flex items-center gap-2">
-          <span class="text-green-600 text-lg">✅</span>
-          <div>
-            <p class="text-sm font-semibold text-green-800">Dossier clôturé positivement</p>
-            <p class="text-xs text-green-600">Toutes les étapes du circuit ont été validées.</p>
-          </div>
-        </div>
-
-        <!-- CLOTURE_REJETE -->
-        <div *ngIf="workflowEtat()!.globalStatus === 'CLOTURE_REJETE'"
-             class="px-4 py-2.5 bg-red-50 border-b border-red-200 flex items-center gap-2">
-          <span class="text-red-500 text-lg">❌</span>
-          <div>
-            <p class="text-sm font-semibold text-red-800">Dossier clôturé — étape rejetée</p>
-            <p class="text-xs text-red-600">Une étape du circuit a été rejetée par l'intervenant désigné.</p>
-          </div>
-        </div>
-
+        } @else {
+          <span class="text-xs text-blue-500 italic">✅ Document créé</span>
+        }
       </div>
-      <!-- ─── Fin Bandeau Workflow ──────────────────────────────────── -->
 
       <!-- Messages -->
       <div #chatContainer class="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50/30 space-y-4 md:space-y-6 scroll-smooth">
         <div *ngFor="let msg of messages()" class="flex flex-col"
-             [ngClass]="msg.type === 'system' ? 'items-center' : (msg.isSelf ? 'items-end' : 'items-start')">
+             [ngClass]="msg.isSystemMessage ? 'items-center' : (msg.isSelf ? 'items-end' : 'items-start')">
 
           <!-- Message système -->
-          <div *ngIf="msg.type === 'system'"
+          <div *ngIf="msg.isSystemMessage"
                class="flex items-center gap-2 px-4 py-1.5 bg-gray-100 border border-gray-200 rounded-full text-xs text-gray-500 max-w-[90%] my-1">
             <span>⚙️</span>
             <span class="text-center leading-snug">{{ msg.text }}</span>
             <span class="text-gray-400 flex-shrink-0">• {{ msg.time }}</span>
           </div>
 
-          <div *ngIf="msg.type !== 'system'" class="text-xs text-gray-500 mb-1 px-1">{{ msg.sender }} • {{ msg.time }}</div>
-
           <!-- Message normal -->
-          <div *ngIf="msg.type === 'normal'"
-               class="max-w-[85%] md:max-w-[70%] rounded-2xl px-4 py-3 shadow-sm"
-               [ngClass]="msg.isSelf ? 'bg-primary text-white rounded-tr-sm' : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm'">
-            <p *ngIf="msg.text" class="text-sm leading-relaxed whitespace-pre-wrap">{{ msg.text }}</p>
-            <div *ngIf="msg.audioUrl" class="mt-2">
-              <audio [src]="msg.audioUrl" controls
-                     class="h-8 w-48 max-w-full rounded"
-                     [ngClass]="msg.isSelf ? 'invert' : ''"></audio>
-            </div>
-            <button *ngIf="msg.hasAttachment && !msg.audioUrl"
-                    (click)="msg.attachmentName && openPreview(msg.attachmentName)"
-                    class="mt-3 p-2 bg-gray-50 border border-gray-200 rounded flex items-center gap-2 w-full text-left cursor-pointer hover:bg-gray-100 transition-colors">
-              <span class="text-xl text-alert" *ngIf="msg.attachmentName?.endsWith('.pdf')">📄</span>
-              <span class="text-xl text-blue-500" *ngIf="msg.attachmentName?.endsWith('.m4a') || msg.attachmentName?.endsWith('.webm')">🎵</span>
-              <div class="overflow-hidden flex-1">
-                <p class="text-xs font-medium truncate text-gray-800">{{ msg.attachmentName }}</p>
-                <p class="text-[10px] text-gray-500">{{ msg.attachmentName?.endsWith('.pdf') ? 'PDF • Cliquer pour aperçu' : 'Audio • Écouter' }}</p>
+          <ng-container *ngIf="!msg.isSystemMessage">
+            <div class="text-xs text-gray-500 mb-1 px-1">{{ msg.sender }} • {{ msg.time }}</div>
+            <div class="max-w-[85%] md:max-w-[70%] rounded-2xl px-4 py-3 shadow-sm"
+                 [ngClass]="msg.isSelf ? 'bg-primary text-white rounded-tr-sm' : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm'">
+              <p *ngIf="msg.text" class="text-sm leading-relaxed whitespace-pre-wrap">{{ msg.text }}</p>
+              <div *ngIf="msg.audioUrl" class="mt-2">
+                <audio [src]="msg.audioUrl" controls
+                       class="h-8 w-48 max-w-full rounded"
+                       [ngClass]="msg.isSelf ? 'invert' : ''"></audio>
               </div>
-              <span *ngIf="msg.attachmentName?.endsWith('.pdf')" class="text-gray-400 text-xs">👁</span>
-            </button>
-          </div>
-
-          <!-- Action finale (carte) -->
-          <div *ngIf="msg.type === 'final'"
-               class="w-full max-w-[340px] md:max-w-[450px] bg-white border-2 rounded-xl shadow-md overflow-hidden mt-2"
-               [ngClass]="msg.status === 'validated' ? 'border-green-500' : (msg.status === 'rejected' ? 'border-red-500' : 'border-blue-300')">
-
-            <div class="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center gap-2">
-              <span class="text-xl" *ngIf="msg.actionType === 'signature'">✍️</span>
-              <span class="text-xl" *ngIf="msg.actionType === 'inbox'">📥</span>
-              <span class="text-xl" *ngIf="msg.actionType === 'memo'">📢</span>
-              <div>
-                <h4 class="font-bold text-gray-900 text-sm">
-                  Clôture :
-                  {{ msg.actionType === 'signature' ? 'Pour Signature' : (msg.actionType === 'inbox' ? 'Courrier Arrivé' : 'Brouillon Note') }}
-                </h4>
-                <p class="text-xs text-gray-500">Action finale demandée</p>
-              </div>
-            </div>
-
-            <div class="p-3">
-              <p class="text-sm text-gray-800 mb-3 whitespace-pre-wrap">"{{ msg.text }}"</p>
-              <button *ngIf="msg.hasAttachment"
+              <button *ngIf="msg.hasAttachment && !msg.audioUrl"
                       (click)="msg.attachmentName && openPreview(msg.attachmentName)"
-                      class="p-2 bg-blue-50 border border-blue-100 rounded flex items-center gap-2 mb-3 w-full text-left cursor-pointer hover:bg-blue-100 transition-colors">
-                <span class="text-xl text-alert">📄</span>
+                      class="mt-3 p-2 bg-gray-50 border border-gray-200 rounded flex items-center gap-2 w-full text-left cursor-pointer hover:bg-gray-100 transition-colors">
+                <span class="text-xl text-alert" *ngIf="msg.attachmentName?.endsWith('.pdf')">📄</span>
+                <span class="text-xl text-blue-500" *ngIf="msg.attachmentName?.endsWith('.m4a') || msg.attachmentName?.endsWith('.webm')">🎵</span>
                 <div class="overflow-hidden flex-1">
-                  <p class="text-xs font-medium text-gray-800 truncate">{{ msg.attachmentName }}</p>
-                  <p class="text-[10px] text-blue-600 font-medium">Prêt pour action • Cliquer pour aperçu</p>
+                  <p class="text-xs font-medium truncate text-gray-800">{{ msg.attachmentName }}</p>
+                  <p class="text-[10px] text-gray-500">{{ msg.attachmentName?.endsWith('.pdf') ? 'PDF • Cliquer pour aperçu' : 'Audio • Écouter' }}</p>
                 </div>
-                <span class="text-blue-400 text-xs flex-shrink-0">👁</span>
+                <span *ngIf="msg.attachmentName?.endsWith('.pdf')" class="text-gray-400 text-xs">👁</span>
               </button>
-              <!-- Boutons valider/refuser : ancien workflow (DG uniquement) -->
-              <div *ngIf="msg.status === 'pending' && peutValiderMessages()" class="flex gap-2">
-                <button (click)="validateFinalAction(msg.id)"
-                        class="flex-1 py-2 bg-green-600 text-white rounded font-medium hover:bg-green-700 transition-colors text-xs flex justify-center items-center gap-1">
-                  ✅ Valider
-                </button>
-                <button (click)="rejectFinalAction(msg.id)"
-                        class="flex-1 py-2 bg-white border border-red-200 text-red-600 rounded font-medium hover:bg-red-50 transition-colors text-xs">
-                  ❌ Refuser
-                </button>
-              </div>
-              <div *ngIf="msg.status === 'validated'" class="py-2 bg-green-100 text-green-800 text-center rounded font-semibold text-xs border border-green-200">
-                Validé et Clôturé ✅
-              </div>
-              <div *ngIf="msg.status === 'rejected'" class="py-2 bg-red-100 text-red-800 text-center rounded font-semibold text-xs border border-red-200">
-                Clôture Refusée ❌
-              </div>
             </div>
-          </div>
+          </ng-container>
+
         </div>
 
         <div *ngIf="messages().length === 0 && activeThread()" class="text-center text-gray-400 py-12">
@@ -315,148 +170,44 @@
         </div>
       </div>
 
-      <!-- Documents attendus (panneau subordonné legacy) -->
-      <div *ngIf="peutEnvoyerRepDefinitive() && activeThreadDocuments().length > 0"
-           class="px-4 py-2.5 bg-amber-50 border-t border-amber-200 flex-shrink-0">
-        <p class="text-[10px] font-semibold text-amber-700 uppercase tracking-wide mb-1.5">Documents à fournir</p>
-        <div class="flex flex-wrap gap-1.5">
-          <span *ngFor="let doc of activeThreadDocuments()"
-                class="px-2 py-0.5 bg-white border border-amber-300 text-amber-800 rounded text-xs">📄 {{ doc }}</span>
-        </div>
-      </div>
-
-      <!-- Saisie -->
-      <footer class="p-3 md:p-4 bg-white border-t border-gray-200 relative flex-shrink-0">
-        <!-- Dropdown action finale (secrétaire) -->
-        <div *ngIf="showFinalActionMenu()"
-             class="absolute bottom-full right-3 mb-2 w-56 bg-white border border-gray-200 shadow-xl rounded-lg overflow-hidden z-20">
-          <div class="px-4 py-2 bg-gray-50 border-b border-gray-100">
-            <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Type d'action finale</span>
+      <!-- Saisie (masquée si instruction clôturée) -->
+      @if (activeThread()?.statut !== 'CLOTURE') {
+        <footer class="p-3 md:p-4 bg-white border-t border-gray-200 flex-shrink-0">
+          <div *ngIf="selectedFile()" class="mb-2 inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full shadow-sm">
+            <span class="text-blue-600 text-sm">📎</span>
+            <span class="text-xs text-blue-700 font-medium truncate max-w-[150px]">{{ selectedFile()?.name }}</span>
+            <button (click)="removeSelectedFile()" class="text-blue-400 hover:text-red-500 text-xs font-bold leading-none">&times;</button>
           </div>
-          <button (click)="sendFinalAction('signature')" class="w-full text-left px-4 py-3 hover:bg-primary/5 flex items-center gap-2 border-b border-gray-100 transition-colors">
-            <span>✍️</span><span class="text-sm font-medium text-gray-800">Draft pour Signature</span>
-          </button>
-          <button (click)="sendFinalAction('inbox')" class="w-full text-left px-4 py-3 hover:bg-primary/5 flex items-center gap-2 border-b border-gray-100 transition-colors">
-            <span>📥</span><span class="text-sm font-medium text-gray-800">Courrier Arrivé</span>
-          </button>
-          <button (click)="sendFinalAction('memo')" class="w-full text-left px-4 py-3 hover:bg-primary/5 flex items-center gap-2 transition-colors">
-            <span>📢</span><span class="text-sm font-medium text-gray-800">Note de Service</span>
-          </button>
-        </div>
-
-        <!-- Aperçu fichier sélectionné -->
-        <div *ngIf="selectedFile()" class="mb-2 inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full shadow-sm">
-          <span class="text-blue-600 text-sm">📎</span>
-          <span class="text-xs text-blue-700 font-medium truncate max-w-[150px]">{{ selectedFile()?.name }}</span>
-          <button (click)="removeSelectedFile()" class="text-blue-400 hover:text-red-500 text-xs font-bold leading-none">&times;</button>
-        </div>
-
-        <div class="flex items-end gap-2">
-          <label class="p-2 text-gray-400 hover:text-primary transition-colors flex-shrink-0 cursor-pointer">
-            <span class="text-xl">📎</span>
-            <input type="file" class="hidden" (change)="onFileSelected($event)">
-          </label>
-          <app-audio-recorder class="flex-shrink-0" (recorded)="onAudioRecorded($event)"></app-audio-recorder>
-          <div class="flex-1 flex bg-white border border-gray-300 rounded-lg focus-within:border-primary focus-within:ring-1 focus-within:ring-primary items-end">
-            <textarea
-              [ngModel]="newMessage()"
-              (ngModelChange)="newMessage.set($event)"
-              (keydown)="onKeydown($event)"
-              rows="1"
-              class="flex-1 resize-none bg-transparent pl-3 py-2.5 focus:outline-none text-sm min-h-[42px]"
-              placeholder="Votre instruction..."></textarea>
-            <div class="flex items-center pr-2 gap-1.5 pb-1.5">
-
-              <!-- Subordonné (legacy) : répondre + réponse définitive -->
-              <ng-container *ngIf="peutEnvoyerRepDefinitive()">
-                <button (click)="sendNormalMessage()"
-                        class="px-3 py-1.5 text-gray-700 bg-gray-100 border border-gray-200 rounded hover:bg-gray-200 transition-colors disabled:opacity-50 flex items-center gap-1 text-xs font-medium"
-                        [disabled]="newMessage().trim() === '' && !selectedFile()">
-                  <span>💬</span><span class="hidden sm:inline">Répondre</span>
-                </button>
-                <button (click)="sendSubordonneFinal()"
-                        class="px-3 py-1.5 text-white rounded transition-colors disabled:opacity-50 flex items-center gap-1 text-xs font-bold"
-                        [ngClass]="activeThread()?.statut === 'CLOTURE' ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'"
-                        [disabled]="(newMessage().trim() === '' && !selectedFile()) || uploadingFile()
-                                    || activeThread()?.statut === 'SOUMIS_VALIDATION'
-                                    || activeThread()?.statut === 'CLOTURE'">
-                  <span *ngIf="uploadingFile()">⏳</span>
-                  <span *ngIf="!uploadingFile() && activeThread()?.statut !== 'SOUMIS_VALIDATION' && activeThread()?.statut !== 'CLOTURE'">✅</span>
-                  <span *ngIf="activeThread()?.statut === 'SOUMIS_VALIDATION'">⏳</span>
-                  <span *ngIf="activeThread()?.statut === 'CLOTURE'">🔒</span>
-                  <span class="hidden sm:inline">
-                    {{ uploadingFile() ? 'Envoi...' :
-                       activeThread()?.statut === 'SOUMIS_VALIDATION' ? 'En attente DG...' :
-                       activeThread()?.statut === 'CLOTURE' ? 'Clôturé' : 'Rép. Définitive' }}
-                  </span>
-                </button>
-              </ng-container>
-
-              <!-- Secrétaire (legacy) : répondre + clôture -->
-              <ng-container *ngIf="peutEnvoyerCloture()">
+          <div class="flex items-end gap-2">
+            <label class="p-2 text-gray-400 hover:text-primary transition-colors flex-shrink-0 cursor-pointer">
+              <span class="text-xl">📎</span>
+              <input type="file" class="hidden" (change)="onFileSelected($event)">
+            </label>
+            <app-audio-recorder class="flex-shrink-0" (recorded)="onAudioRecorded($event)"></app-audio-recorder>
+            <div class="flex-1 flex bg-white border border-gray-300 rounded-lg focus-within:border-primary focus-within:ring-1 focus-within:ring-primary items-end">
+              <textarea
+                [ngModel]="newMessage()"
+                (ngModelChange)="newMessage.set($event)"
+                (keydown)="onKeydown($event)"
+                rows="1"
+                class="flex-1 resize-none bg-transparent pl-3 py-2.5 focus:outline-none text-sm min-h-[42px]"
+                placeholder="Votre message..."></textarea>
+              <div class="flex items-center pr-2 gap-1.5 pb-1.5">
                 <button (click)="sendNormalMessage()"
                         class="px-3 py-1.5 text-white bg-primary rounded hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1 text-xs font-medium"
                         [disabled]="newMessage().trim() === ''">
                   <span>💬</span><span class="hidden sm:inline">Répondre</span>
                 </button>
-                <button (click)="toggleActionMenu()"
-                        class="px-3 py-1.5 text-primary bg-primary/10 rounded hover:bg-primary/20 transition-colors disabled:opacity-50 flex items-center gap-1 text-xs font-bold"
-                        [disabled]="newMessage().trim() === ''">
-                  <span>✅</span><span class="hidden sm:inline">Clôture ▾</span>
-                </button>
-              </ng-container>
-
-              <!-- Autres rôles (DG, ADMIN_IT, nouveau modèle Poste) : répondre uniquement -->
-              <ng-container *ngIf="!peutEnvoyerRepDefinitive() && !peutEnvoyerCloture()">
-                <button (click)="sendNormalMessage()"
-                        class="px-3 py-1.5 text-white bg-primary rounded hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1 text-xs font-medium"
-                        [disabled]="newMessage().trim() === ''">
-                  <span>💬</span><span class="hidden sm:inline">Répondre</span>
-                </button>
-              </ng-container>
-
+              </div>
             </div>
           </div>
+        </footer>
+      } @else {
+        <div class="px-4 py-3 bg-gray-50 border-t border-gray-200 text-center text-xs text-gray-400 italic flex-shrink-0">
+          🔒 Cette instruction est clôturée — aucun nouveau message ne peut être envoyé.
         </div>
-      </footer>
+      }
     </main>
-
-    <!-- ─── Panneau latéral : Timeline du Circuit ─────────────────── -->
-    <aside *ngIf="showTimelinePanel() && activeThread()"
-           class="hidden md:flex w-64 xl:w-72 border-l border-gray-200 flex-col bg-gray-50/60 flex-shrink-0 overflow-hidden">
-
-      <div class="px-3 py-2.5 border-b border-gray-200 flex items-center justify-between bg-white flex-shrink-0">
-        <h3 class="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-          </svg>
-          Circuit de validation
-        </h3>
-        <button (click)="showTimelinePanel.set(false)"
-                class="text-gray-400 hover:text-gray-600 transition-colors p-0.5 rounded">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-          </svg>
-        </button>
-      </div>
-
-      <!-- Infos étape courante -->
-      <div *ngIf="workflowEtat()?.globalStatus === 'EN_CIRCUIT'"
-           class="mx-3 mt-3 p-2.5 bg-indigo-50 border border-indigo-200 rounded-lg flex-shrink-0">
-        <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-wider mb-0.5">Étape en cours</p>
-        <p class="text-xs font-semibold text-indigo-900">{{ workflowEtat()!.currentStep?.stepLabel }}</p>
-        <p *ngIf="workflowEtat()!.currentStep?.requiredPoste" class="text-[10px] text-indigo-600 mt-0.5">
-          {{ workflowEtat()!.currentStep!.requiredPoste!.libelle }}
-        </p>
-      </div>
-
-      <div class="flex-1 overflow-y-auto">
-        <app-workflow-timeline
-          [typeId]="activeThread()?.instructionTypeId ?? ''"
-          [instructionId]="activeThread()?.id ?? ''">
-        </app-workflow-timeline>
-      </div>
-    </aside>
 
   </div>
 </div>
@@ -476,7 +227,7 @@
 
     <div class="p-5 space-y-4 overflow-y-auto flex-1">
 
-      <!-- Type d'instruction + Titre -->
+      <!-- Type + Titre -->
       <div class="flex flex-col sm:flex-row gap-3">
         <div class="sm:w-1/2">
           <label class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">Type d'instruction *</label>
@@ -490,16 +241,6 @@
           <input type="text" [ngModel]="newInstructionTitle()" (ngModelChange)="newInstructionTitle.set($event)"
                  placeholder="Laisser vide si non défini..."
                  class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary">
-        </div>
-      </div>
-
-      <!-- Documents attendus pour ce type -->
-      <div *ngIf="selectedTypeDocuments().length > 0"
-           class="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-        <p class="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-2">Documents à fournir pour ce type</p>
-        <div class="flex flex-wrap gap-1.5">
-          <span *ngFor="let doc of selectedTypeDocuments()"
-                class="px-2 py-0.5 bg-white border border-amber-300 text-amber-800 rounded text-xs">📄 {{ doc }}</span>
         </div>
       </div>
 
@@ -528,72 +269,34 @@
         </div>
       </div>
 
-      <!-- Aperçu du Circuit de validation -->
-      <div class="border border-indigo-200 rounded-lg overflow-hidden"
-           *ngIf="circuitPreview().length > 0">
-        <div class="bg-indigo-50 px-4 py-2.5 border-b border-indigo-200 flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-indigo-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-          </svg>
-          <h4 class="text-sm font-semibold text-indigo-800">Circuit de validation</h4>
-          <span class="ml-auto text-xs text-indigo-500 font-medium bg-indigo-100 px-2 py-0.5 rounded-full">
-            {{ circuitPreview().length }} étape{{ circuitPreview().length > 1 ? 's' : '' }}
-          </span>
+      <!-- Assignés -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider">Intervenants</label>
+          <button type="button" (click)="addAssignee()"
+                  class="text-xs text-primary font-medium hover:underline flex items-center gap-1">
+            ➕ Ajouter
+          </button>
         </div>
-        <div class="p-3 bg-white space-y-0">
-          <div *ngFor="let step of circuitPreview(); let last = last"
-               class="flex items-start gap-3">
-            <div class="flex flex-col items-center flex-shrink-0 pt-0.5">
-              <div class="w-6 h-6 rounded-full bg-indigo-100 border border-indigo-300 flex items-center justify-center text-[10px] font-bold text-indigo-700">
-                {{ step.stepOrder }}
-              </div>
-              <div *ngIf="!last" class="w-px h-4 bg-indigo-100 mt-0.5"></div>
-            </div>
-            <div class="pb-3 min-w-0 flex-1">
-              <p class="text-sm font-medium text-gray-900 leading-tight">{{ step.stepLabel }}</p>
-              <div class="flex items-center gap-2 mt-0.5 flex-wrap">
-                <span class="text-xs text-gray-400">
-                  {{ step.requiredPoste?.libelle ?? 'Ouvert à tous' }}
-                </span>
-                <span *ngIf="step.requiresSignature"
-                      class="text-[10px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5">
-                  ✍️ Signature
-                </span>
-                <span *ngIf="step.requiresAttachment"
-                      class="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
-                  📎 Pièce jointe
-                </span>
-              </div>
-            </div>
+        <div class="space-y-2">
+          <div *ngFor="let a of newInstructionAssignees(); let i = index"
+               class="flex items-center gap-2">
+            <select [ngModel]="a.agent" (ngModelChange)="updateAssigneeAgent(i, $event)"
+                    class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white">
+              <option *ngFor="let u of availableAgents()" [value]="u.nomComplet">{{ u.nomComplet }}</option>
+            </select>
+            <button type="button" (click)="removeAssignee(i)"
+                    class="text-gray-400 hover:text-red-500 transition-colors p-1.5">✕</button>
           </div>
+          <p *ngIf="newInstructionAssignees().length === 0" class="text-xs text-gray-400 italic">
+            Aucun intervenant — instruction sans assigné.
+          </p>
         </div>
-      </div>
-
-      <!-- Avertissement : type sans circuit -->
-      <div *ngIf="circuitPreview().length === 0 && newInstructionTypeId()"
-           class="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-        </svg>
-        Aucun circuit configuré pour ce type. L'instruction sera gérée manuellement.
-      </div>
-
-      <!-- Option : lancer le circuit immédiatement -->
-      <div *ngIf="circuitPreview().length > 0"
-           class="flex items-center gap-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
-        <label class="flex items-center gap-2.5 cursor-pointer select-none flex-1">
-          <input type="checkbox"
-                 [ngModel]="lancerApresCreation()"
-                 (ngModelChange)="lancerApresCreation.set($event)"
-                 class="w-4 h-4 rounded accent-indigo-600 flex-shrink-0">
-          <span class="text-sm font-semibold text-indigo-800">Lancer le circuit immédiatement</span>
-        </label>
-        <span class="text-xs text-indigo-400 hidden sm:block">Démarre la validation à la création</span>
       </div>
 
       <!-- Audio + Texte -->
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">Instruction</label>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Instruction *</label>
         <div class="flex items-center gap-3 mb-3 p-3 border border-gray-200 rounded-lg"
              [ngClass]="isRecordingAudio() ? 'bg-red-50 border-red-200' : 'bg-white'">
           <button (click)="toggleAudioRecording()"
@@ -624,15 +327,9 @@
         Annuler
       </button>
       <button (click)="createNewInstruction()"
-              class="px-5 py-2 font-medium rounded shadow-soft flex items-center gap-2 text-sm disabled:opacity-50 transition-colors"
-              [ngClass]="lancerApresCreation()
-                ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                : 'bg-primary text-white hover:bg-primary/90'"
+              class="px-5 py-2 bg-primary text-white font-medium rounded shadow-soft flex items-center gap-2 text-sm disabled:opacity-50 transition-colors hover:bg-primary/90"
               [disabled]="!newInstructionMessage().trim() && !hasAudioRecord()">
-        <svg *ngIf="lancerApresCreation()" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-        </svg>
-        {{ lancerApresCreation() ? 'Créer et Lancer le Circuit' : '💾 Créer en Brouillon' }}
+        💾 Créer l'instruction
       </button>
     </div>
   </div>
@@ -655,53 +352,5 @@
     <app-pdf-file-viewer class="flex-1 overflow-hidden"
                          [fileName]="previewFileName()!">
     </app-pdf-file-viewer>
-  </div>
-</div>
-
-<!-- ─── Modale de Rejet (motif obligatoire) ─────────────────────────────── -->
-<div *ngIf="showRejectionModal()" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-  <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
-
-    <div class="px-5 py-4 border-b border-gray-200 bg-red-50 flex items-center justify-between">
-      <h3 class="text-base font-semibold text-red-800 flex items-center gap-2">
-        <span>❌</span> Rejeter l'Étape
-      </h3>
-      <button (click)="fermerModalRejet()" class="text-gray-400 hover:text-gray-700 transition-colors">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </button>
-    </div>
-
-    <div class="p-5 space-y-4">
-      <p class="text-sm text-gray-700">
-        Le rejet entraîne la clôture du dossier avec statut <strong class="text-red-700">Rejeté</strong>.
-        Veuillez indiquer le motif afin de justifier cette décision.
-      </p>
-      <div>
-        <label class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">
-          Motif du rejet <span class="text-red-500">*</span>
-        </label>
-        <textarea
-          [ngModel]="motifRejet()"
-          (ngModelChange)="motifRejet.set($event)"
-          rows="3"
-          placeholder="Expliquez la raison du rejet..."
-          class="w-full resize-none border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-400 focus:ring-1 focus:ring-red-200">
-        </textarea>
-      </div>
-    </div>
-
-    <div class="px-5 py-4 border-t border-gray-200 flex justify-end gap-3 bg-gray-50">
-      <button (click)="fermerModalRejet()"
-              class="px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded hover:bg-gray-100 text-sm">
-        Annuler
-      </button>
-      <button (click)="rejeterEtapeWorkflow()"
-              class="px-5 py-2 bg-red-600 text-white font-medium rounded hover:bg-red-700 shadow-sm flex items-center gap-2 text-sm disabled:opacity-50"
-              [disabled]="!motifRejet().trim()">
-        ❌ Confirmer le Rejet
-      </button>
-    </div>
   </div>
 </div>

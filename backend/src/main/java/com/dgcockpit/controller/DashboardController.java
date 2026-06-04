@@ -3,7 +3,6 @@ package com.dgcockpit.controller;
 import com.dgcockpit.entity.CourrierArrive;
 import com.dgcockpit.entity.CourrierDepart;
 import com.dgcockpit.entity.Instruction;
-import com.dgcockpit.entity.InstructionMessage;
 import com.dgcockpit.repository.*;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,18 +16,15 @@ import java.util.Map;
 public class DashboardController {
 
     private final InstructionRepository instructionRepo;
-    private final InstructionMessageRepository messageRepo;
     private final CourrierArriveRepository courrierArriveRepo;
     private final CourrierDepartRepository courrierDepartRepo;
     private final RendezVousRepository rendezVousRepo;
 
     public DashboardController(InstructionRepository instructionRepo,
-                               InstructionMessageRepository messageRepo,
                                CourrierArriveRepository courrierArriveRepo,
                                CourrierDepartRepository courrierDepartRepo,
                                RendezVousRepository rendezVousRepo) {
         this.instructionRepo = instructionRepo;
-        this.messageRepo = messageRepo;
         this.courrierArriveRepo = courrierArriveRepo;
         this.courrierDepartRepo = courrierDepartRepo;
         this.rendezVousRepo = rendezVousRepo;
@@ -38,12 +34,9 @@ public class DashboardController {
     public Map<String, Object> getStats() {
         long instructionsActives = instructionRepo.countByStatutIn(
             List.of(Instruction.StatutInstruction.OUVERT,
-                    Instruction.StatutInstruction.EN_COURS,
-                    Instruction.StatutInstruction.EN_ATTENTE)
+                    Instruction.StatutInstruction.EN_COURS)
         );
-        long docsASignerCount = messageRepo.countByTypeAndStatut(
-            InstructionMessage.TypeMessage.FINAL, InstructionMessage.StatutMessage.PENDING
-        );
+        long docsASignerCount = 0L;
 
         LocalDate today = LocalDate.now();
         long rdvAujourdhui = rendezVousRepo.findByDateBetweenOrderByDateAscHeureAsc(today, today).size();

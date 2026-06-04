@@ -1,9 +1,11 @@
-import { Component, OnInit, OnDestroy, signal, inject, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, inject, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
+import { take } from 'rxjs/operators';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
+import { CollaboraEditorComponent } from '../../shared/collabora-editor/collabora-editor.component';
 
 interface BureauDoc {
   id: string;
@@ -17,6 +19,7 @@ interface BureauDoc {
   createdAt: string;
   hasSignatureZone: boolean;
   hasStampZone: boolean;
+  hasSignaturePdf: boolean;
   renvoyeMotif: string | null;
   corrigeDepuisRenvoi: boolean;
   circuitPdfDocumentId: string | null;
@@ -37,6 +40,7 @@ interface TypeDoc {
   requiresStampZone: boolean;
   requiresDestinataire: boolean;
   actif: boolean;
+  templateDocxPath?: string | null;
 }
 
 interface EtapeCircuit {
@@ -47,13 +51,14 @@ interface EtapeCircuit {
 @Component({
   selector: 'app-bureau',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, CollaboraEditorComponent],
   templateUrl: './bureau.component.html',
 })
 export class BureauComponent implements OnInit, OnDestroy {
-  private api  = inject(ApiService);
-  private auth = inject(AuthService);
+  private api   = inject(ApiService);
+  private auth  = inject(AuthService);
   private router = inject(Router);
+  private route  = inject(ActivatedRoute);
 
   private sse: EventSource | null = null;
 
@@ -76,19 +81,80 @@ export class BureauComponent implements OnInit, OnDestroy {
   uploadTitre        = '';
   uploadType         = 'COURRIER';
   uploadDestinataire = '';
-  uploadTypeDocumentId = '';
+  uploadTypeDocumentId = signal<string>('');
 
   // Liste des types de documents disponibles
   typeDocuments = signal<TypeDoc[]>([]);
   // TypeDocument sélectionné pour l'upload en cours
   uploadTypeDoc = computed(() =>
-    this.typeDocuments().find(t => t.id === this.uploadTypeDocumentId) ?? null
+    this.typeDocuments().find(t => t.id === this.uploadTypeDocumentId()) ?? null
   );
+
+  // Section Instruction dans la modale d'upload
+  uploadInstructionMode          = signal<'AUCUNE' | 'EXISTANTE'>('AUCUNE');
+  uploadInstructionId            = signal<string>('');
+  instructionsPendingForTypeDoc  = signal<{ id: string; title: string; statut: string }[]>([]);
+  loadingInstructionsPending     = signal(false);
+
+  // Création depuis template
+  creatingFromTemplate = signal(false);
+
+  creerDepuisModele() {
+    const td = this.uploadTypeDoc();
+    if (!td) return;
+    this.creatingFromTemplate.set(true);
+    const instrId = this.uploadInstructionMode() === 'EXISTANTE'
+      ? (this.uploadInstructionId() || undefined)
+      : undefined;
+    this.api.createFromTemplate(td.id, this.uploadTitre || undefined, instrId).subscribe({
+      next: (doc: any) => {
+        this.docs.update(list => [{ ...doc, hasSignatureZone: false, hasStampZone: false } as any, ...list]);
+        this.showUploadModal.set(false);
+        this.creatingFromTemplate.set(false);
+        // Ouvrir immédiatement Collabora sur le nouveau document
+        this.editingDoc.set(doc as any);
+      },
+      error: () => this.creatingFromTemplate.set(false),
+    });
+  }
+
+  // Éditeur Collabora — document ouvert en plein écran
+  editingDoc = signal<BureauDoc | null>(null);
+
+  ouvrirEdition(doc: BureauDoc) {
+    if (doc.statut === 'BROUILLON' || doc.statut === 'RETOURNE') {
+      this.editingDoc.set(doc);
+    }
+  }
+
+  fermerEdition() {
+    this.editingDoc.set(null);
+    this.load(); // rafraîchit la liste après modification
+  }
 
   // Confirm delete
   deletingId = signal<string | null>(null);
 
   // Modale soumettre avec sélection de circuit
+  /** Retourne true si le document est un .docx éditable via Collabora. */
+  isDocx(doc: BureauDoc): boolean {
+    return !!doc.originalFileName?.toLowerCase().endsWith('.docx');
+  }
+
+  /**
+   * Soumission autorisée une fois la zone de signature posée (PDF comme .docx).
+   * Pour un .docx, les zones sont posées sur le PDF régénéré à l'enregistrement Collabora.
+   */
+  peutSoumettre(doc: BureauDoc): boolean {
+    if (doc.statut === 'RETOURNE') return doc.hasSignatureZone && doc.corrigeDepuisRenvoi;
+    return doc.hasSignatureZone;
+  }
+
+  /** Le placement de zones est possible une fois le PDF disponible (PDF natif ou .docx déjà enregistré dans Collabora). */
+  peutPlacerZones(doc: BureauDoc): boolean {
+    return !this.isDocx(doc) || doc.hasSignaturePdf;
+  }
+
   soumettreId        = signal<string | null>(null);
   submitting         = signal(false);
   circuitSelectionne = signal<EtapeCircuit[]>([]);
@@ -104,7 +170,7 @@ export class BureauComponent implements OnInit, OnDestroy {
   userPickerFilter  = signal('');
 
   utilisateursFiltres = computed(() => {
-    const filtre     = this.userPickerFilter().toLowerCase();
+    const filtre      = this.userPickerFilter().toLowerCase();
     const dejaChoisis = new Set(this.circuitSelectionne().map(e => e.userId));
     const moiId       = this.currentUser()?.id;
     return this.utilisateurs()
@@ -146,6 +212,31 @@ export class BureauComponent implements OnInit, OnDestroy {
   livraisonSelected   = signal<string[]>([]);
   livraisonSaving     = signal(false);
 
+  constructor() {
+    // Quand le TypeDocument change et qu'il a un binôme, charger les instructions en attente
+    // allowSignalWrites: true requis pour écrire dans des signaux depuis l'effect
+    effect(() => {
+      const tdId = this.uploadTypeDocumentId();
+      if (tdId) {
+        this.loadingInstructionsPending.set(true);
+        this.api.getInstructionsPendingForTypeDoc(tdId).subscribe({
+          next: list => {
+            this.instructionsPendingForTypeDoc.set(list);
+            this.loadingInstructionsPending.set(false);
+          },
+          error: () => {
+            this.instructionsPendingForTypeDoc.set([]);
+            this.loadingInstructionsPending.set(false);
+          },
+        });
+      } else {
+        this.instructionsPendingForTypeDoc.set([]);
+        this.uploadInstructionMode.set('AUCUNE');
+        this.uploadInstructionId.set('');
+      }
+    }, { allowSignalWrites: true });
+  }
+
   ngOnInit() {
     this.load();
     this.api.getClasseurs().subscribe(data => this.livraisonClasseurs.set(data));
@@ -155,6 +246,25 @@ export class BureauComponent implements OnInit, OnDestroy {
     this.api.getTypeDocuments().subscribe((types: TypeDoc[]) =>
       this.typeDocuments.set(types.filter(t => t.actif))
     );
+    // Ouvrir automatiquement la modale d'upload si on arrive depuis le chat (instruction DOCUMENTAIRE)
+    this.route.queryParams.pipe(take(1)).subscribe(params => {
+      const typeDocId        = params['typeDocumentId'];
+      const srcInstructionId = params['sourceInstructionId'];
+      if (typeDocId) {
+        this.uploadTypeDocumentId.set(typeDocId);
+        this.uploadTitre          = '';
+        this.uploadFile           = null;
+        this.uploadDestinataire   = '';
+        if (srcInstructionId) {
+          this.uploadInstructionMode.set('EXISTANTE');
+          this.uploadInstructionId.set(srcInstructionId);
+        } else {
+          this.uploadInstructionMode.set('AUCUNE');
+          this.uploadInstructionId.set('');
+        }
+        this.showUploadModal.set(true);
+      }
+    });
     this.sse = new EventSource('/api/events');
     this.sse.addEventListener('PARAPHEUR_UPDATED', () => this.load());
   }
@@ -174,11 +284,13 @@ export class BureauComponent implements OnInit, OnDestroy {
   // ── Upload ────────────────────────────────────────────────────────────────
 
   openUploadModal() {
-    this.uploadFile = null;
-    this.uploadTitre = '';
-    this.uploadType = 'COURRIER';
-    this.uploadDestinataire = '';
-    this.uploadTypeDocumentId = '';
+    this.uploadFile           = null;
+    this.uploadTitre          = '';
+    this.uploadType           = 'COURRIER';
+    this.uploadDestinataire   = '';
+    this.uploadTypeDocumentId.set('');
+    this.uploadInstructionMode.set('AUCUNE');
+    this.uploadInstructionId.set('');
     this.showUploadModal.set(true);
   }
 
@@ -186,20 +298,31 @@ export class BureauComponent implements OnInit, OnDestroy {
     const f = (ev.target as HTMLInputElement).files?.[0];
     if (!f) return;
     this.uploadFile = f;
-    if (!this.uploadTitre) this.uploadTitre = f.name.replace(/\.pdf$/i, '');
+    if (!this.uploadTitre) {
+      this.uploadTitre = f.name.replace(/\.(pdf|docx)$/i, '');
+    }
   }
 
   doUpload() {
     if (!this.uploadFile) return;
     this.uploading.set(true);
-    const td = this.uploadTypeDoc();
+    const td   = this.uploadTypeDoc();
     const type = td ? td.code : this.uploadType;
+    const mode = this.uploadInstructionMode();
+    // AUCUNE → le backend auto-crée l'instruction via InstructionType.typeDocumentAttenduId
+    // EXISTANTE → on passe l'ID de l'instruction sélectionnée
+    const instructionId = mode === 'EXISTANTE' ? (this.uploadInstructionId() || undefined) : undefined;
+    this.effectuerUpload(type, instructionId);
+  }
+
+  private effectuerUpload(type: string, sourceInstructionId?: string) {
     this.api.uploadBureauDocument(
-      this.uploadFile,
+      this.uploadFile!,
       type,
       this.uploadTitre || undefined,
       this.uploadDestinataire || undefined,
-      this.uploadTypeDocumentId || undefined
+      this.uploadTypeDocumentId() || undefined,
+      sourceInstructionId
     ).subscribe({
       next: doc => {
         this.docs.update(list => [doc, ...list]);
@@ -219,7 +342,8 @@ export class BureauComponent implements OnInit, OnDestroy {
   // ── Soumettre au parapheur ────────────────────────────────────────────────
 
   confirmSoumettre(doc: BureauDoc) {
-    if (!doc.hasSignatureZone) {
+    if (!this.peutSoumettre(doc)) {
+      if (this.isDocx(doc)) return; // bouton désactivé côté HTML, ne devrait pas arriver
       alert('Veuillez d\'abord placer la zone de signature avant de soumettre.');
       return;
     }
@@ -236,7 +360,6 @@ export class BureauComponent implements OnInit, OnDestroy {
     const mode = doc.modeCircuit ?? 'LIBRE';
 
     if (mode === 'MANAGER_SEUL') {
-      // Circuit automatique — pas de picker, manager direct uniquement
       const user = this.currentUser();
       const circuit: EtapeCircuit[] = user?.managerId && user?.managerNom
         ? [{ userId: user.managerId, nom: user.managerNom }]
@@ -247,14 +370,12 @@ export class BureauComponent implements OnInit, OnDestroy {
     }
 
     if (mode === 'PREDEFINI') {
-      // Circuit fixé — résolu côté backend, afficher en lecture seule
       this.circuitSelectionne.set([]);
       this.soumettreId.set(doc.id);
       return;
     }
 
     if (mode === 'PREDEFINI_MODIFIABLE' && doc.typeDocCircuit?.length) {
-      // Pré-remplir avec le circuit type (résolution poste → utilisateur), modifiable
       const filledCircuit: EtapeCircuit[] = [];
       for (const step of doc.typeDocCircuit) {
         const occupant = this.utilisateurs().find(u => u.posteId === step.posteId);
@@ -288,7 +409,7 @@ export class BureauComponent implements OnInit, OnDestroy {
 
   supprimerEtape(index: number) {
     const circuit = this.circuitSelectionne();
-    if (circuit.length <= 1) return; // garder au moins une étape
+    if (circuit.length <= 1) return;
     this.circuitSelectionne.set(circuit.filter((_, i) => i !== index));
   }
 
@@ -311,7 +432,7 @@ export class BureauComponent implements OnInit, OnDestroy {
     const id = this.soumettreId();
     if (!id) return;
     const doc = this.soumettreDoc();
-    const isTransit  = !!doc?.circuitPdfDocumentId;
+    const isTransit   = !!doc?.circuitPdfDocumentId;
     const isPredefini = doc?.modeCircuit === 'PREDEFINI';
     const circuit = this.circuitSelectionne();
     if (!isTransit && !isPredefini && circuit.length === 0) {
@@ -319,7 +440,6 @@ export class BureauComponent implements OnInit, OnDestroy {
       return;
     }
     this.submitting.set(true);
-    // Pour PREDEFINI : pas de circuit côté frontend — le backend résout via TypeDocument.circuitJson
     const circuitParam = (isTransit || isPredefini) ? undefined : JSON.stringify(circuit);
     this.api.soumettreAuParapheur(id, circuitParam).subscribe({
       next: () => {

@@ -21,35 +21,18 @@ public class InstructionMessage {
     @Column(columnDefinition = "TEXT")
     private String text;
 
-    @Enumerated(EnumType.STRING)
-    private TypeMessage type = TypeMessage.NORMAL;
-
     private String attachmentName;
     private String audioUrl;
 
+    /** Surlignages PDF posés lors d'un renvoi pour correction — JSON [{page,x,y,w,h},...] */
     @Column(columnDefinition = "TEXT")
     private String highlightsJson;
 
-    @Enumerated(EnumType.STRING)
-    private ActionType actionType;
-
-    @Enumerated(EnumType.STRING)
-    private StatutMessage statut;
-
-    /**
-     * Étape du circuit lors de l'envoi de ce message.
-     * Null pour les messages échangés hors circuit (BROUILLON) ou les messages système.
-     * Permet de retracer l'historique des échanges par étape.
-     */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "workflow_step_id")
-    private WorkflowStep workflowStep;
+    /** Message généré automatiquement par le système (événement circuit) */
+    @Column(columnDefinition = "boolean DEFAULT false")
+    private boolean systemMessage = false;
 
     private LocalDateTime sentAt = LocalDateTime.now();
-
-    public enum TypeMessage { NORMAL, FINAL, SYSTEM }
-    public enum ActionType { SIGNATURE, INBOX, MEMO }
-    public enum StatutMessage { PENDING, VALIDATED, REJECTED }
 
     // Getters / Setters
     public String getId() { return id; }
@@ -62,21 +45,14 @@ public class InstructionMessage {
     public void setSelf(boolean self) { isSelf = self; }
     public String getText() { return text; }
     public void setText(String text) { this.text = text; }
-    public TypeMessage getType() { return type; }
-    public void setType(TypeMessage type) { this.type = type; }
     public String getAttachmentName() { return attachmentName; }
     public void setAttachmentName(String attachmentName) { this.attachmentName = attachmentName; }
     public String getAudioUrl() { return audioUrl; }
     public void setAudioUrl(String audioUrl) { this.audioUrl = audioUrl; }
     public String getHighlightsJson() { return highlightsJson; }
     public void setHighlightsJson(String highlightsJson) { this.highlightsJson = highlightsJson; }
-    public ActionType getActionType() { return actionType; }
-    public void setActionType(ActionType actionType) { this.actionType = actionType; }
-    public StatutMessage getStatut() { return statut; }
-    public void setStatut(StatutMessage statut) { this.statut = statut; }
+    public boolean isSystemMessage() { return systemMessage; }
+    public void setSystemMessage(boolean systemMessage) { this.systemMessage = systemMessage; }
     public LocalDateTime getSentAt() { return sentAt; }
     public void setSentAt(LocalDateTime sentAt) { this.sentAt = sentAt; }
-
-    public WorkflowStep getWorkflowStep() { return workflowStep; }
-    public void setWorkflowStep(WorkflowStep workflowStep) { this.workflowStep = workflowStep; }
 }

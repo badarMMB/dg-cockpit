@@ -2,8 +2,6 @@ package com.dgcockpit.entity;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
 @Entity
 @Table(name = "instruction_types")
@@ -26,29 +24,25 @@ public class InstructionType {
     @Enumerated(EnumType.STRING)
     private Urgence urgenceDefaut = Urgence.NORMAL;
 
+    /**
+     * LIBRE  : pas de document attendu, clôture manuelle par l'initiateur.
+     * DOCUMENTAIRE : un document de type {@link #typeDocumentAttenduId} doit être produit ;
+     *                les événements du circuit sont reportés dans le fil ; clôture auto.
+     */
     @Enumerated(EnumType.STRING)
-    private TypeLivrable livrableAttendu = TypeLivrable.CONFIRMATION;
+    @Column(nullable = false)
+    private TypeInstruction typeInstruction = TypeInstruction.LIBRE;
 
-    @Column(columnDefinition = "TEXT")
-    private String documentsAttendus;
+    /** FK vers TypeDocument — uniquement pour typeInstruction = DOCUMENTAIRE */
+    private String typeDocumentAttenduId;
 
     private boolean actif = true;
 
     private final LocalDateTime createdAt = LocalDateTime.now();
 
-    /**
-     * Étapes du circuit de validation associées à ce type d'instruction.
-     * L'ensemble de ces étapes définit le workflow complet à suivre.
-     * Triées par {@link WorkflowStep#getStepOrder()} croissant.
-     */
-    @OneToMany(mappedBy = "instructionType", cascade = CascadeType.ALL,
-               fetch = FetchType.LAZY, orphanRemoval = true)
-    @OrderBy("stepOrder ASC")
-    private List<WorkflowStep> workflowSteps = new ArrayList<>();
-
     public enum Categorie { STRATEGIQUE, OPERATIONNELLE, MANAGERIALE, JURIDIQUE }
     public enum Urgence { URGENT, NORMAL, PLANIFIE }
-    public enum TypeLivrable { CONFIRMATION, PREUVE, DOCUMENT }
+    public enum TypeInstruction { LIBRE, DOCUMENTAIRE }
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -60,13 +54,11 @@ public class InstructionType {
     public void setCategorie(Categorie categorie) { this.categorie = categorie; }
     public Urgence getUrgenceDefaut() { return urgenceDefaut; }
     public void setUrgenceDefaut(Urgence urgenceDefaut) { this.urgenceDefaut = urgenceDefaut; }
-    public TypeLivrable getLivrableAttendu() { return livrableAttendu; }
-    public void setLivrableAttendu(TypeLivrable livrableAttendu) { this.livrableAttendu = livrableAttendu; }
-    public String getDocumentsAttendus() { return documentsAttendus; }
-    public void setDocumentsAttendus(String documentsAttendus) { this.documentsAttendus = documentsAttendus; }
+    public TypeInstruction getTypeInstruction() { return typeInstruction; }
+    public void setTypeInstruction(TypeInstruction typeInstruction) { this.typeInstruction = typeInstruction; }
+    public String getTypeDocumentAttenduId() { return typeDocumentAttenduId; }
+    public void setTypeDocumentAttenduId(String typeDocumentAttenduId) { this.typeDocumentAttenduId = typeDocumentAttenduId; }
     public boolean isActif() { return actif; }
     public void setActif(boolean actif) { this.actif = actif; }
     public LocalDateTime getCreatedAt() { return createdAt; }
-    public List<WorkflowStep> getWorkflowSteps() { return workflowSteps; }
-    public void setWorkflowSteps(List<WorkflowStep> workflowSteps) { this.workflowSteps = workflowSteps; }
 }

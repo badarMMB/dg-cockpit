@@ -62,6 +62,18 @@ public class MinioService {
         return name;
     }
 
+    // ── Upload MultipartFile avec une clé objet personnalisée (bucket par défaut) ─
+
+    public String upload(MultipartFile file, String objectKey) throws Exception {
+        minio.putObject(PutObjectArgs.builder()
+                .bucket(defaultBucket)
+                .object(objectKey)
+                .stream(file.getInputStream(), file.getSize(), -1)
+                .contentType(file.getContentType())
+                .build());
+        return objectKey;
+    }
+
     // ── Upload bytes bruts dans un bucket spécifique ─────────────────────────
 
     public void uploadBytes(String bucket, String objectKey, byte[] data, String contentType) throws Exception {
@@ -106,6 +118,18 @@ public class MinioService {
                 .expiry(1, TimeUnit.HOURS)
                 .build());
         return url.replace(internalUrl, publicUrl);
+    }
+
+    // ── Taille d'un objet (requis par WOPI CheckFileInfo) ────────────────────
+
+    /** Retourne la taille en octets de l'objet, ou 0 s'il est introuvable. */
+    public long sizeOf(String bucket, String objectKey) {
+        try {
+            return minio.statObject(
+                StatObjectArgs.builder().bucket(bucket).object(objectKey).build()).size();
+        } catch (Exception e) {
+            return 0L;
+        }
     }
 
     // ── Suppression ───────────────────────────────────────────────────────────

@@ -12,23 +12,30 @@ public interface InstructionRepository extends JpaRepository<Instruction, String
 
     List<Instruction> findAllByOrderByCreatedAtDesc();
 
-    // ── Nouveau modèle (globalStatus) ─────────────────────────────────────────
+    List<Instruction> findByCreatedByIdOrderByCreatedAtDesc(String createdById);
 
-    List<Instruction> findByGlobalStatusOrderByCreatedAtDesc(Instruction.GlobalStatus globalStatus);
+    List<Instruction> findByStatutOrderByCreatedAtDesc(Instruction.StatutInstruction statut);
 
-    long countByGlobalStatus(Instruction.GlobalStatus globalStatus);
+    long countByStatut(Instruction.StatutInstruction statut);
+
+    long countByStatutIn(List<Instruction.StatutInstruction> statuts);
 
     @Query("SELECT DISTINCT i FROM Instruction i JOIN i.assignees a WHERE a.agent = :agentName ORDER BY i.createdAt DESC")
     List<Instruction> findByAssignee(@Param("agentName") String agentName);
 
+    @Query("SELECT DISTINCT i FROM Instruction i JOIN i.assignees a WHERE a.userId = :userId ORDER BY i.createdAt DESC")
+    List<Instruction> findByAssigneeUserId(@Param("userId") String userId);
+
+    @Query("SELECT DISTINCT i FROM Instruction i JOIN i.assignees a " +
+           "WHERE i.instructionType.typeDocumentAttenduId = :typeDocId " +
+           "AND i.statut IN :statuts " +
+           "AND a.userId = :userId " +
+           "ORDER BY i.createdAt DESC")
+    List<Instruction> findPendingByTypeDocumentAndAssignee(
+        @Param("typeDocId") String typeDocId,
+        @Param("statuts") List<Instruction.StatutInstruction> statuts,
+        @Param("userId") String userId);
+
     @Query("SELECT i FROM Instruction i WHERE LOWER(i.title) LIKE LOWER(CONCAT('%',:q,'%')) OR LOWER(i.type) LIKE LOWER(CONCAT('%',:q,'%')) OR LOWER(i.agentDisplay) LIKE LOWER(CONCAT('%',:q,'%'))")
     List<Instruction> search(@Param("q") String q);
-
-    // ── Ancien modèle (statut déprécié, pour le dashboard) ───────────────────
-
-    @SuppressWarnings("deprecation")
-    long countByStatutIn(List<Instruction.StatutInstruction> statuts);
-
-    @SuppressWarnings("deprecation")
-    long countByStatut(Instruction.StatutInstruction statut);
 }

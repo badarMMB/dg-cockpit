@@ -56,6 +56,20 @@ public class TypeDocument {
     /** Champ destinataire obligatoire à la création */
     private boolean requiresDestinataire = false;
 
+    /** Gabarit HTML pré-rempli au moment de la création d'un document de ce type.
+     *  Pas de @Lob : sur Postgres + Hibernate 6, @Lob String tente un OID streaming
+     *  ("Unable to access lob stream" hors transaction). TEXT supporte 1 GB, c'est suffisant. */
+    @Column(columnDefinition = "TEXT")
+    private String templateHtml;
+
+    /** Chemin MinIO du .docx source (null si jamais importé). */
+    @Column
+    private String templateDocxPath;
+
+    /** Chemin MinIO du PDF pré-converti (null si pas encore généré). */
+    @Column
+    private String templatePdfPath;
+
     private boolean actif = true;
 
     private LocalDateTime createdAt = LocalDateTime.now();
@@ -112,6 +126,15 @@ public class TypeDocument {
 
     public boolean isRequiresDestinataire() { return requiresDestinataire; }
     public void setRequiresDestinataire(boolean requiresDestinataire) { this.requiresDestinataire = requiresDestinataire; }
+
+    public String getTemplateHtml() { return templateHtml; }
+    public void setTemplateHtml(String templateHtml) { this.templateHtml = templateHtml; }
+
+    public String getTemplateDocxPath() { return templateDocxPath; }
+    public void setTemplateDocxPath(String templateDocxPath) { this.templateDocxPath = templateDocxPath; }
+
+    public String getTemplatePdfPath() { return templatePdfPath; }
+    public void setTemplatePdfPath(String templatePdfPath) { this.templatePdfPath = templatePdfPath; }
 
     public boolean isActif() { return actif; }
     public void setActif(boolean actif) { this.actif = actif; }

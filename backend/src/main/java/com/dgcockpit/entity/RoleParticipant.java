@@ -14,5 +14,8 @@ public enum RoleParticipant {
     /** Valide ou approuve le livrable produit */
     VALIDATEUR,
     /** Observateur : consultation uniquement, pas d'action requise */
-    OBSERVATEUR
+    OBSERVATEUR,
+    DECIDEUR,
+    SIGNATAIRE,
+    RESPONSABLE
 }

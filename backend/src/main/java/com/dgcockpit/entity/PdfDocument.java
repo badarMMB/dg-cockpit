@@ -1,7 +1,15 @@
 package com.dgcockpit.entity;
 
-import jakarta.persistence.*;
 import java.time.LocalDateTime;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "pdf_documents")
@@ -65,6 +73,11 @@ public class PdfDocument {
     // Index 0-based de l'étape courante dans la table circuit_signatures
     private int currentCircuitStep = 0;
 
+    // ── Workflow Engine ──────────────────────────────────────────────────────
+    // Liens vers le workflow si ce document est piloté par un WorkflowInstance
+    private String workflowInstanceId;
+    private String workflowStepId;
+
     // ── Getters / Setters ────────────────────────────────────────────────────
 
     public String getId() { return id; }
@@ -122,4 +135,10 @@ public class PdfDocument {
 
     public int getCurrentCircuitStep() { return currentCircuitStep; }
     public void setCurrentCircuitStep(int currentCircuitStep) { this.currentCircuitStep = currentCircuitStep; }
+
+    public String getWorkflowInstanceId() { return workflowInstanceId; }
+    public void setWorkflowInstanceId(String workflowInstanceId) { this.workflowInstanceId = workflowInstanceId; }
+
+    public String getWorkflowStepId() { return workflowStepId; }
+    public void setWorkflowStepId(String workflowStepId) { this.workflowStepId = workflowStepId; }
 }

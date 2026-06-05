@@ -358,6 +358,16 @@ export class ApiService {
   deleteBureauDocument(docId: string): Observable<void> {
     return this.http.delete<void>(`${this.base}/bureau/documents/${docId}`);
   }
+  generateWorkflowFromTypeDoc(typeDocId: string): Observable<any> {
+    return this.http.post<any>(`${this.base}/type-documents/${typeDocId}/generate-workflow`, {});
+  }
+  getDocumentWorkflowSignataires(docId: string): Observable<{ userId: string; userNom: string }[]> {
+    return this.http.get<{ userId: string; userNom: string }[]>(
+      `${this.base}/bureau/documents/${docId}/workflow-signataires`);
+  }
+  adjustParapheurZone(pdfDocId: string, zone: { page: number; x: number; y: number; w: number; h: number }): Observable<void> {
+    return this.http.put<void>(`${this.base}/parapheur/${pdfDocId}/adjust-zone`, zone);
+  }
 
   /** Crée un BureauDocument .docx en clonant le template du TypeDocument. */
   createFromTemplate(typeDocumentId: string, titre?: string, sourceInstructionId?: string): Observable<any> {
@@ -431,6 +441,67 @@ export class ApiService {
   aiSuggest(bureauDocumentId: string, action: string): Observable<any> {
     return this.http.post<any>(
       `${this.base}/ai/suggest/${bureauDocumentId}`, null, { params: { action } });
+  }
+
+  // ── Workflows (Paramètres > Workflows) ───────────────────────────────────
+
+  getWorkflows(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/workflows`);
+  }
+  createWorkflow(body: any): Observable<any> {
+    return this.http.post<any>(`${this.base}/workflows`, body);
+  }
+  updateWorkflow(id: string, body: any): Observable<any> {
+    return this.http.put<any>(`${this.base}/workflows/${id}`, body);
+  }
+  deleteWorkflow(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/workflows/${id}`);
+  }
+  toggleWorkflow(id: string): Observable<any> {
+    return this.http.patch<any>(`${this.base}/workflows/${id}/toggle`, {});
+  }
+  getWorkflowSteps(id: string): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/workflows/${id}/steps`);
+  }
+  createWorkflowStep(id: string, body: any): Observable<any> {
+    return this.http.post<any>(`${this.base}/workflows/${id}/steps`, body);
+  }
+  updateWorkflowStep(id: string, stepId: string, body: any): Observable<any> {
+    return this.http.put<any>(`${this.base}/workflows/${id}/steps/${stepId}`, body);
+  }
+  deleteWorkflowStep(id: string, stepId: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/workflows/${id}/steps/${stepId}`);
+  }
+  reorderWorkflowSteps(id: string, orderedIds: string[]): Observable<any[]> {
+    return this.http.put<any[]>(`${this.base}/workflows/${id}/steps/reorder`, orderedIds);
+  }
+  getWorkflowStepParticipants(id: string, stepId: string): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/workflows/${id}/steps/${stepId}/participants`);
+  }
+  saveWorkflowStepParticipants(id: string, stepId: string, participants: any[]): Observable<any[]> {
+    return this.http.put<any[]>(
+      `${this.base}/workflows/${id}/steps/${stepId}/participants`, participants);
+  }
+  validateWorkflow(id: string): Observable<{ valid: boolean; errors: string[] }> {
+    return this.http.post<{ valid: boolean; errors: string[] }>(
+      `${this.base}/workflows/${id}/validate`, {});
+  }
+
+  // Workflow Instances
+  getMyWorkflowInstances(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/workflow-instances/my`);
+  }
+  getWorkflowInstance(id: string): Observable<any> {
+    return this.http.get<any>(`${this.base}/workflow-instances/${id}`);
+  }
+  getWorkflowInstanceActions(id: string): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/workflow-instances/${id}/actions`);
+  }
+  workflowNextStep(id: string): Observable<any> {
+    return this.http.post<any>(`${this.base}/workflow-instances/${id}/next-step`, {});
+  }
+  cancelWorkflowInstance(id: string, motif?: string): Observable<void> {
+    return this.http.post<void>(`${this.base}/workflow-instances/${id}/cancel`, { motif });
   }
 
   // ── Templates de participants (Paramètres > Types d'Instructions) ─────────

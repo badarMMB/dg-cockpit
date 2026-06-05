@@ -16,11 +16,14 @@ import { SignatureAssetsComponent } from './pages/signature-assets/signature-ass
 import { PdfDocumentsComponent } from './pages/pdf-documents/pdf-documents.component';
 import { PdfViewerComponent } from './pages/pdf-viewer/pdf-viewer.component';
 import { ParametresComponent } from './pages/parametres/parametres.component';
+import { WorkflowDesignerComponent } from './pages/parametres/workflow-designer/workflow-designer.component';
 import { BureauComponent } from './pages/bureau/bureau.component';
 import { BureauPlacementComponent } from './pages/bureau/bureau-placement.component';
 import { ClasseursListComponent } from './pages/classeurs/classeurs-list.component';
 import { ClasseurDetailComponent } from './pages/classeurs/classeur-detail.component';
 import { NotesDeServiceComponent } from './pages/notes/notes-de-service.component';
+import { WorkflowsListComponent } from './pages/workflows/workflows-list.component';
+import { WorkflowDetailComponent } from './pages/workflows/workflow-detail.component';
 import { authGuard } from './guards/auth.guard';
 import { bureauGuard } from './guards/bureau.guard';
 import { permissionGuard } from './guards/permission.guard';
@@ -48,11 +51,14 @@ export const routes: Routes = [
       { path: 'appointments',         component: AppointmentListComponent, canActivate: [permissionGuard], data: { anyPermissions: ['HAS_BUREAU', 'CAN_VIEW_ALL'] } },
       { path: 'appointments/:id',     component: AppointmentDetailComponent, canActivate: [permissionGuard], data: { anyPermissions: ['HAS_BUREAU', 'CAN_VIEW_ALL'] } },
       { path: 'parametres',           component: ParametresComponent,      canActivate: [permissionGuard], data: { anyPermissions: ['CAN_MANAGE_USERS', 'CAN_MANAGE_TYPES'] } },
+      { path: 'parametres/workflow-designer/:id', component: WorkflowDesignerComponent, canActivate: [permissionGuard], data: { anyPermissions: ['CAN_MANAGE_TYPES'] } },
       { path: 'bureau',               component: BureauComponent,          canActivate: [bureauGuard] },
       { path: 'bureau-placement/:id', component: BureauPlacementComponent, canActivate: [bureauGuard] },
       { path: 'classeurs',            component: ClasseursListComponent,   canActivate: [permissionGuard], data: { anyPermissions: ['HAS_BUREAU', 'CAN_VIEW_ALL'] } },
       { path: 'classeurs/:id',        component: ClasseurDetailComponent,  canActivate: [permissionGuard], data: { anyPermissions: ['HAS_BUREAU', 'CAN_VIEW_ALL'] } },
       { path: 'notes-de-service',     component: NotesDeServiceComponent },
+      { path: 'workflows',            component: WorkflowsListComponent,  canActivate: [authGuard] },
+      { path: 'workflows/:id',        component: WorkflowDetailComponent, canActivate: [authGuard] },
     ]
   }
 ];

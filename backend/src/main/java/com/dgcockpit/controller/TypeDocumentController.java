@@ -4,6 +4,7 @@ import com.dgcockpit.entity.AppUser;
 import com.dgcockpit.entity.Poste;
 import com.dgcockpit.entity.TypeDocument;
 import com.dgcockpit.repository.TypeDocumentRepository;
+import com.dgcockpit.repository.WorkflowDefinitionRepository;
 import com.dgcockpit.service.CollaboraConvertService;
 import com.dgcockpit.service.DocxToHtmlConverter;
 import com.dgcockpit.service.MinioService;
@@ -38,6 +39,8 @@ public class TypeDocumentController {
     private final DocxToHtmlConverter docxConverter;
     private final MinioService minioService;
     private final CollaboraConvertService collaboraConvertService;
+    private final WorkflowDefinitionRepository workflowDefRepo;
+    private final com.dgcockpit.service.WorkflowMigrationService workflowMigration;
 
     @Value("${minio.bucket}")
     private String defaultBucket;
@@ -46,12 +49,16 @@ public class TypeDocumentController {
                                   ObjectMapper objectMapper,
                                   DocxToHtmlConverter docxConverter,
                                   MinioService minioService,
-                                  CollaboraConvertService collaboraConvertService) {
+                                  CollaboraConvertService collaboraConvertService,
+                                  WorkflowDefinitionRepository workflowDefRepo,
+                                  com.dgcockpit.service.WorkflowMigrationService workflowMigration) {
         this.repo                    = repo;
         this.objectMapper            = objectMapper;
         this.docxConverter           = docxConverter;
         this.minioService            = minioService;
         this.collaboraConvertService = collaboraConvertService;
+        this.workflowDefRepo         = workflowDefRepo;
+        this.workflowMigration       = workflowMigration;
     }
 
     // ── GET /api/type-documents ── liste (admin: tous ; autres: actifs uniquement) ──
@@ -229,6 +236,30 @@ public class TypeDocumentController {
                 .body(pdfBytes);
     }
 
+    // ── POST /api/type-documents/{id}/generate-workflow ───────────────────────
+    @PostMapping("/{id}/generate-workflow")
+    @PreAuthorize("hasAuthority('CAN_MANAGE_TYPES')")
+    public ResponseEntity<Map<String, Object>> generateWorkflow(
+            @PathVariable String id,
+            HttpServletRequest request) {
+
+        AppUser currentUser = (AppUser) request.getAttribute("currentUser");
+        if (!estAdmin(currentUser)) return ResponseEntity.status(403).build();
+
+        try {
+            com.dgcockpit.entity.WorkflowDefinition wf = workflowMigration.generateDefaultWorkflow(id);
+            Map<String, Object> result = new HashMap<>();
+            result.put("workflowDefinitionId", wf.getId());
+            result.put("workflowLibelle", wf.getLibelle());
+            result.put("actif", wf.isActif());
+            // Retourner le DTO mis à jour du TypeDocument
+            repo.findById(id).ifPresent(td -> result.put("typeDocument", toDto(td)));
+            return ResponseEntity.ok(result);
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(409).body(Map.of("error", e.getMessage()));
+        }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     @SuppressWarnings("deprecation")
@@ -273,6 +304,8 @@ public class TypeDocumentController {
             t.setTemplatePdfPath((String) body.get("templatePdfPath"));
         if (body.containsKey("actif"))
             t.setActif(Boolean.TRUE.equals(body.get("actif")));
+        if (body.containsKey("workflowDefinitionId"))
+            t.setWorkflowDefinitionId((String) body.get("workflowDefinitionId"));
     }
 
     private String toJson(Object o) {
@@ -297,6 +330,13 @@ public class TypeDocumentController {
         m.put("templatePdfPath", t.getTemplatePdfPath());
         m.put("actif", t.isActif());
         m.put("createdAt", t.getCreatedAt().toString());
+        m.put("workflowDefinitionId", t.getWorkflowDefinitionId());
+        if (t.getWorkflowDefinitionId() != null) {
+            workflowDefRepo.findById(t.getWorkflowDefinitionId())
+                           .ifPresent(w -> m.put("workflowLibelle", w.getLibelle()));
+        } else {
+            m.put("workflowLibelle", null);
+        }
         return m;
     }
 

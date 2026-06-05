@@ -5,6 +5,7 @@ import { DomSanitizer, SafeHtml, SafeResourceUrl } from '@angular/platform-brows
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../services/toast.service';
+import { RouterLink } from '@angular/router';
 import { SignatureAssetsComponent } from '../signature-assets/signature-assets.component';
 
 /** CSS print injecté à paged.js. Sert d'unique source de vérité visuelle —
@@ -49,7 +50,7 @@ em, i { font-style: italic; }
 .ql-align-justify { text-align: justify; }
 `;
 
-type Tab = 'INSTRUCTION_TYPES' | 'POSTES' | 'USERS' | 'SIGNATURE_ASSETS' | 'TYPE_DOCUMENTS';
+type Tab = 'INSTRUCTION_TYPES' | 'POSTES' | 'USERS' | 'SIGNATURE_ASSETS' | 'TYPE_DOCUMENTS' | 'WORKFLOWS';
 
 type Categorie = 'STRATEGIQUE' | 'OPERATIONNELLE' | 'MANAGERIALE' | 'JURIDIQUE';
 type Urgence = 'URGENT' | 'NORMAL' | 'PLANIFIE';
@@ -94,13 +95,15 @@ interface TypeDocParam {
   templateDocxPath: string | null;
   templatePdfPath: string | null;
   linkedInstructionTypeId: string | null;
+  workflowDefinitionId: string | null;
+  workflowLibelle: string | null;
   actif: boolean;
 }
 
 @Component({
   selector: 'app-parametres',
   standalone: true,
-  imports: [CommonModule, FormsModule, SignatureAssetsComponent],
+  imports: [CommonModule, FormsModule, SignatureAssetsComponent, RouterLink],
   template: `
     <div class="p-6 max-w-6xl mx-auto">
       <h1 class="text-2xl font-bold text-gray-800 mb-6">{{ tabs().length === 1 ? 'Mes Signatures' : 'Paramètres' }}</h1>
@@ -278,6 +281,7 @@ interface TypeDocParam {
                     <th class="px-4 py-3">Libellé</th>
                     <th class="px-4 py-3">Code</th>
                     <th class="px-4 py-3">Circuit</th>
+                    <th class="px-4 py-3">Workflow</th>
                     <th class="px-4 py-3">Action finale</th>
                     <th class="px-4 py-3">Options</th>
                     <th class="px-4 py-3">Statut</th>
@@ -295,6 +299,21 @@ interface TypeDocParam {
                         </span>
                         @if ((t.modeCircuit === 'PREDEFINI' || t.modeCircuit === 'PREDEFINI_MODIFIABLE') && t.circuit.length) {
                           <div class="mt-1 text-[10px] text-gray-400">{{ circuitLabel(t.circuit) }}</div>
+                        }
+                      </td>
+                      <!-- Colonne Workflow -->
+                      <td class="px-4 py-3">
+                        @if ($any(t).workflowDefinitionId) {
+                          <a [routerLink]="['/parametres/workflow-designer', $any(t).workflowDefinitionId]"
+                             class="text-xs text-indigo-600 hover:underline truncate block max-w-[120px]"
+                             [title]="$any(t).workflowLibelle">
+                            🔄 {{ $any(t).workflowLibelle ?? '…' }}
+                          </a>
+                        } @else {
+                          <button (click)="generateWorkflow($any(t))"
+                                  class="text-xs text-gray-400 hover:text-indigo-600 hover:underline">
+                            + Créer workflow
+                          </button>
                         }
                       </td>
                       <td class="px-4 py-3">
@@ -595,6 +614,104 @@ interface TypeDocParam {
             <button (click)="saveItype()" [disabled]="savingItype()"
                     class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50">
               {{ savingItype() ? 'Enregistrement…' : 'Enregistrer' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ── WORKFLOWS ────────────────────────────────────────────────────── -->
+    @if (activeTab() === 'WORKFLOWS') {
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <p class="text-sm text-gray-500">Définissez les workflows métier et leurs étapes.</p>
+          <button (click)="openWorkflowModal()"
+                  class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">
+            + Nouveau workflow
+          </button>
+        </div>
+
+        @if (loadingWorkflows()) {
+          <p class="text-gray-400 text-sm py-8 text-center">Chargement…</p>
+        } @else {
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <th class="px-4 py-3">Code</th>
+                  <th class="px-4 py-3">Libellé</th>
+                  <th class="px-4 py-3">Version</th>
+                  <th class="px-4 py-3">Statut</th>
+                  <th class="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                @for (wf of workflows(); track wf.id) {
+                  <tr [class]="wf.actif ? '' : 'opacity-50'">
+                    <td class="px-4 py-3 font-mono text-xs text-gray-500 uppercase">{{ wf.code }}</td>
+                    <td class="px-4 py-3 font-medium text-gray-800">{{ wf.libelle }}</td>
+                    <td class="px-4 py-3 text-xs text-gray-500">v{{ wf.version }}</td>
+                    <td class="px-4 py-3">
+                      <span [class]="wf.actif ? 'text-green-600 text-xs' : 'text-gray-400 text-xs'">
+                        {{ wf.actif ? 'Actif' : 'Inactif' }}
+                      </span>
+                    </td>
+                    <td class="px-4 py-3 text-right flex justify-end gap-2 flex-wrap">
+                      <a [routerLink]="['/parametres/workflow-designer', wf.id]"
+                         class="text-xs text-indigo-600 hover:underline font-medium">Designer</a>
+                      <button (click)="openWorkflowModal(wf)"
+                              class="text-xs text-blue-600 hover:underline">Modifier</button>
+                      <button (click)="toggleWorkflow(wf)"
+                              class="text-xs text-gray-500 hover:underline">
+                        {{ wf.actif ? 'Désactiver' : 'Activer' }}
+                      </button>
+                      <button (click)="deleteWorkflow(wf)"
+                              class="text-xs text-red-500 hover:underline">Supprimer</button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+            @if (workflows().length === 0) {
+              <p class="text-center text-gray-400 text-sm py-8">Aucun workflow défini.</p>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <!-- ── Modal Workflow ─────────────────────────────────────────────────── -->
+    @if (showWorkflowModal()) {
+      <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
+          <h2 class="text-lg font-semibold mb-4">
+            {{ editingWorkflow ? 'Modifier le workflow' : 'Nouveau workflow' }}
+          </h2>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Code *</label>
+              <input [(ngModel)]="workflowForm['code']" placeholder="Ex: ORDRE_MISSION"
+                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono uppercase" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Libellé *</label>
+              <input [(ngModel)]="workflowForm['libelle']" placeholder="Ex: Circuit Ordre de Mission"
+                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Description</label>
+              <textarea [(ngModel)]="workflowForm['description']" rows="2"
+                        placeholder="Description du workflow…"
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none">
+              </textarea>
+            </div>
+          </div>
+          <div class="flex justify-end gap-3 mt-6">
+            <button (click)="showWorkflowModal.set(false)"
+                    class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Annuler</button>
+            <button (click)="saveWorkflow()" [disabled]="savingWorkflow()"
+                    class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50 hover:bg-indigo-700">
+              {{ savingWorkflow() ? 'Enregistrement…' : 'Enregistrer' }}
             </button>
           </div>
         </div>
@@ -1021,6 +1138,7 @@ export class ParametresComponent implements OnInit {
         { id: 'INSTRUCTION_TYPES', label: "Types d'Instructions" },
         { id: 'TYPE_DOCUMENTS', label: 'Types de Documents' },
         { id: 'POSTES', label: 'Postes & Roles' },
+        { id: 'WORKFLOWS', label: 'Workflows' },
       );
     }
     if (this.auth.hasPermission('CAN_MANAGE_USERS')) {
@@ -1031,6 +1149,67 @@ export class ParametresComponent implements OnInit {
   });
 
   activeTab = signal<Tab>('INSTRUCTION_TYPES');
+
+  // ── Workflows ────────────────────────────────────────────────────────────
+  workflows        = signal<any[]>([]);
+  loadingWorkflows = signal(false);
+  showWorkflowModal = signal(false);
+  savingWorkflow   = signal(false);
+  editingWorkflow: any = null;
+  workflowForm: Record<string, any> = {};
+
+  loadWorkflows() {
+    this.loadingWorkflows.set(true);
+    this.api.getWorkflows().subscribe({
+      next: wfs => { this.workflows.set(wfs); this.loadingWorkflows.set(false); },
+      error: ()  => this.loadingWorkflows.set(false),
+    });
+  }
+
+  openWorkflowModal(wf?: any) {
+    this.editingWorkflow = wf ?? null;
+    this.workflowForm = {
+      code:        wf?.code        ?? '',
+      libelle:     wf?.libelle     ?? '',
+      description: wf?.description ?? '',
+      actif:       wf?.actif       ?? false,
+    };
+    this.showWorkflowModal.set(true);
+  }
+
+  saveWorkflow() {
+    if (!this.workflowForm['code'] || !this.workflowForm['libelle']) return;
+    this.savingWorkflow.set(true);
+    const obs = this.editingWorkflow
+      ? this.api.updateWorkflow(this.editingWorkflow.id, this.workflowForm)
+      : this.api.createWorkflow(this.workflowForm);
+    obs.subscribe({
+      next: saved => {
+        if (this.editingWorkflow) {
+          this.workflows.update(list => list.map(w => w.id === saved.id ? saved : w));
+        } else {
+          this.workflows.update(list => [...list, saved]);
+        }
+        this.savingWorkflow.set(false);
+        this.showWorkflowModal.set(false);
+      },
+      error: () => this.savingWorkflow.set(false),
+    });
+  }
+
+  toggleWorkflow(wf: any) {
+    this.api.toggleWorkflow(wf.id).subscribe(saved =>
+      this.workflows.update(list => list.map(w => w.id === saved.id ? saved : w))
+    );
+  }
+
+  deleteWorkflow(wf: any) {
+    if (!confirm(`Supprimer définitivement le workflow "${wf.libelle}" ?`)) return;
+    this.api.deleteWorkflow(wf.id).subscribe({
+      next: () => this.workflows.update(list => list.filter(w => w.id !== wf.id)),
+      error: () => alert('Impossible de supprimer ce workflow : des instances sont actives.'),
+    });
+  }
 
   // ── Instruction Types ────────────────────────────────────────────────────
   instructionTypes = signal<InstructionType[]>([]);
@@ -1141,6 +1320,7 @@ export class ParametresComponent implements OnInit {
     this.loadPostes();
     this.loadUsers();
     this.loadTdocs();
+    this.loadWorkflows();
   }
 
   // ── Instruction Types ────────────────────────────────────────────────────
@@ -1618,6 +1798,20 @@ export class ParametresComponent implements OnInit {
     if (!confirm(`Supprimer définitivement le type "${t.libelle}" ?`)) return;
     this.api.deleteTypeDocument(t.id).subscribe(() => {
       this.typeDocuments.update(list => list.filter(x => x.id !== t.id));
+    });
+  }
+
+  generateWorkflow(t: TypeDocParam) {
+    if (!confirm(`Générer un workflow par défaut pour "${t.libelle}" ?\nIl sera inactif — vous pourrez le configurer dans le Designer avant de l'activer.`)) return;
+    this.api.generateWorkflowFromTypeDoc(t.id).subscribe({
+      next: (res: any) => {
+        this.typeDocuments.update(list => list.map(x =>
+          x.id === t.id
+            ? { ...x, workflowDefinitionId: res.workflowDefinitionId, workflowLibelle: res.workflowLibelle }
+            : x
+        ));
+      },
+      error: () => alert('Ce type de document possède déjà un workflow associé.'),
     });
   }
 

@@ -92,6 +92,9 @@ public class BureauDocument {
     // Référence au TypeDocument configuré dans les Paramètres (nullable pour compat ascendante)
     private String typeDocumentId;
 
+    private String workflowInstanceId;
+    private String workflowStepId;
+
     // Timestamps de chaque changement de statut (pour la timeline)
     private LocalDateTime soumisAt;
     private LocalDateTime signeAt;
@@ -188,4 +191,8 @@ public class BureauDocument {
     public void setCircuitNextStep(int circuitNextStep) { this.circuitNextStep = circuitNextStep; }
     public String getTypeDocumentId() { return typeDocumentId; }
     public void setTypeDocumentId(String typeDocumentId) { this.typeDocumentId = typeDocumentId; }
+    public String getWorkflowInstanceId() { return workflowInstanceId; }
+    public void setWorkflowInstanceId(String workflowInstanceId) { this.workflowInstanceId = workflowInstanceId; }
+    public String getWorkflowStepId() { return workflowStepId; }
+    public void setWorkflowStepId(String workflowStepId) { this.workflowStepId = workflowStepId; }
 }

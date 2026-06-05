@@ -24,6 +24,7 @@ const ALL_MENU_ITEMS: MenuItem[] = [
   { label: 'Agenda & Visiteurs',    icon: '📅', route: '/appointments',     permissions: ['HAS_BUREAU', 'CAN_VIEW_ALL'],           unread: 0, alert: false },
   { label: 'Classeurs',             icon: '🗂️', route: '/classeurs',        permissions: ['HAS_BUREAU', 'CAN_VIEW_ALL'],           unread: 0, alert: false },
   { label: 'Mes Signatures',        icon: '🖊️', route: '/signature-assets', visible: u => u !== null,                              unread: 0, alert: false },
+  { label: 'Mes Workflows',         icon: '🔄', route: '/workflows',        visible: u => u !== null,                              unread: 0, alert: false },
   { label: 'Paramètres',            icon: '⚙️', route: '/parametres',       permissions: ['CAN_MANAGE_USERS', 'CAN_MANAGE_TYPES'], unread: 0, alert: false },
 ];
 

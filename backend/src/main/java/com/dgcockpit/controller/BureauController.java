@@ -70,6 +70,9 @@ public class BureauController {
     private final com.dgcockpit.service.WopiTokenService wopiTokenService;
     private final com.dgcockpit.service.CollaboraConvertService collaboraConvertService;
     private final com.dgcockpit.repository.ParticipantTemplateRepository participantTemplateRepo;
+    private final com.dgcockpit.repository.WorkflowStepRepository workflowStepRepo;
+    private final com.dgcockpit.repository.WorkflowParticipantRepository workflowParticipantRepo;
+    private final com.dgcockpit.service.WorkflowEngineService workflowEngine;
 
     @org.springframework.beans.factory.annotation.Value("${collabora.public-url:http://localhost:9980}")
     private String collaboraPublicUrl;
@@ -94,7 +97,10 @@ public class BureauController {
                             ObjectMapper objectMapper,
                             com.dgcockpit.service.WopiTokenService wopiTokenService,
                             com.dgcockpit.service.CollaboraConvertService collaboraConvertService,
-                            com.dgcockpit.repository.ParticipantTemplateRepository participantTemplateRepo) {
+                            com.dgcockpit.repository.ParticipantTemplateRepository participantTemplateRepo,
+                            com.dgcockpit.repository.WorkflowStepRepository workflowStepRepo,
+                            com.dgcockpit.repository.WorkflowParticipantRepository workflowParticipantRepo,
+                            com.dgcockpit.service.WorkflowEngineService workflowEngine) {
         this.bureauRepo = bureauRepo;
         this.pdfRepo = pdfRepo;
         this.annotRepo = annotRepo;
@@ -112,7 +118,10 @@ public class BureauController {
         this.objectMapper = objectMapper;
         this.wopiTokenService = wopiTokenService;
         this.collaboraConvertService = collaboraConvertService;
-        this.participantTemplateRepo = participantTemplateRepo;
+        this.participantTemplateRepo    = participantTemplateRepo;
+        this.workflowStepRepo           = workflowStepRepo;
+        this.workflowParticipantRepo    = workflowParticipantRepo;
+        this.workflowEngine             = workflowEngine;
     }
 
     // ── POST /api/bureau/documents ── upload PDF ou .docx
@@ -261,6 +270,36 @@ public class BureauController {
         try { minio.delete(doc.getBucket(), doc.getObjectKey()); } catch (Exception ignored) {}
         bureauRepo.delete(doc);
         return ResponseEntity.noContent().build();
+    }
+
+    // ── GET /api/bureau/documents/:id/workflow-signataires ── signataires du step SIGNATURE
+    @GetMapping("/documents/{id}/workflow-signataires")
+    public ResponseEntity<List<Map<String, Object>>> workflowSignataires(@PathVariable String id) {
+        BureauDocument doc = bureauRepo.findById(id).orElse(null);
+        if (doc == null || doc.getTypeDocumentId() == null) return ResponseEntity.ok(List.of());
+
+        TypeDocument td = typeDocRepo.findById(doc.getTypeDocumentId()).orElse(null);
+        if (td == null || td.getWorkflowDefinitionId() == null) return ResponseEntity.ok(List.of());
+
+        com.dgcockpit.entity.WorkflowStep sigStep = workflowStepRepo
+            .findByWorkflowIdOrderByOrdre(td.getWorkflowDefinitionId()).stream()
+            .filter(s -> s.getStepType() == com.dgcockpit.entity.StepType.SIGNATURE)
+            .findFirst().orElse(null);
+        if (sigStep == null) return ResponseEntity.ok(List.of());
+
+        List<Map<String, Object>> signataires = workflowParticipantRepo
+            .findByWorkflowStepId(sigStep.getId()).stream()
+            .filter(wp -> wp.getRoleParticipant() == com.dgcockpit.entity.RoleParticipant.SIGNATAIRE)
+            .flatMap(wp -> userRepo.findByPosteIdAndActifTrue(wp.getPosteId()).stream())
+            .map(u -> {
+                Map<String, Object> m = new HashMap<>();
+                m.put("userId", u.getId());
+                m.put("userNom", u.getNomComplet());
+                return m;
+            })
+            .toList();
+
+        return ResponseEntity.ok(signataires);
     }
 
     // ── POST /api/bureau/documents/:id/zones ── sauvegarder positions signature + tampon
@@ -496,18 +535,7 @@ public class BureauController {
 
         PdfDocument savedPdf = pdfRepo.save(pdf);
 
-        for (Map<String, Object> z : sigZones) {
-            PageAnnotation a = new PageAnnotation();
-            a.setPageId(savedPdf.getId() + "::" + toInt(z.get("page")));
-            a.setAnnotationType("SIGNATURE_ZONE");
-            a.setXPercent(toDouble(z.get("x")));
-            a.setYPercent(toDouble(z.get("y")));
-            a.setWidthPercent(toDouble(z.get("w")));
-            a.setHeightPercent(toDouble(z.get("h")));
-            a.setCreatedBy(submittedBy);
-            annotRepo.save(a);
-        }
-
+        // ── Zones tampon (communes aux deux chemins) ─────────────────────────
         for (Map<String, Object> z : parseZones(doc.getStampZonesJson())) {
             PageAnnotation a = new PageAnnotation();
             a.setPageId(savedPdf.getId() + "::" + toInt(z.get("page")));
@@ -520,27 +548,7 @@ public class BureauController {
             annotRepo.save(a);
         }
 
-        // ── Créer les étapes du circuit de signature ────────────────────────
-        // Les étapes > 0 héritent des zones du document source pour que le prochain
-        // signataire ait une zone pré-positionnée au même endroit (pratique sur doc 1 page).
-        String zonesJsonSource = doc.getSignatureZonesJson();
-        for (int i = 0; i < circuitSteps.size(); i++) {
-            Map<String, Object> step = circuitSteps.get(i);
-            CircuitSignature etape = new CircuitSignature();
-            etape.setPdfDocumentId(savedPdf.getId());
-            etape.setStepOrder(i);
-            etape.setSignaireUserId((String) step.get("userId"));
-            etape.setSignaireNom((String) step.get("nom"));
-            // Étape 0 : annotations déjà créées via PageAnnotation — pas besoin de les dupliquer.
-            // Étapes suivantes : propager les zones du document source (même position).
-            etape.setSignatureZonesJson(i == 0 ? null : zonesJsonSource);
-            circuitRepo.save(etape);
-        }
-        // Pointer le PdfDocument vers le premier signataire
-        savedPdf.setCurrentSignataireUserId((String) circuitSteps.get(0).get("userId"));
-        savedPdf.setCurrentCircuitStep(0);
-        pdfRepo.save(savedPdf);
-
+        // ── Référence documentaire ────────────────────────────────────────────
         if (doc.getReference() == null) {
             int year = LocalDateTime.now().getYear();
             int nextNum = bureauRepo.findMaxReferenceNumberForYear(year) + 1;
@@ -555,7 +563,54 @@ public class BureauController {
         doc.setUpdatedAt(LocalDateTime.now());
         bureauRepo.save(doc);
 
-        // Message système dans l'instruction liée (soumission initiale ou re-soumission)
+        // ── CHEMIN A : workflow piloté ────────────────────────────────────────
+        // Le WorkflowEngineService prend en charge la création des CircuitSignatures
+        // et des PageAnnotations de signature (filtrées par userId si zones nominatives).
+        if (typeDoc != null && typeDoc.getWorkflowDefinitionId() != null) {
+            try {
+                workflowEngine.startWorkflow(
+                    typeDoc.getWorkflowDefinitionId(),
+                    savedPdf.getId(),               // PdfDocument.id → engine peut retrouver le BureauDoc
+                    doc.getSourceInstructionId(),
+                    submittedBy
+                );
+            } catch (Exception e) {
+                // Le workflow n'a pas pu démarrer (config manquante) — on continue sans bloquer
+                // L'admin devra corriger la définition du workflow
+            }
+        } else {
+            // ── CHEMIN B : circuit legacy ─────────────────────────────────────
+            // Zones de signature pour le premier signataire (PageAnnotations)
+            for (Map<String, Object> z : sigZones) {
+                PageAnnotation a = new PageAnnotation();
+                a.setPageId(savedPdf.getId() + "::" + toInt(z.get("page")));
+                a.setAnnotationType("SIGNATURE_ZONE");
+                a.setXPercent(toDouble(z.get("x")));
+                a.setYPercent(toDouble(z.get("y")));
+                a.setWidthPercent(toDouble(z.get("w")));
+                a.setHeightPercent(toDouble(z.get("h")));
+                a.setCreatedBy(submittedBy);
+                annotRepo.save(a);
+            }
+
+            // Étapes du circuit — étapes > 0 héritent des zones source
+            String zonesJsonSource = doc.getSignatureZonesJson();
+            for (int i = 0; i < circuitSteps.size(); i++) {
+                Map<String, Object> step = circuitSteps.get(i);
+                CircuitSignature etape = new CircuitSignature();
+                etape.setPdfDocumentId(savedPdf.getId());
+                etape.setStepOrder(i);
+                etape.setSignaireUserId((String) step.get("userId"));
+                etape.setSignaireNom((String) step.get("nom"));
+                etape.setSignatureZonesJson(i == 0 ? null : zonesJsonSource);
+                circuitRepo.save(etape);
+            }
+            savedPdf.setCurrentSignataireUserId((String) circuitSteps.get(0).get("userId"));
+            savedPdf.setCurrentCircuitStep(0);
+            pdfRepo.save(savedPdf);
+        }
+
+        // ── Message système + SSE (commun) ────────────────────────────────────
         if (doc.getSourceInstructionId() != null) {
             String msgSoumis = isResoumission
                 ? "📤 Document re-soumis au circuit de signature par " + currentUser.getNomComplet()

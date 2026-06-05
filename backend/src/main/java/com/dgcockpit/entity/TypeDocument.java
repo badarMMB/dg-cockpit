@@ -70,6 +70,8 @@ public class TypeDocument {
     @Column
     private String templatePdfPath;
 
+    private String workflowDefinitionId;
+
     private boolean actif = true;
 
     private LocalDateTime createdAt = LocalDateTime.now();
@@ -135,6 +137,9 @@ public class TypeDocument {
 
     public String getTemplatePdfPath() { return templatePdfPath; }
     public void setTemplatePdfPath(String templatePdfPath) { this.templatePdfPath = templatePdfPath; }
+
+    public String getWorkflowDefinitionId() { return workflowDefinitionId; }
+    public void setWorkflowDefinitionId(String workflowDefinitionId) { this.workflowDefinitionId = workflowDefinitionId; }
 
     public boolean isActif() { return actif; }
     public void setActif(boolean actif) { this.actif = actif; }

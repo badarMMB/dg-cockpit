@@ -64,6 +64,7 @@ public class ParapheurController {
     private final com.dgcockpit.service.WopiTokenService wopiTokenService;
     private final com.dgcockpit.service.DocxSignatureService docxSignatureService;
     private final com.dgcockpit.service.CollaboraConvertService collaboraConvertService;
+    private final com.dgcockpit.service.WorkflowEngineService workflowEngine;
 
     @org.springframework.beans.factory.annotation.Value("${collabora.public-url:http://localhost:9980}")
     private String collaboraPublicUrl;
@@ -88,7 +89,8 @@ public class ParapheurController {
                                com.dgcockpit.service.AuthorizationService authorizationService,
                                com.dgcockpit.service.WopiTokenService wopiTokenService,
                                com.dgcockpit.service.DocxSignatureService docxSignatureService,
-                               com.dgcockpit.service.CollaboraConvertService collaboraConvertService) {
+                               com.dgcockpit.service.CollaboraConvertService collaboraConvertService,
+                               com.dgcockpit.service.WorkflowEngineService workflowEngine) {
         this.repo = repo;
         this.finalizer = finalizer;
         this.minio = minio;
@@ -103,8 +105,9 @@ public class ParapheurController {
         this.objectMapper = objectMapper;
         this.authorizationService = authorizationService;
         this.wopiTokenService = wopiTokenService;
-        this.docxSignatureService = docxSignatureService;
+        this.docxSignatureService    = docxSignatureService;
         this.collaboraConvertService = collaboraConvertService;
+        this.workflowEngine          = workflowEngine;
     }
 
     @GetMapping
@@ -242,8 +245,8 @@ public class ParapheurController {
             transit.setProprietaireId(signataire != null ? signataire.getId() : null);
             transit.setTitre(doc.getTitle());
             transit.setOriginalFileName(doc.getOriginalFileName());
-            transit.setBucket(doc.getBucket());        // "ged-final-documents" après la maj ci-dessus
-            transit.setObjectKey(doc.getObjectKey()); // clé du PDF signé brûlé
+            transit.setBucket(doc.getBucket());
+            transit.setObjectKey(doc.getObjectKey());
             transit.setPageCount(doc.getPageCount());
             transit.setType(doc.getParapheurType() == PdfDocument.ParapheurType.NOTE_SERVICE
                     ? "NOTE_SERVICE" : "COURRIER");
@@ -251,6 +254,11 @@ public class ParapheurController {
             transit.setStatut(BureauDocument.Statut.BROUILLON);
             transit.setCircuitPdfDocumentId(doc.getId());
             transit.setCircuitNextStep(next.getStepOrder());
+            // Pré-remplir les zones du prochain signataire (zones nominatives)
+            // afin que le bureau de transit arrive déjà zoné pour ce signataire.
+            if (next.getSignatureZonesJson() != null && !next.getSignatureZonesJson().isBlank()) {
+                transit.setSignatureZonesJson(next.getSignatureZonesJson());
+            }
             bureauRepo.save(transit);
 
             // Mettre le PdfDocument en attente de transmission (invisible du parapheur)
@@ -325,6 +333,14 @@ public class ParapheurController {
             transit.setUpdatedAt(LocalDateTime.now());
             bureauRepo.save(transit);
         });
+
+        // Avancer le workflow si ce PdfDocument est piloté par un WorkflowInstance
+        if (saved.getWorkflowInstanceId() != null) {
+            try {
+                workflowEngine.moveToNextStep(saved.getWorkflowInstanceId(),
+                        signataire != null ? signataire.getId() : "system");
+            } catch (Exception ignored) {}
+        }
 
         return ResponseEntity.ok(saved);
     }
@@ -666,6 +682,48 @@ public class ParapheurController {
             "accessTokenTtl",  token.getExpiresAt().toEpochMilli(),
             "canWrite",        canWrite
         ));
+    }
+
+    /**
+     * Réajustement de zone par le signataire avant de signer.
+     * Remplace les PageAnnotations SIGNATURE_ZONE existantes de la page concernée
+     * par la nouvelle position fournie.
+     * Body : { page, x, y, w, h }
+     */
+    @PutMapping("/{id}/adjust-zone")
+    public ResponseEntity<Void> adjustZone(@PathVariable String id,
+                                            @RequestBody Map<String, Object> body,
+                                            HttpServletRequest request) {
+        PdfDocument doc = repo.findById(id).orElse(null);
+        if (doc == null) return ResponseEntity.notFound().build();
+        if (doc.getParapheurStatut() != PdfDocument.ParapheurStatut.EN_ATTENTE_SIGNATURE) {
+            return ResponseEntity.badRequest().build();
+        }
+        AppUser current = (AppUser) request.getAttribute("currentUser");
+        if (current == null || !current.getId().equals(doc.getCurrentSignataireUserId())) {
+            return ResponseEntity.status(403).build();
+        }
+
+        int page = ((Number) body.get("page")).intValue();
+        String pageId = id + "::" + page;
+
+        // Remplacer les SIGNATURE_ZONE de cette page
+        List<PageAnnotation> existing = annotRepo.findByPageId(pageId).stream()
+            .filter(a -> "SIGNATURE_ZONE".equals(a.getAnnotationType()))
+            .toList();
+        annotRepo.deleteAll(existing);
+
+        PageAnnotation a = new PageAnnotation();
+        a.setPageId(pageId);
+        a.setAnnotationType("SIGNATURE_ZONE");
+        a.setXPercent(((Number) body.get("x")).doubleValue());
+        a.setYPercent(((Number) body.get("y")).doubleValue());
+        a.setWidthPercent(((Number) body.get("w")).doubleValue());
+        a.setHeightPercent(((Number) body.get("h")).doubleValue());
+        a.setCreatedBy(current.getUsername());
+        annotRepo.save(a);
+
+        return ResponseEntity.noContent().build();
     }
 
     private void ajouterMessageSysteme(String instructionId, String texte) {

@@ -1,10 +1,24 @@
 package com.dgcockpit.entity;
 
-import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "instructions")
@@ -48,6 +62,11 @@ public class Instruction {
     @OneToMany(mappedBy = "instruction", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Assignee> assignees = new ArrayList<>();
 
+    // ── Workflow Engine ──────────────────────────────────────────────────────
+    // Liens vers le workflow si cette instruction est pilotée par un WorkflowInstance
+    private String workflowInstanceId;
+    private String workflowStepId;
+
     public enum StatutInstruction { OUVERT, EN_COURS, CLOTURE }
 
     // ── Getters / Setters ─────────────────────────────────────────────────────
@@ -86,4 +105,10 @@ public class Instruction {
 
     public List<InstructionMessage> getMessages() { return messages; }
     public List<Assignee> getAssignees() { return assignees; }
+
+    public String getWorkflowInstanceId() { return workflowInstanceId; }
+    public void setWorkflowInstanceId(String workflowInstanceId) { this.workflowInstanceId = workflowInstanceId; }
+
+    public String getWorkflowStepId() { return workflowStepId; }
+    public void setWorkflowStepId(String workflowStepId) { this.workflowStepId = workflowStepId; }
 }

@@ -55,12 +55,21 @@ type Categorie = 'STRATEGIQUE' | 'OPERATIONNELLE' | 'MANAGERIALE' | 'JURIDIQUE';
 type Urgence = 'URGENT' | 'NORMAL' | 'PLANIFIE';
 type UserRole = 'DG' | 'SECRETAIRE' | 'SUBORDONNE' | 'ADMIN_IT';
 
+interface ParticipantTemplateItem {
+  id?: string;
+  posteId: string;
+  posteLibelle: string;
+  role: 'RAPPORTEUR' | 'PARTICIPANT' | 'VALIDATEUR' | 'OBSERVATEUR';
+  obligatoire: boolean;
+  ordre?: number;
+}
 interface InstructionType {
   id: string; code: string; label: string;
   categorie: Categorie; urgenceDefaut: Urgence;
   typeInstruction: 'LIBRE' | 'DOCUMENTAIRE';
   typeDocumentAttenduId: string | null;
   actif: boolean;
+  participantTemplates: ParticipantTemplateItem[];
 }
 interface AppUser {
   id: string; username: string; nomComplet: string;
@@ -70,6 +79,7 @@ interface AppUser {
 }
 interface Poste {
   id: string; code: string; libelle: string; actif: boolean;
+  habilitations: string[];
 }
 interface TypeDocParam {
   id: string; code: string; libelle: string;
@@ -83,6 +93,7 @@ interface TypeDocParam {
   templateHtml: string;
   templateDocxPath: string | null;
   templatePdfPath: string | null;
+  linkedInstructionTypeId: string | null;
   actif: boolean;
 }
 
@@ -191,6 +202,57 @@ interface TypeDocParam {
               @if (filteredItypes().length === 0) {
                 <p class="text-center text-gray-400 text-sm py-8">Aucun type correspondant au filtre.</p>
               }
+            </div>
+          }
+
+          <!-- Tableau de gestion : TypeDocument × Flux × Participants -->
+          @if (typeDocuments().length > 0) {
+            <div class="mt-8">
+              <h3 class="text-sm font-semibold text-gray-700 mb-3">Tableau de gestion des flux documentaires</h3>
+              <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      <th class="px-4 py-3">Type de Document</th>
+                      <th class="px-4 py-3">Flux déclenché (Instruction)</th>
+                      <th class="px-4 py-3">Participants pré-définis</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">
+                    @for (td of typeDocuments(); track td.id) {
+                      <tr [class]="td.actif ? '' : 'opacity-50'">
+                        <td class="px-4 py-3">
+                          <p class="font-medium text-gray-800">{{ td.libelle }}</p>
+                          <p class="text-[10px] text-gray-400 font-mono uppercase">{{ td.code }}</p>
+                        </td>
+                        <td class="px-4 py-3">
+                          @if (td.linkedInstructionTypeId) {
+                            <span class="text-indigo-700 text-xs font-medium">
+                              {{ instructionTypeLibelle(td.linkedInstructionTypeId) }}
+                            </span>
+                          } @else {
+                            <span class="text-gray-300 text-xs">—</span>
+                          }
+                        </td>
+                        <td class="px-4 py-3">
+                          @for (p of participantsForTypeDoc(td.linkedInstructionTypeId); track p.posteId) {
+                            <span class="inline-flex items-center gap-1 mr-1 mb-1 px-1.5 py-0.5 rounded text-[10px] font-medium"
+                                  [class]="p.role === 'RAPPORTEUR'  ? 'bg-blue-100 text-blue-700'  :
+                                            p.role === 'VALIDATEUR'  ? 'bg-green-100 text-green-700' :
+                                            p.role === 'OBSERVATEUR' ? 'bg-gray-100 text-gray-600'  :
+                                            'bg-amber-100 text-amber-700'">
+                              {{ p.posteLibelle || p.posteId }} · {{ p.role }}
+                            </span>
+                          }
+                          @if (!td.linkedInstructionTypeId || participantsForTypeDoc(td.linkedInstructionTypeId).length === 0) {
+                            <span class="text-gray-300 text-xs">—</span>
+                          }
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
             </div>
           }
         </div>
@@ -305,7 +367,18 @@ interface TypeDocParam {
                   @for (p of postes(); track p.id) {
                     <tr [class]="p.actif ? '' : 'opacity-50'">
                       <td class="px-4 py-3 font-mono text-xs text-gray-500 uppercase">{{ p.code }}</td>
-                      <td class="px-4 py-3 font-medium text-gray-800">{{ p.libelle }}</td>
+                      <td class="px-4 py-3">
+                        <p class="font-medium text-gray-800">{{ p.libelle }}</p>
+                        @if (p.habilitations.length) {
+                          <div class="flex flex-wrap gap-1 mt-1">
+                            @for (h of p.habilitations; track h) {
+                              <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-700">
+                                {{ habLabel(h) }}
+                              </span>
+                            }
+                          </div>
+                        }
+                      </td>
                       <td class="px-4 py-3">
                         <span [class]="p.actif ? 'text-green-600 text-xs' : 'text-gray-400 text-xs'">
                           {{ p.actif ? 'Actif' : 'Inactif' }}
@@ -473,6 +546,47 @@ interface TypeDocParam {
                   }
                 </select>
               </div>
+
+              <!-- Participants par défaut -->
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Participants par défaut</p>
+                  <button (click)="addParticipantTemplate()"
+                          class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">+ Ajouter</button>
+                </div>
+                <div class="flex flex-col gap-2">
+                  @for (p of editingParticipants(); track $index; let i = $index) {
+                    <div class="flex items-center gap-2 p-2 bg-gray-50 rounded-lg border border-gray-200">
+                      <select [(ngModel)]="p.posteId"
+                              class="flex-1 border border-gray-300 rounded px-2 py-1.5 text-xs bg-white">
+                        <option value="">— Poste —</option>
+                        @for (poste of postes(); track poste.id) {
+                          @if (poste.actif) {
+                            <option [value]="poste.id">{{ poste.libelle }}</option>
+                          }
+                        }
+                      </select>
+                      <select [(ngModel)]="p.role"
+                              class="flex-1 border border-gray-300 rounded px-2 py-1.5 text-xs bg-white">
+                        @for (r of ROLES_PARTICIPANT; track r.key) {
+                          <option [value]="r.key">{{ r.label }}</option>
+                        }
+                      </select>
+                      <label class="flex items-center gap-1 text-[10px] text-gray-500 whitespace-nowrap cursor-pointer">
+                        <input type="checkbox" [(ngModel)]="p.obligatoire" class="accent-indigo-600" />
+                        Obligatoire
+                      </label>
+                      <button (click)="removeParticipantTemplate(i)"
+                              class="text-red-400 hover:text-red-600 text-xs flex-shrink-0">✕</button>
+                    </div>
+                  }
+                  @if (editingParticipants().length === 0) {
+                    <p class="text-xs text-gray-400 italic py-1">
+                      Aucun participant pré-défini. Ils seront assignés manuellement à la création.
+                    </p>
+                  }
+                </div>
+              </div>
             }
           </div>
           <div class="flex justify-end gap-3 mt-6">
@@ -490,7 +604,7 @@ interface TypeDocParam {
     <!-- ── Modal Poste ──────────────────────────────────────────────────── -->
     @if (showPosteModal()) {
       <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
+        <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
           <h2 class="text-lg font-semibold mb-4">
             {{ editingPoste ? 'Modifier le Poste' : 'Nouveau Poste' }}
           </h2>
@@ -505,7 +619,30 @@ interface TypeDocParam {
               <input [(ngModel)]="posteForm['libelle']" placeholder="Ex: Directeur Administratif et Financier"
                      class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400" />
             </div>
+
+            <!-- Habilitations -->
+            <div>
+              <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Droits & Accès</p>
+              <div class="flex flex-col gap-1.5">
+                @for (hab of ALL_HABILITATIONS; track hab.key) {
+                  <label class="flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors"
+                         [class]="hasHabilitation(hab.key)
+                           ? 'border-indigo-300 bg-indigo-50'
+                           : 'border-gray-200 hover:border-gray-300 bg-white'">
+                    <input type="checkbox"
+                           [checked]="hasHabilitation(hab.key)"
+                           (change)="toggleHabilitation(hab.key)"
+                           class="mt-0.5 h-4 w-4 accent-indigo-600 flex-shrink-0" />
+                    <div class="min-w-0">
+                      <p class="text-sm font-medium text-gray-800 leading-snug">{{ hab.label }}</p>
+                      <p class="text-xs text-gray-500 leading-snug">{{ hab.description }}</p>
+                    </div>
+                  </label>
+                }
+              </div>
+            </div>
           </div>
+
           <div class="flex justify-end gap-3 mt-6">
             <button (click)="showPosteModal.set(false)"
                     class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Annuler</button>
@@ -902,6 +1039,38 @@ export class ParametresComponent implements OnInit {
   savingItype      = signal(false);
   editingItype: InstructionType | null = null;
   itypeForm: Record<string, any> = {};
+
+  // ── Participants par défaut (ParticipantTemplate) ──────────────────────
+  editingParticipants = signal<ParticipantTemplateItem[]>([]);
+
+  readonly ROLES_PARTICIPANT: { key: ParticipantTemplateItem['role']; label: string; description: string }[] = [
+    { key: 'RAPPORTEUR',  label: 'Rapporteur',  description: 'Responsable principal, rédige le livrable' },
+    { key: 'PARTICIPANT', label: 'Participant',  description: 'Contributeur actif' },
+    { key: 'VALIDATEUR',  label: 'Validateur',  description: 'Valide le livrable produit' },
+    { key: 'OBSERVATEUR', label: 'Observateur', description: 'Consultation uniquement' },
+  ];
+
+  addParticipantTemplate() {
+    this.editingParticipants.update(list => [
+      ...list,
+      { posteId: '', posteLibelle: '', role: 'PARTICIPANT' as const, obligatoire: false }
+    ]);
+  }
+
+  removeParticipantTemplate(i: number) {
+    this.editingParticipants.update(list => list.filter((_, idx) => idx !== i));
+  }
+
+  participantsForTypeDoc(linkedInstructionTypeId: string | null): ParticipantTemplateItem[] {
+    if (!linkedInstructionTypeId) return [];
+    const it = this.instructionTypes().find(t => t.id === linkedInstructionTypeId);
+    return it?.participantTemplates ?? [];
+  }
+
+  instructionTypeLibelle(id: string | null): string {
+    if (!id) return '—';
+    return this.instructionTypes().find(t => t.id === id)?.label ?? id;
+  }
   catFilter        = signal<Categorie[]>([]);
 
   filteredItypes = computed(() => {
@@ -917,6 +1086,18 @@ export class ParametresComponent implements OnInit {
   savingPoste   = signal(false);
   editingPoste: Poste | null = null;
   posteForm: Record<string, string> = {};
+  editingPosteHabilitations = signal<Set<string>>(new Set());
+
+  readonly ALL_HABILITATIONS: { key: string; label: string; description: string }[] = [
+    { key: 'CAN_CREATE_INSTRUCTION', label: 'Créer des instructions',      description: 'Initier de nouvelles instructions / dossiers' },
+    { key: 'CAN_SIGN',               label: 'Signer des documents',         description: 'Apposer une signature électronique au parapheur' },
+    { key: 'CAN_VALIDATE',           label: 'Valider une étape',            description: 'Valider une étape de circuit de signature' },
+    { key: 'CAN_REJECT',             label: 'Rejeter une étape',            description: 'Rejeter une étape de circuit' },
+    { key: 'CAN_CLOSE',              label: 'Clôturer un dossier',          description: 'Clôturer définitivement une instruction' },
+    { key: 'CAN_MANAGE_USERS',       label: 'Gérer les utilisateurs',       description: 'Accès à l\'onglet Utilisateurs dans Paramètres' },
+    { key: 'CAN_MANAGE_TYPES',       label: 'Gérer les types & paramètres', description: 'Accès CRUD aux types d\'instructions, documents, postes' },
+    { key: 'CAN_VIEW_ALL',           label: 'Vue globale',                  description: 'Voir tous les dossiers (mode superviseur)' },
+  ];
 
   // ── Users ────────────────────────────────────────────────────────────────
   users        = signal<AppUser[]>([]);
@@ -986,6 +1167,9 @@ export class ParametresComponent implements OnInit {
       typeInstruction:       t?.typeInstruction       ?? 'LIBRE',
       typeDocumentAttenduId: t?.typeDocumentAttenduId ?? '',
     };
+    this.editingParticipants.set(
+      (t?.participantTemplates ?? []).map(p => ({ ...p }))
+    );
     this.showItypeModal.set(true);
   }
 
@@ -1001,13 +1185,20 @@ export class ParametresComponent implements OnInit {
       : this.api.createInstructionType(payload);
     obs.subscribe({
       next: saved => {
-        if (this.editingItype) {
-          this.instructionTypes.update(list => list.map(x => x.id === saved.id ? saved : x));
-        } else {
-          this.instructionTypes.update(list => [...list, saved]);
-        }
-        this.savingItype.set(false);
-        this.showItypeModal.set(false);
+        // Sauvegarder les participants (PUT remplace toute la liste)
+        const participants = this.editingParticipants()
+          .filter(p => p.posteId)
+          .map((p, i) => ({ ...p, ordre: i }));
+        this.api.saveInstructionTypeParticipants(saved.id, participants).subscribe(updatedPts => {
+          const withParticipants = { ...saved, participantTemplates: updatedPts };
+          if (this.editingItype) {
+            this.instructionTypes.update(list => list.map(x => x.id === saved.id ? withParticipants : x));
+          } else {
+            this.instructionTypes.update(list => [...list, withParticipants]);
+          }
+          this.savingItype.set(false);
+          this.showItypeModal.set(false);
+        });
       },
       error: () => this.savingItype.set(false)
     });
@@ -1039,15 +1230,36 @@ export class ParametresComponent implements OnInit {
   openPosteModal(p?: Poste) {
     this.editingPoste = p ?? null;
     this.posteForm = { code: p?.code ?? '', libelle: p?.libelle ?? '' };
+    this.editingPosteHabilitations.set(new Set(p?.habilitations ?? []));
     this.showPosteModal.set(true);
+  }
+
+  toggleHabilitation(key: string) {
+    this.editingPosteHabilitations.update(s => {
+      const next = new Set(s);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+
+  hasHabilitation(key: string): boolean {
+    return this.editingPosteHabilitations().has(key);
+  }
+
+  habLabel(key: string): string {
+    return this.ALL_HABILITATIONS.find(h => h.key === key)?.label ?? key;
   }
 
   savePoste() {
     if (!this.posteForm['code'] || !this.posteForm['libelle']) return;
     this.savingPoste.set(true);
+    const payload = {
+      ...this.posteForm,
+      habilitations: Array.from(this.editingPosteHabilitations()),
+    };
     const obs = this.editingPoste
-      ? this.api.updatePoste(this.editingPoste.id, this.posteForm)
-      : this.api.createPoste(this.posteForm);
+      ? this.api.updatePoste(this.editingPoste.id, payload)
+      : this.api.createPoste(payload);
     obs.subscribe({
       next: saved => {
         if (this.editingPoste) {

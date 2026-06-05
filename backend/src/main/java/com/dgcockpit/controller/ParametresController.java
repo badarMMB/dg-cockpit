@@ -1,7 +1,10 @@
 package com.dgcockpit.controller;
 
 import com.dgcockpit.entity.*;
+import com.dgcockpit.repository.ParticipantTemplateRepository;
+import com.dgcockpit.repository.PosteRepository;
 import com.dgcockpit.service.ParametresService;
+import jakarta.transaction.Transactional;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -9,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @RestController
@@ -16,9 +20,15 @@ import java.util.stream.Collectors;
 public class ParametresController {
 
     private final ParametresService service;
+    private final ParticipantTemplateRepository participantTemplateRepo;
+    private final PosteRepository posteRepo;
 
-    public ParametresController(ParametresService service) {
+    public ParametresController(ParametresService service,
+                                 ParticipantTemplateRepository participantTemplateRepo,
+                                 PosteRepository posteRepo) {
         this.service = service;
+        this.participantTemplateRepo = participantTemplateRepo;
+        this.posteRepo = posteRepo;
     }
 
     // ── InstructionType ───────────────────────────────────────────────────────
@@ -55,6 +65,38 @@ public class ParametresController {
     public ResponseEntity<Void> deleteInstructionType(@PathVariable String id) {
         service.deleteInstructionType(id);
         return ResponseEntity.noContent().build();
+    }
+
+    // ── ParticipantTemplate — GET/PUT /instruction-types/{id}/participants ────
+
+    @GetMapping("/instruction-types/{id}/participants")
+    @PreAuthorize("hasAuthority('CAN_MANAGE_TYPES')")
+    public List<Map<String, Object>> getParticipants(@PathVariable String id) {
+        return participantTemplateRepo.findByInstructionTypeIdOrderByOrdreAsc(id)
+                .stream().map(this::toParticipantTemplateDto).toList();
+    }
+
+    @PutMapping("/instruction-types/{id}/participants")
+    @PreAuthorize("hasAuthority('CAN_MANAGE_TYPES')")
+    @Transactional
+    public List<Map<String, Object>> saveParticipants(
+            @PathVariable String id,
+            @RequestBody List<Map<String, Object>> body) {
+        participantTemplateRepo.deleteByInstructionTypeId(id);
+        AtomicInteger ordre = new AtomicInteger(0);
+        body.forEach(p -> {
+            String posteId = (String) p.get("posteId");
+            String roleStr = (String) p.get("role");
+            if (posteId == null || posteId.isBlank() || roleStr == null) return;
+            ParticipantTemplate t = new ParticipantTemplate();
+            t.setInstructionTypeId(id);
+            t.setPosteId(posteId);
+            t.setRole(RoleParticipant.valueOf(roleStr));
+            t.setObligatoire(Boolean.TRUE.equals(p.get("obligatoire")));
+            t.setOrdre(ordre.getAndIncrement());
+            participantTemplateRepo.save(t);
+        });
+        return getParticipants(id);
     }
 
     // ── Poste ─────────────────────────────────────────────────────────────────
@@ -145,6 +187,23 @@ public class ParametresController {
         m.put("typeInstruction", t.getTypeInstruction().name());
         m.put("typeDocumentAttenduId", t.getTypeDocumentAttenduId());
         m.put("actif", t.isActif());
+        // Inclure les templates de participants pour la config et le tableau de gestion
+        m.put("participantTemplates",
+            participantTemplateRepo.findByInstructionTypeIdOrderByOrdreAsc(t.getId())
+                .stream().map(this::toParticipantTemplateDto).toList());
+        return m;
+    }
+
+    private Map<String, Object> toParticipantTemplateDto(ParticipantTemplate pt) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("id", pt.getId());
+        m.put("instructionTypeId", pt.getInstructionTypeId());
+        m.put("posteId", pt.getPosteId());
+        // Résoudre le libellé du poste pour l'affichage
+        posteRepo.findById(pt.getPosteId()).ifPresent(p -> m.put("posteLibelle", p.getLibelle()));
+        m.put("role", pt.getRole().name());
+        m.put("obligatoire", pt.isObligatoire());
+        m.put("ordre", pt.getOrdre());
         return m;
     }
 

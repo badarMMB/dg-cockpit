@@ -69,6 +69,7 @@ public class BureauController {
     private final ObjectMapper objectMapper;
     private final com.dgcockpit.service.WopiTokenService wopiTokenService;
     private final com.dgcockpit.service.CollaboraConvertService collaboraConvertService;
+    private final com.dgcockpit.repository.ParticipantTemplateRepository participantTemplateRepo;
 
     @org.springframework.beans.factory.annotation.Value("${collabora.public-url:http://localhost:9980}")
     private String collaboraPublicUrl;
@@ -92,7 +93,8 @@ public class BureauController {
                             SseService sseService,
                             ObjectMapper objectMapper,
                             com.dgcockpit.service.WopiTokenService wopiTokenService,
-                            com.dgcockpit.service.CollaboraConvertService collaboraConvertService) {
+                            com.dgcockpit.service.CollaboraConvertService collaboraConvertService,
+                            com.dgcockpit.repository.ParticipantTemplateRepository participantTemplateRepo) {
         this.bureauRepo = bureauRepo;
         this.pdfRepo = pdfRepo;
         this.annotRepo = annotRepo;
@@ -110,6 +112,7 @@ public class BureauController {
         this.objectMapper = objectMapper;
         this.wopiTokenService = wopiTokenService;
         this.collaboraConvertService = collaboraConvertService;
+        this.participantTemplateRepo = participantTemplateRepo;
     }
 
     // ── POST /api/bureau/documents ── upload PDF ou .docx
@@ -659,14 +662,36 @@ public class BureauController {
         instr.setUrgence(itype.getUrgenceDefaut().name());
         Instruction savedInstr = instructionRepo.save(instr);
 
-        // Routage de l'assignee selon le modeCircuit du TypeDocument
-        AppUser assignee = resoudreAssignee(td, currentUser);
-        if (assignee != null) {
-            Assignee a = new Assignee();
-            a.setInstruction(savedInstr);
-            a.setUserId(assignee.getId());
-            a.setAgent(assignee.getNomComplet());
-            assigneeRepo.save(a);
+        // Résoudre les participants depuis les templates de l'InstructionType
+        List<com.dgcockpit.entity.ParticipantTemplate> templates =
+            participantTemplateRepo.findByInstructionTypeIdOrderByOrdreAsc(itype.getId());
+
+        if (templates.isEmpty()) {
+            // Comportement legacy : 1 assigné = manager ou résolution par Poste
+            AppUser assignee = resoudreAssignee(td, currentUser);
+            if (assignee != null) {
+                creerAssigneeAvecRole(savedInstr, assignee, null);
+            }
+        } else {
+            // Résolution par template : Poste → RoleParticipant
+            for (com.dgcockpit.entity.ParticipantTemplate tmpl : templates) {
+                List<AppUser> candidats = userRepo.findByPosteIdAndActifTrue(tmpl.getPosteId());
+                if (candidats.isEmpty()) {
+                    if (tmpl.isObligatoire()) {
+                        // Fallback : manager du créateur
+                        AppUser fallback = currentUser.getManager() != null
+                            ? userRepo.findById(currentUser.getManager().getId()).orElse(currentUser)
+                            : currentUser;
+                        creerAssigneeAvecRole(savedInstr, fallback, tmpl.getRole());
+                    }
+                } else if (tmpl.getRole() == com.dgcockpit.entity.RoleParticipant.RAPPORTEUR) {
+                    // RAPPORTEUR = premier candidat uniquement
+                    creerAssigneeAvecRole(savedInstr, candidats.get(0), com.dgcockpit.entity.RoleParticipant.RAPPORTEUR);
+                } else {
+                    // PARTICIPANT / VALIDATEUR / OBSERVATEUR = tous les candidats
+                    candidats.forEach(u -> creerAssigneeAvecRole(savedInstr, u, tmpl.getRole()));
+                }
+            }
         }
 
         // Lier le bureau à l'instruction
@@ -676,6 +701,16 @@ public class BureauController {
         // Message système initial dans le fil
         ajouterMessageSysteme(savedInstr.getId(),
             "📄 Document « " + savedDoc.getTitre() + " » créé par " + currentUser.getNomComplet());
+    }
+
+    private void creerAssigneeAvecRole(Instruction instr, AppUser user,
+                                        com.dgcockpit.entity.RoleParticipant role) {
+        Assignee a = new Assignee();
+        a.setInstruction(instr);
+        a.setUserId(user.getId());
+        a.setAgent(user.getNomComplet());
+        a.setRole(role);
+        assigneeRepo.save(a);
     }
 
     /**

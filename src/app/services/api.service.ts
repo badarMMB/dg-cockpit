@@ -432,6 +432,17 @@ export class ApiService {
     return this.http.post<any>(
       `${this.base}/ai/suggest/${bureauDocumentId}`, null, { params: { action } });
   }
+
+  // ── Templates de participants (Paramètres > Types d'Instructions) ─────────
+
+  getInstructionTypeParticipants(id: string): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/parametres/instruction-types/${id}/participants`);
+  }
+
+  saveInstructionTypeParticipants(id: string, participants: any[]): Observable<any[]> {
+    return this.http.put<any[]>(
+      `${this.base}/parametres/instruction-types/${id}/participants`, participants);
+  }
   envoyerCorrection(docId: string, comment: string, audio?: File, highlights?: string): Observable<any> {
     const form = new FormData();
     form.append('comment', comment);

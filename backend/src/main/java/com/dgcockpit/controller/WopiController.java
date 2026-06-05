@@ -26,6 +26,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -117,6 +118,11 @@ public class WopiController {
         info.put("SupportsUpdate", true);
         info.put("SupportsLocks", false);
         info.put("LastModifiedTime", doc.getUpdatedAt().toString());
+        // Activer les commentaires natifs Collabora (margin comments, comme Word)
+        // et le suivi des modifications (Track Changes) — le DG les utilise pour
+        // annoter le .docx avant renvoi pour correction, sans passer par les highlights pixel.
+        info.put("AllowComments", t.isCanWrite());
+        info.put("AllowEditComment", t.isCanWrite());
         return ResponseEntity.ok(info);
     }
 
@@ -200,12 +206,23 @@ public class WopiController {
 
         docRepo.save(doc);
 
-        // Notifie le fil d'instruction si le document y est rattaché
+        // Notifie le fil d'instruction si le document y est rattaché —
+        // une seule fois par session WOPI (premier PutFile après émission du token).
+        // Les autosaves suivants (~10s) restent silencieux pour éviter le flood.
         if (doc.getSourceInstructionId() != null) {
             AppUser editor = userRepo.findById(t.getUserId()).orElse(null);
             String nom = editor != null ? editor.getNomComplet() : "un utilisateur";
-            ajouterMessageSysteme(doc.getSourceInstructionId(),
-                "✏️ Document modifié par " + nom);
+            // updatedAt est mis à jour juste avant docRepo.save() — on le compare
+            // à la date d'émission du token (+ 10s de tolérance pour la 1ère sauvegarde).
+            Instant tokenCreated = t.getCreatedAt();
+            Instant docPreviousUpdate = doc.getUpdatedAt() != null
+                ? doc.getUpdatedAt().toInstant(java.time.ZoneOffset.UTC)
+                : Instant.EPOCH;
+            boolean isFirstSave = docPreviousUpdate.isBefore(tokenCreated.plusSeconds(10));
+            if (isFirstSave) {
+                ajouterMessageSysteme(doc.getSourceInstructionId(),
+                    "✏️ Document modifié par " + nom);
+            }
         }
 
         return ResponseEntity.ok(Map.of("LastModifiedTime", doc.getUpdatedAt().toString()));

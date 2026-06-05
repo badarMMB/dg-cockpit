@@ -71,8 +71,8 @@ interface Highlight { x: number; y: number; w: number; h: number; }
                   {{ signatureAnnotations()[p].length }}✍️
                 </span>
               }
-              <!-- Badge zones surlignées sur vignette -->
-              @if (highlights()[p] && highlights()[p].length) {
+              <!-- Badge zones surlignées sur vignette — PDF natifs uniquement -->
+              @if (!bureauDocumentId() && highlights()[p] && highlights()[p].length) {
                 <span class="absolute top-1 right-1 bg-yellow-400 text-yellow-900 text-[9px] font-bold px-1 rounded">
                   {{ highlights()[p].length }}🖊️
                 </span>
@@ -91,17 +91,20 @@ interface Highlight { x: number; y: number; w: number; h: number; }
           <div class="flex-1"></div>
 
           @if (isParapheur()) {
-            <!-- Bouton surligner -->
-            <button (click)="toggleHighlightMode()"
-                    [class]="highlightMode()
-                      ? 'px-3 py-1.5 bg-yellow-400 text-yellow-900 text-sm rounded-lg font-medium flex items-center gap-1.5'
-                      : 'px-3 py-1.5 border border-yellow-400 text-yellow-700 text-sm rounded-lg hover:bg-yellow-50 flex items-center gap-1.5'">
-              🖊️
-              <span>{{ highlightMode() ? 'Terminer' : 'Surligner' }}</span>
-              @if (totalHighlights() > 0) {
-                <span class="bg-yellow-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">{{ totalHighlights() }}</span>
-              }
-            </button>
+            <!-- Bouton surligner — uniquement pour les PDF natifs (pas les .docx)
+                 Pour les .docx, le DG annote directement dans Collabora via Track Changes -->
+            @if (!bureauDocumentId()) {
+              <button (click)="toggleHighlightMode()"
+                      [class]="highlightMode()
+                        ? 'px-3 py-1.5 bg-yellow-400 text-yellow-900 text-sm rounded-lg font-medium flex items-center gap-1.5'
+                        : 'px-3 py-1.5 border border-yellow-400 text-yellow-700 text-sm rounded-lg hover:bg-yellow-50 flex items-center gap-1.5'">
+                🖊️
+                <span>{{ highlightMode() ? 'Terminer' : 'Surligner' }}</span>
+                @if (totalHighlights() > 0) {
+                  <span class="bg-yellow-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">{{ totalHighlights() }}</span>
+                }
+              </button>
+            }
 
             @if (bureauDocumentId()) {
               <button (click)="ouvrirEdition()"
@@ -229,17 +232,34 @@ interface Highlight { x: number; y: number; w: number; h: number; }
       <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
            (click)="$event.target === $event.currentTarget && showCorrectionModal.set(false)">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-          <h2 class="text-base font-semibold text-gray-900 mb-1">Correction/modification demandées</h2>
+          <h2 class="text-base font-semibold text-gray-900 mb-1">
+            {{ bureauDocumentId() ? 'Renvoyer pour correction' : 'Correction/modification demandées' }}
+          </h2>
           <p class="text-xs text-gray-500 mb-4">
-            Le document sera renvoyé à la secrétaire et une instruction sera créée automatiquement.
+            @if (bureauDocumentId()) {
+              Le document sera renvoyé à la secrétaire avec votre motif.
+              Vos annotations Track Changes dans Collabora seront visibles à la réouverture du document.
+            } @else {
+              Le document sera renvoyé à la secrétaire et une instruction sera créée automatiquement.
+            }
           </p>
 
-          <!-- Résumé des zones surlignées -->
-          @if (totalHighlights() > 0) {
+          <!-- Résumé des zones surlignées — uniquement pour les PDF natifs -->
+          @if (!bureauDocumentId() && totalHighlights() > 0) {
             <div class="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 mb-4 flex items-center gap-2">
               <span class="text-yellow-600 text-base">🖊️</span>
               <p class="text-xs text-yellow-700">
                 <strong>{{ totalHighlights() }}</strong> zone(s) surlignée(s) sur <strong>{{ highlightedPageCount() }}</strong> page(s) jointes à la correction
+              </p>
+            </div>
+          }
+
+          <!-- Rappel Collabora pour les .docx -->
+          @if (bureauDocumentId()) {
+            <div class="bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 mb-4 flex items-center gap-2">
+              <span class="text-indigo-600 text-base">💡</span>
+              <p class="text-xs text-indigo-700">
+                Ajoutez vos annotations visuelles directement dans Collabora (Track Changes) avant de renvoyer.
               </p>
             </div>
           }
@@ -346,7 +366,13 @@ export class PdfViewerComponent implements OnInit, OnDestroy {
   totalHighlights       = computed(() => Object.values(this.highlights()).reduce((s, a) => s + a.length, 0));
   highlightedPageCount  = computed(() => Object.values(this.highlights()).filter(a => a.length > 0).length);
 
-  canSign = computed(() => !this.highlightMode() && this.totalHighlights() === 0 && !this.signing());
+  // Pour les .docx (bureauDocumentId présent), les corrections passent par Collabora
+  // Track Changes — les highlights pixel ne s'appliquent pas, on ne bloque pas la signature.
+  canSign = computed(() =>
+    !this.signing() &&
+    !this.highlightMode() &&
+    (this.bureauDocumentId() !== null || this.totalHighlights() === 0)
+  );
 
   private hlStart: { x: number; y: number } | null = null;
   private hlBoundMove = this.onHlMove.bind(this);

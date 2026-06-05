@@ -249,6 +249,14 @@ public class InstructionController {
         m.put("echeance", i.getEcheance() != null ? i.getEcheance().toString() : null);
         m.put("createdById", i.getCreatedById());
         m.put("documentCree", bureauDocRepo.existsBySourceInstructionId(i.getId()));
+        // Assignees avec leur rôle (null = assignee legacy sans rôle défini)
+        m.put("assignees", i.getAssignees().stream().map(a -> {
+            var am = new java.util.HashMap<String, Object>();
+            am.put("userId", a.getUserId());
+            am.put("agent", a.getAgent());
+            am.put("role", a.getRole() != null ? a.getRole().name() : null);
+            return am;
+        }).toList());
         if (i.getInstructionType() != null) {
             InstructionType itype = i.getInstructionType();
             m.put("instructionTypeId", itype.getId());

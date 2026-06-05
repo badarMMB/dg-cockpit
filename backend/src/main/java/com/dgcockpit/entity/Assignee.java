@@ -20,6 +20,11 @@ public class Assignee {
     /** Nom complet dénormalisé pour l'affichage */
     private String agent;
 
+    /** Rôle du participant dans cette instruction (nullable pour les assignees legacy sans rôle). */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = true)
+    private RoleParticipant role;
+
     // Getters / Setters
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -29,4 +34,6 @@ public class Assignee {
     public void setUserId(String userId) { this.userId = userId; }
     public String getAgent() { return agent; }
     public void setAgent(String agent) { this.agent = agent; }
+    public RoleParticipant getRole() { return role; }
+    public void setRole(RoleParticipant role) { this.role = role; }
 }

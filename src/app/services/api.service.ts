@@ -418,6 +418,20 @@ export class ApiService {
     return this.http.get<{ bureauDocumentId: string | null; isDocx: boolean }>(
       `${this.base}/parapheur/${pdfDocId}/source-docx`);
   }
+
+  // ── Assistant IA ──────────────────────────────────────────────────────────
+
+  /** Mode AUTO-APPLY ou SUGGESTION selon la configuration backend (ai.llm.auto-apply). */
+  aiAssist(bureauDocumentId: string, action: string): Observable<any> {
+    return this.http.post<any>(
+      `${this.base}/ai/assist/${bureauDocumentId}`, null, { params: { action } });
+  }
+
+  /** Toujours en mode SUGGESTION : poste dans le fil d'instruction sans modifier le fichier. */
+  aiSuggest(bureauDocumentId: string, action: string): Observable<any> {
+    return this.http.post<any>(
+      `${this.base}/ai/suggest/${bureauDocumentId}`, null, { params: { action } });
+  }
   envoyerCorrection(docId: string, comment: string, audio?: File, highlights?: string): Observable<any> {
     const form = new FormData();
     form.append('comment', comment);
